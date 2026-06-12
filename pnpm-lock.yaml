@@ -75,6 +75,9 @@ importers:
 
   apps/console:
     dependencies:
+      '@egrm/config-schemas':
+        specifier: workspace:*
+        version: link:../../packages/config-schemas
       '@egrm/core':
         specifier: workspace:*
         version: link:../../packages/core

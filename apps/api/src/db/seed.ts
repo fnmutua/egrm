@@ -2,7 +2,7 @@
 import bcrypt from 'bcryptjs';
 import { and, eq } from 'drizzle-orm';
 import type { ConfigDomain } from '@egrm/core';
-import { validateConfig } from '@egrm/config-schemas';
+import { validateConfig, defaultNotificationPack } from '@egrm/config-schemas';
 import { db, pool, schema } from './client.js';
 import { syncRolesFromOrgAccess } from '../services/org-access.js';
 
@@ -442,6 +442,13 @@ async function main() {
       chatbot: { enabled: false },
     },
   }, admin!.id);
+
+  const kisipNotifications = defaultNotificationPack();
+  kisipNotifications.senders = {
+    email: { from_name: 'KISIP GRM', from_address: 'grm@kisip.go.ke' },
+    sms: { sender_id: 'KISIP', provider: 'advanta' },
+  };
+  await upsertActiveConfig(kisip!.id, 'cd09_notifications', kisipNotifications, admin!.id);
 
   // Sample unit tree: national → 2 counties → 3 settlements
   const existingUnits = await db.select({ id: schema.unit.id }).from(schema.unit).where(eq(schema.unit.tenantId, kisip!.id)).limit(1);

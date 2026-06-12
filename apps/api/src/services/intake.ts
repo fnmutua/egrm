@@ -6,6 +6,7 @@ import { db, schema } from '../db/client.js';
 import { encryptPII, piiLookupHash } from './crypto.js';
 import { getActiveConfig } from './config.js';
 import { allocateReference } from './reference.js';
+import { enqueueNotifications } from './notifications.js';
 
 export interface IntakeInput {
   tenantId: string;
@@ -179,6 +180,29 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
       visibility: 'public',
       data: { channel: input.channel, status: initialStatus, anonymous: input.anonymous },
     });
+
+    await enqueueNotifications(
+      {
+        tenantId: input.tenantId,
+        caseId: c!.id,
+        event: 'case.created',
+        case: {
+          reference,
+          status: initialStatus,
+          sensitivity: 'standard',
+          priority: str(input.values.priority) ?? 'normal',
+          levelCode: unitRow?.levelCode ?? fallbackIntakeLevel.code,
+          channel: input.channel,
+          anonymous: input.anonymous,
+          categories,
+          unitId: unitRow?.id ?? null,
+          assigneeId: null,
+          partyId,
+        },
+        locale: str(input.values.preferred_language) ?? undefined,
+      },
+      tx,
+    );
 
     return c!.id;
   });

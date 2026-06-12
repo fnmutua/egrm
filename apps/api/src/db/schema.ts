@@ -179,3 +179,37 @@ export const auditEvent = pgTable('audit_event', {
   data: jsonb('data'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Notification outbox — enqueued inside case-action transactions (spec 06 §2). */
+export const notificationOutbox = pgTable('notification_outbox', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenant.id),
+  caseId: uuid('case_id').references(() => grmCase.id),
+  eventKind: text('event_kind').notNull(),
+  payload: jsonb('payload').notNull(),
+  status: text('status', { enum: ['pending', 'processing', 'done', 'failed'] }).notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('last_error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  processedAt: timestamp('processed_at', { withTimezone: true }),
+});
+
+/** Every send attempt — including suppressed (spec 06 §3, spec 03 §2.9). */
+export const notificationLog = pgTable('notification_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenant.id),
+  caseId: uuid('case_id').references(() => grmCase.id),
+  outboxId: uuid('outbox_id').references(() => notificationOutbox.id),
+  eventKind: text('event_kind').notNull(),
+  recipientKind: text('recipient_kind').notNull(),
+  recipientAddressHash: text('recipient_address_hash'),
+  channel: text('channel').notNull(),
+  templateId: text('template_id').notNull(),
+  locale: text('locale').notNull().default('en'),
+  renderedPreview: text('rendered_preview'),
+  status: text('status').notNull().default('queued'),
+  providerMessageId: text('provider_message_id'),
+  attempts: integer('attempts').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});

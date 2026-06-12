@@ -11,6 +11,13 @@ export interface DomainMeta {
   subsections?: { id: string; label: string }[];
 }
 
+export const CD09_SUBSECTIONS = [
+  { id: 'sec-rules', label: 'Rules' },
+  { id: 'sec-templates', label: 'Templates' },
+  { id: 'sec-senders', label: 'Sender identities' },
+  { id: 'sec-delivery', label: 'Delivery policy' },
+];
+
 export const CD08_SUBSECTIONS = [
   { id: 'sec-public', label: 'Other ways to reach us' },
   { id: 'sec-modules', label: 'Intake modules' },
@@ -146,8 +153,9 @@ export const DOMAIN_CATALOGUE: DomainMeta[] = [
   { domain: 'cd08_channels', cd: 'CD-08', title: 'Channels', icon: 'i-lucide-radio', strict: true,
     description: 'Public contact routes (portal landing page) and intake channel module enablement.',
     subsections: CD08_SUBSECTIONS },
-  { domain: 'cd09_notifications', cd: 'CD-09', title: 'Notifications', icon: 'i-lucide-bell', strict: false,
-    description: 'Event subscriptions, recipient selectors, templates per locale and channel, kill switches, sender identities.' },
+  { domain: 'cd09_notifications', cd: 'CD-09', title: 'Notifications', icon: 'i-lucide-bell', strict: true,
+    description: 'Event subscriptions, recipient selectors, templates per locale and channel, kill switches, sender identities.',
+    subsections: CD09_SUBSECTIONS },
   { domain: 'cd10_org_access', cd: 'CD-10', title: 'Org & access', icon: 'i-lucide-shield', strict: true,
     description: 'Role definitions (permission sets), departments/teams, and authentication policy. Roles sync to the database on activation.',
     subsections: CD10_SUBSECTIONS },

@@ -10,6 +10,7 @@
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
+    "@egrm/config-schemas": "workspace:*",
     "@egrm/core": "workspace:*",
     "@nuxt/ui": "^4.0.0",
     "nuxt": "^4.0.0"
