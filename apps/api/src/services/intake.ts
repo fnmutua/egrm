@@ -7,6 +7,7 @@ import { encryptPII, piiLookupHash } from './crypto.js';
 import { getActiveConfig } from './config.js';
 import { allocateReference } from './reference.js';
 import { enqueueNotifications } from './notifications.js';
+import { scheduleOutboxDispatch } from './notification-queue.js';
 
 export interface IntakeInput {
   tenantId: string;
@@ -127,6 +128,8 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
 
   const reference = await allocateReference(input.tenantId, numbering);
 
+  let pendingOutboxId: string | null = null;
+
   const result = await db.transaction(async (tx) => {
     let partyId: string | null = null;
     if (hasPII) {
@@ -181,7 +184,7 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
       data: { channel: input.channel, status: initialStatus, anonymous: input.anonymous },
     });
 
-    await enqueueNotifications(
+    const { outboxId } = await enqueueNotifications(
       {
         tenantId: input.tenantId,
         caseId: c!.id,
@@ -203,9 +206,16 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
       },
       tx,
     );
+    pendingOutboxId = outboxId;
 
     return c!.id;
   });
+
+  if (pendingOutboxId) {
+    scheduleOutboxDispatch(pendingOutboxId).catch((err) => {
+      console.error('[notifications] dispatch schedule failed:', err);
+    });
+  }
 
   return { ok: true, caseId: result, reference, status: initialStatus, trackingPin, possibleDuplicates };
 }

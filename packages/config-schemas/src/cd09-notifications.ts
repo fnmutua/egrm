@@ -1,4 +1,25 @@
 import { z } from 'zod';
+import {
+  ADVANTA_SMS_SENDOTP_URL,
+  ADVANTA_SMS_SENDBULK_URL,
+  channelApiConfig,
+  SMS_PROVIDER_PRESETS,
+} from './provider-api.js';
+
+export {
+  ADVANTA_SMS_SENDOTP_URL,
+  ADVANTA_SMS_SENDBULK_URL,
+  channelApiConfig,
+  providerField,
+  PROVIDER_FIELD_PLACEHOLDERS,
+  resolveProviderFields,
+  SMS_PROVIDER_PRESETS,
+  EMAIL_PROVIDER_PRESETS,
+  applyProviderPreset,
+  ensureChannelApiConfig,
+  migrateLegacySender,
+} from './provider-api.js';
+export type { ProviderField, ChannelApiConfig, ProviderPreset, ProviderRuntimeContext } from './provider-api.js';
 
 /** Fixed event catalogue (spec 06 §1.1) — extensible by platform releases. */
 export const NOTIFICATION_EVENTS = [
@@ -154,29 +175,21 @@ export const notificationTemplate = z.object({
   ),
 });
 
-/** Provider gateway credentials (spec 06 §2 — keys may move to vault in production). */
-export const providerConnection = z.object({
-  provider: z.string().optional(),
-  /** API key / bearer token / SMTP password (stored encrypted at rest in production). */
-  api_token: z.string().optional(),
-  /** API base URL or SMTP host when required by the provider. */
-  api_url: z.string().optional(),
-  enabled: z.boolean().default(true),
-});
+/** Provider gateway — endpoint, headers, and body fields (spec 06 §2). */
+export const providerConnection = channelApiConfig;
 
-export const emailSenderIdentity = providerConnection.extend({
+export const emailSenderIdentity = channelApiConfig.extend({
   from_name: z.string().optional(),
   from_address: z.string().optional(),
 });
 
-export const smsSenderIdentity = providerConnection.extend({
-  sender_id: z.string().optional(),
+export const smsSenderIdentity = channelApiConfig.extend({
+  /** Optional second endpoint for bulk sends. */
+  bulk_api_url: z.string().optional(),
 });
 
-export const whatsappSenderIdentity = providerConnection.extend({
-  /** Meta / Twilio business phone number id. */
+export const whatsappSenderIdentity = channelApiConfig.extend({
   phone_number_id: z.string().optional(),
-  /** E.164 number or display label shown to recipients. */
   display_number: z.string().optional(),
 });
 
@@ -612,13 +625,41 @@ export function defaultNotificationPack(): Cd09Notifications {
     },
   ];
 
+  const advantaSms = SMS_PROVIDER_PRESETS.advanta!;
+
   return {
     templates,
     rules,
     senders: {
-      email: { from_name: 'GRM', from_address: '', provider: '', api_token: '', enabled: true },
-      sms: { sender_id: 'GRM', provider: '', api_token: '', enabled: true },
-      whatsapp: { display_number: '', phone_number_id: '', provider: '', api_token: '', enabled: false },
+      email: {
+        provider: 'smtp',
+        enabled: true,
+        api_url: '',
+        request_format: 'json',
+        headers: [],
+        fields: [{ key: 'pass', value: '', secret: true }],
+        from_name: 'GRM',
+        from_address: '',
+      },
+      sms: {
+        provider: advantaSms.provider,
+        enabled: true,
+        api_url: advantaSms.api_url,
+        request_format: advantaSms.request_format,
+        headers: structuredClone(advantaSms.headers),
+        fields: structuredClone(advantaSms.fields),
+        bulk_api_url: ADVANTA_SMS_SENDBULK_URL,
+      },
+      whatsapp: {
+        provider: 'meta',
+        enabled: false,
+        api_url: '',
+        request_format: 'json',
+        headers: [{ key: 'Authorization', value: 'Bearer ', secret: true }],
+        fields: [],
+        phone_number_id: '',
+        display_number: '',
+      },
     },
     quiet_hours: {
       enabled: false,

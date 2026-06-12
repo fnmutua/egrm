@@ -8,7 +8,16 @@ import {
   TEMPLATE_VARIABLES,
   defaultNotificationPack,
   stripEmptyTemplateVariants,
+  ADVANTA_SMS_SENDOTP_URL,
+  ADVANTA_SMS_SENDBULK_URL,
+  SMS_PROVIDER_PRESETS,
+  EMAIL_PROVIDER_PRESETS,
+  PROVIDER_FIELD_PLACEHOLDERS,
+  applyProviderPreset,
+  ensureChannelApiConfig,
+  migrateLegacySender,
 } from '@egrm/config-schemas';
+import type { ProviderField } from '@egrm/config-schemas';
 
 const EVENT_ITEMS = NOTIFICATION_EVENTS.map((e) => ({
   value: e,
@@ -85,12 +94,60 @@ const PROVIDER_PRESETS = {
   ],
 } as const;
 
-function ensureSenderIdentity(sender: Record<string, unknown>) {
-  sender.enabled ??= true;
-  sender.provider ??= '';
-  sender.api_token ??= '';
-  sender.api_url ??= '';
+function ensureSenderIdentity(sender: Record<string, unknown>, kind: 'sms' | 'email' | 'whatsapp') {
+  migrateLegacySender(sender, kind);
+  ensureChannelApiConfig(sender);
 }
+
+function ensureSmsSender(sms: Record<string, unknown>) {
+  ensureSenderIdentity(sms, 'sms');
+  if ((sms.fields as ProviderField[]).length === 0) {
+    loadSmsPreset(sms);
+  }
+  sms.bulk_api_url ??= ADVANTA_SMS_SENDBULK_URL;
+  if ((sms.provider ?? 'advanta') === 'advanta' && !sms.api_url) {
+    sms.api_url = ADVANTA_SMS_SENDOTP_URL;
+  }
+}
+
+function addProviderField(list: ProviderField[]) {
+  list.push({ key: '', value: '', secret: false });
+}
+
+function removeProviderField(list: ProviderField[], i: number) {
+  list.splice(i, 1);
+}
+
+function loadSmsPreset(sender: Record<string, unknown>) {
+  const key = String(sender.provider ?? 'custom').toLowerCase();
+  const preset = SMS_PROVIDER_PRESETS[key] ?? SMS_PROVIDER_PRESETS.custom;
+  applyProviderPreset(sender, preset, { keepSecrets: true });
+  if (key === 'advanta') sender.bulk_api_url = ADVANTA_SMS_SENDBULK_URL;
+}
+
+function loadEmailPreset(sender: Record<string, unknown>) {
+  const key = String(sender.provider ?? 'smtp').toLowerCase();
+  const preset = EMAIL_PROVIDER_PRESETS[key] ?? EMAIL_PROVIDER_PRESETS.smtp;
+  applyProviderPreset(sender, preset, { keepSecrets: true });
+}
+
+watch(
+  () => props.payload.senders?.sms?.provider,
+  (next, prev) => {
+    if (prev !== undefined && next && next !== prev && props.payload.senders?.sms) {
+      loadSmsPreset(props.payload.senders.sms);
+    }
+  },
+);
+
+watch(
+  () => props.payload.senders?.email?.provider,
+  (next, prev) => {
+    if (prev !== undefined && next && next !== prev && props.payload.senders?.email) {
+      loadEmailPreset(props.payload.senders.email);
+    }
+  },
+);
 
 function ensure() {
   const p = props.payload;
@@ -102,9 +159,9 @@ function ensure() {
   p.senders.email ??= {};
   p.senders.sms ??= {};
   p.senders.whatsapp ??= {};
-  ensureSenderIdentity(p.senders.email);
-  ensureSenderIdentity(p.senders.sms);
-  ensureSenderIdentity(p.senders.whatsapp);
+  ensureSenderIdentity(p.senders.email, 'email');
+  ensureSmsSender(p.senders.sms);
+  ensureSenderIdentity(p.senders.whatsapp, 'whatsapp');
   p.quiet_hours ??= {
     enabled: false,
     timezone: 'Africa/Nairobi',
@@ -133,6 +190,8 @@ function ensure() {
 ensure();
 watch(() => props.payload, ensure, { deep: false });
 
+const smsProvider = computed(() => String(props.payload.senders?.sms?.provider ?? 'advanta').toLowerCase());
+const placeholderHint = PROVIDER_FIELD_PLACEHOLDERS.join(', ');
 const rules = computed(() => props.payload.rules as Record<string, unknown>[]);
 const templates = computed(() => props.payload.templates as Record<string, unknown>[]);
 const templateIds = computed(() => templates.value.map((t) => String(t.id)).filter(Boolean));
@@ -610,34 +669,92 @@ function varToken(name: string) {
           </div>
           <USwitch v-model="payload.senders.email.enabled" size="sm" />
         </div>
-        <div v-if="payload.senders.email.enabled" class="grid sm:grid-cols-2 gap-3">
-          <UFormField label="From name">
-            <UInput v-model="payload.senders.email.from_name" class="w-full" placeholder="GRM" />
-          </UFormField>
-          <UFormField label="From address">
-            <UInput v-model="payload.senders.email.from_address" class="w-full" placeholder="grm@tenant.go.ke" />
-          </UFormField>
-          <UFormField label="Provider">
-            <USelectMenu
-              v-model="payload.senders.email.provider"
-              :items="[...PROVIDER_PRESETS.email]"
-              value-key="value"
-              label-key="label"
-              class="w-full"
-            />
-          </UFormField>
-          <UFormField label="API URL / SMTP host" help="Provider endpoint or mail server hostname.">
-            <UInput v-model="payload.senders.email.api_url" class="w-full" placeholder="smtp.example.com" />
-          </UFormField>
-          <UFormField label="API token" help="API key or SMTP password — stored in tenant config." class="sm:col-span-2">
-            <UInput
-              v-model="payload.senders.email.api_token"
-              type="password"
-              class="w-full font-mono"
-              placeholder="••••••••"
-              autocomplete="off"
-            />
-          </UFormField>
+        <div v-if="payload.senders.email.enabled" class="space-y-3">
+          <div class="grid sm:grid-cols-2 gap-3">
+            <UFormField label="From name">
+              <UInput v-model="payload.senders.email.from_name" class="w-full" placeholder="GRM" />
+            </UFormField>
+            <UFormField label="From address">
+              <UInput v-model="payload.senders.email.from_address" class="w-full" placeholder="grm@tenant.go.ke" />
+            </UFormField>
+            <UFormField label="Provider preset">
+              <USelectMenu
+                v-model="payload.senders.email.provider"
+                :items="[...PROVIDER_PRESETS.email]"
+                value-key="value"
+                label-key="label"
+                class="w-full"
+              />
+            </UFormField>
+            <UFormField label="Request format">
+              <USelectMenu
+                v-model="payload.senders.email.request_format"
+                :items="[
+                  { value: 'json', label: 'JSON body' },
+                  { value: 'form', label: 'Form-urlencoded' },
+                ]"
+                value-key="value"
+                label-key="label"
+                class="w-full"
+              />
+            </UFormField>
+            <UFormField label="API URL / SMTP host" help="POST endpoint or mail server hostname." class="sm:col-span-2">
+              <UInput v-model="payload.senders.email.api_url" class="w-full" placeholder="smtp.example.com or https://…" />
+            </UFormField>
+          </div>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-muted">Request headers</span>
+              <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addProviderField(payload.senders.email.headers)">
+                Add header
+              </UButton>
+            </div>
+            <div
+              v-for="(row, hi) in payload.senders.email.headers"
+              :key="`eh-${hi}`"
+              class="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-center"
+            >
+              <UInput v-model="row.key" placeholder="Header name" class="font-mono text-xs" />
+              <UInput
+                v-model="row.value"
+                :type="row.secret ? 'password' : 'text'"
+                placeholder="Value or {{placeholder}}"
+                class="font-mono text-xs"
+              />
+              <label class="flex items-center gap-1 text-xs whitespace-nowrap">
+                <UCheckbox v-model="row.secret" />
+                Secret
+              </label>
+              <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" @click="removeProviderField(payload.senders.email.headers, hi)" />
+            </div>
+          </div>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-muted">Request body fields</span>
+              <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addProviderField(payload.senders.email.fields)">
+                Add field
+              </UButton>
+            </div>
+            <p class="text-[11px] text-muted">Runtime placeholders: {{ placeholderHint }}</p>
+            <div
+              v-for="(row, fi) in payload.senders.email.fields"
+              :key="`ef-${fi}`"
+              class="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-center"
+            >
+              <UInput v-model="row.key" placeholder="Field name" class="font-mono text-xs" />
+              <UInput
+                v-model="row.value"
+                :type="row.secret ? 'password' : 'text'"
+                placeholder="Value or {{placeholder}}"
+                class="font-mono text-xs"
+              />
+              <label class="flex items-center gap-1 text-xs whitespace-nowrap">
+                <UCheckbox v-model="row.secret" />
+                Secret
+              </label>
+              <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" @click="removeProviderField(payload.senders.email.fields, fi)" />
+            </div>
+          </div>
         </div>
       </UCard>
 
@@ -649,31 +766,97 @@ function varToken(name: string) {
           </div>
           <USwitch v-model="payload.senders.sms.enabled" size="sm" />
         </div>
-        <div v-if="payload.senders.sms.enabled" class="grid sm:grid-cols-2 gap-3">
-          <UFormField label="Sender ID">
-            <UInput v-model="payload.senders.sms.sender_id" class="w-full" placeholder="KISIP" />
-          </UFormField>
-          <UFormField label="Provider">
-            <USelectMenu
-              v-model="payload.senders.sms.provider"
-              :items="[...PROVIDER_PRESETS.sms]"
-              value-key="value"
-              label-key="label"
-              class="w-full"
-            />
-          </UFormField>
-          <UFormField label="API URL" help="Gateway base URL if not the provider default.">
-            <UInput v-model="payload.senders.sms.api_url" class="w-full" placeholder="https://…" />
-          </UFormField>
-          <UFormField label="API token">
-            <UInput
-              v-model="payload.senders.sms.api_token"
-              type="password"
-              class="w-full font-mono"
-              placeholder="••••••••"
-              autocomplete="off"
-            />
-          </UFormField>
+        <div v-if="payload.senders.sms.enabled" class="space-y-3">
+          <div class="grid sm:grid-cols-2 gap-3">
+            <UFormField label="Provider preset">
+              <USelectMenu
+                v-model="payload.senders.sms.provider"
+                :items="[...PROVIDER_PRESETS.sms]"
+                value-key="value"
+                label-key="label"
+                class="w-full"
+              />
+            </UFormField>
+            <UFormField label="Request format">
+              <USelectMenu
+                v-model="payload.senders.sms.request_format"
+                :items="[
+                  { value: 'json', label: 'JSON body' },
+                  { value: 'form', label: 'Form-urlencoded' },
+                ]"
+                value-key="value"
+                label-key="label"
+                class="w-full"
+              />
+            </UFormField>
+            <UFormField label="Send URL" help="POST endpoint for single messages.">
+              <UInput
+                v-model="payload.senders.sms.api_url"
+                class="w-full font-mono text-xs"
+                :placeholder="ADVANTA_SMS_SENDOTP_URL"
+              />
+            </UFormField>
+            <UFormField v-if="smsProvider === 'advanta'" label="Bulk URL" help="Optional bulk endpoint.">
+              <UInput
+                v-model="payload.senders.sms.bulk_api_url"
+                class="w-full font-mono text-xs"
+                :placeholder="ADVANTA_SMS_SENDBULK_URL"
+              />
+            </UFormField>
+          </div>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-muted">Request headers</span>
+              <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addProviderField(payload.senders.sms.headers)">
+                Add header
+              </UButton>
+            </div>
+            <div
+              v-for="(row, hi) in payload.senders.sms.headers"
+              :key="`sh-${hi}`"
+              class="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-center"
+            >
+              <UInput v-model="row.key" placeholder="Header name" class="font-mono text-xs" />
+              <UInput
+                v-model="row.value"
+                :type="row.secret ? 'password' : 'text'"
+                placeholder="Value or {{placeholder}}"
+                class="font-mono text-xs"
+              />
+              <label class="flex items-center gap-1 text-xs whitespace-nowrap">
+                <UCheckbox v-model="row.secret" />
+                Secret
+              </label>
+              <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" @click="removeProviderField(payload.senders.sms.headers, hi)" />
+            </div>
+          </div>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-muted">Request body fields</span>
+              <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addProviderField(payload.senders.sms.fields)">
+                Add field
+              </UButton>
+            </div>
+            <p class="text-[11px] text-muted">Runtime placeholders: {{ placeholderHint }}</p>
+            <div
+              v-for="(row, fi) in payload.senders.sms.fields"
+              :key="`sf-${fi}`"
+              class="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-center"
+            >
+              <UInput v-model="row.key" placeholder="Field name" class="font-mono text-xs" />
+              <UInput
+                v-model="row.value"
+                :type="row.secret ? 'password' : 'text'"
+                placeholder="Value or {{placeholder}}"
+                class="font-mono text-xs"
+              />
+              <label class="flex items-center gap-1 text-xs whitespace-nowrap">
+                <UCheckbox v-model="row.secret" />
+                Secret
+              </label>
+              <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" @click="removeProviderField(payload.senders.sms.fields, fi)" />
+            </div>
+          </div>
         </div>
       </UCard>
 
@@ -685,34 +868,92 @@ function varToken(name: string) {
           </div>
           <USwitch v-model="payload.senders.whatsapp.enabled" size="sm" />
         </div>
-        <div v-if="payload.senders.whatsapp.enabled" class="grid sm:grid-cols-2 gap-3">
-          <UFormField label="Display number" help="Business number shown to recipients (E.164).">
-            <UInput v-model="payload.senders.whatsapp.display_number" class="w-full" placeholder="+254…" />
-          </UFormField>
-          <UFormField label="Phone number ID" help="Meta / Twilio business phone number id.">
-            <UInput v-model="payload.senders.whatsapp.phone_number_id" class="w-full font-mono" />
-          </UFormField>
-          <UFormField label="Provider">
-            <USelectMenu
-              v-model="payload.senders.whatsapp.provider"
-              :items="[...PROVIDER_PRESETS.whatsapp]"
-              value-key="value"
-              label-key="label"
-              class="w-full"
-            />
-          </UFormField>
-          <UFormField label="API URL" help="Graph API or gateway URL override.">
-            <UInput v-model="payload.senders.whatsapp.api_url" class="w-full" placeholder="https://graph.facebook.com/…" />
-          </UFormField>
-          <UFormField label="API token" help="Permanent access token or account auth token." class="sm:col-span-2">
-            <UInput
-              v-model="payload.senders.whatsapp.api_token"
-              type="password"
-              class="w-full font-mono"
-              placeholder="••••••••"
-              autocomplete="off"
-            />
-          </UFormField>
+        <div v-if="payload.senders.whatsapp.enabled" class="space-y-3">
+          <div class="grid sm:grid-cols-2 gap-3">
+            <UFormField label="Display number" help="Business number shown to recipients (E.164).">
+              <UInput v-model="payload.senders.whatsapp.display_number" class="w-full" placeholder="+254…" />
+            </UFormField>
+            <UFormField label="Phone number ID" help="Meta / Twilio business phone number id.">
+              <UInput v-model="payload.senders.whatsapp.phone_number_id" class="w-full font-mono" />
+            </UFormField>
+            <UFormField label="Provider preset">
+              <USelectMenu
+                v-model="payload.senders.whatsapp.provider"
+                :items="[...PROVIDER_PRESETS.whatsapp]"
+                value-key="value"
+                label-key="label"
+                class="w-full"
+              />
+            </UFormField>
+            <UFormField label="Request format">
+              <USelectMenu
+                v-model="payload.senders.whatsapp.request_format"
+                :items="[
+                  { value: 'json', label: 'JSON body' },
+                  { value: 'form', label: 'Form-urlencoded' },
+                ]"
+                value-key="value"
+                label-key="label"
+                class="w-full"
+              />
+            </UFormField>
+            <UFormField label="API URL" help="Graph API or gateway URL." class="sm:col-span-2">
+              <UInput v-model="payload.senders.whatsapp.api_url" class="w-full" placeholder="https://graph.facebook.com/…" />
+            </UFormField>
+          </div>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-muted">Request headers</span>
+              <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addProviderField(payload.senders.whatsapp.headers)">
+                Add header
+              </UButton>
+            </div>
+            <div
+              v-for="(row, hi) in payload.senders.whatsapp.headers"
+              :key="`wh-${hi}`"
+              class="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-center"
+            >
+              <UInput v-model="row.key" placeholder="Header name" class="font-mono text-xs" />
+              <UInput
+                v-model="row.value"
+                :type="row.secret ? 'password' : 'text'"
+                placeholder="Value or {{placeholder}}"
+                class="font-mono text-xs"
+              />
+              <label class="flex items-center gap-1 text-xs whitespace-nowrap">
+                <UCheckbox v-model="row.secret" />
+                Secret
+              </label>
+              <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" @click="removeProviderField(payload.senders.whatsapp.headers, hi)" />
+            </div>
+          </div>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-muted">Request body fields</span>
+              <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addProviderField(payload.senders.whatsapp.fields)">
+                Add field
+              </UButton>
+            </div>
+            <p class="text-[11px] text-muted">Runtime placeholders: {{ placeholderHint }}</p>
+            <div
+              v-for="(row, fi) in payload.senders.whatsapp.fields"
+              :key="`wf-${fi}`"
+              class="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-center"
+            >
+              <UInput v-model="row.key" placeholder="Field name" class="font-mono text-xs" />
+              <UInput
+                v-model="row.value"
+                :type="row.secret ? 'password' : 'text'"
+                placeholder="Value or {{placeholder}}"
+                class="font-mono text-xs"
+              />
+              <label class="flex items-center gap-1 text-xs whitespace-nowrap">
+                <UCheckbox v-model="row.secret" />
+                Secret
+              </label>
+              <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" @click="removeProviderField(payload.senders.whatsapp.fields, fi)" />
+            </div>
+          </div>
         </div>
       </UCard>
     </section>

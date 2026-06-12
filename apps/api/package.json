@@ -3,6 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./dispatch": {
+      "types": "./dist/services/notification-dispatch.d.ts",
+      "import": "./dist/services/notification-dispatch.js"
+    },
+    "./notification-queue": {
+      "types": "./dist/services/notification-queue.d.ts",
+      "import": "./dist/services/notification-queue.js"
+    }
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
@@ -15,10 +25,12 @@
   "dependencies": {
     "@egrm/config-schemas": "workspace:*",
     "@egrm/core": "workspace:*",
+    "@egrm/notifications": "workspace:*",
     "@fastify/cors": "^10.0.0",
     "@fastify/jwt": "^9.0.0",
     "@fastify/rate-limit": "^10.0.0",
     "bcryptjs": "^2.4.3",
+    "bullmq": "^5.0.0",
     "dotenv": "^16.4.0",
     "drizzle-orm": "^0.44.0",
     "fastify": "^5.0.0",

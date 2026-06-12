@@ -444,31 +444,9 @@ async function main() {
   }, admin!.id);
 
   const kisipNotifications = defaultNotificationPack();
-  kisipNotifications.senders = {
-    email: {
-      from_name: 'KISIP GRM',
-      from_address: 'grm@kisip.go.ke',
-      provider: 'smtp',
-      api_url: '',
-      api_token: '',
-      enabled: true,
-    },
-    sms: {
-      sender_id: 'KISIP',
-      provider: 'advanta',
-      api_url: '',
-      api_token: '',
-      enabled: true,
-    },
-    whatsapp: {
-      display_number: '',
-      phone_number_id: '',
-      provider: 'meta',
-      api_url: '',
-      api_token: '',
-      enabled: false,
-    },
-  };
+  // defaultNotificationPack already includes Advanta SMS preset fields
+  kisipNotifications.senders.email.from_name = 'KISIP GRM';
+  kisipNotifications.senders.email.from_address = 'grm@kisip.go.ke';
   await upsertActiveConfig(kisip!.id, 'cd09_notifications', kisipNotifications, admin!.id);
 
   // Sample unit tree: national → 2 counties → 3 settlements

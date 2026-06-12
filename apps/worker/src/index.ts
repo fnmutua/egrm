@@ -1,37 +1,35 @@
 /**
- * Worker service scaffold (Phase 0).
- * Phase 2 adds: notification outbox dispatcher, SLA scheduler, escalation rules.
- * Phase 3+: retention jobs, report generation, AI calls.
+ * Background worker: notification outbox dispatch, SLA scheduler (Phase 2+).
  */
-import 'dotenv/config';
-import { Queue, Worker } from 'bullmq';
-import IORedis from 'ioredis';
+import { config as loadEnv } from 'dotenv';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Worker } from 'bullmq';
+import { dispatchNotificationOutbox } from '@egrm/api/dispatch';
+import { NOTIFICATION_OUTBOX_QUEUE } from '@egrm/api/notification-queue';
 
-const connection = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
-  maxRetriesPerRequest: null,
-});
+const __dirname = dirname(fileURLToPath(import.meta.url));
+loadEnv({ path: resolve(__dirname, '../../../.env') });
+loadEnv({ path: resolve(__dirname, '../../api/.env') });
 
-export const QUEUES = {
-  heartbeat: 'heartbeat',
-  // outbox: 'notification-outbox',   (Phase 2)
-  // slaTick: 'sla-tick',             (Phase 2)
-} as const;
+const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
 
-const heartbeatQueue = new Queue(QUEUES.heartbeat, { connection });
-
-const heartbeatWorker = new Worker(
-  QUEUES.heartbeat,
+const outboxWorker = new Worker(
+  NOTIFICATION_OUTBOX_QUEUE,
   async (job) => {
-    console.log(`[worker] heartbeat #${job.id} at ${new Date().toISOString()}`);
+    const outboxId = job.data?.outboxId as string;
+    if (!outboxId) throw new Error('missing outboxId');
+    console.log(`[worker] dispatch outbox ${outboxId}`);
+    await dispatchNotificationOutbox(outboxId);
   },
-  { connection },
+  {
+    connection: { url: redisUrl, maxRetriesPerRequest: null },
+    concurrency: 5,
+  },
 );
 
-heartbeatWorker.on('failed', (job, err) => {
-  console.error(`[worker] job ${job?.id} failed:`, err);
+outboxWorker.on('failed', (job, err) => {
+  console.error(`[worker] outbox job ${job?.id} failed:`, err);
 });
 
-// Repeatable heartbeat proves the scheduler is alive (observability baseline, GEN-NFR-06).
-await heartbeatQueue.upsertJobScheduler('heartbeat-every-minute', { every: 60_000 });
-
-console.log('[worker] started — heartbeat scheduled every 60s');
+console.log('[worker] notification outbox consumer started');

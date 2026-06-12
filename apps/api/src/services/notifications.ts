@@ -2,6 +2,7 @@ import type { Cd09Notifications, NotificationEvent, NotificationRule } from '@eg
 import { db, schema } from '../db/client.js';
 import { getActiveConfig } from './config.js';
 import { piiLookupHash } from './crypto.js';
+import { renderTemplateBody } from './notification-dispatch.js';
 
 export interface NotificationEventContext {
   tenantId: string;
@@ -24,6 +25,7 @@ export interface NotificationEventContext {
   locale?: string;
 }
 
+type RecipientSelector = NotificationRule['to'][number];
 type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 function matchesList(value: string, filter: string | string[] | undefined): boolean {
@@ -63,21 +65,6 @@ function pickTemplateId(rule: NotificationRule, sensitivity: string): string {
   return rule.template;
 }
 
-function renderPreview(
-  cfg: Cd09Notifications,
-  templateId: string,
-  locale: string,
-  channel: string,
-  vars: Record<string, string>,
-): string {
-  const tpl = cfg.templates.find((t) => t.id === templateId);
-  const body =
-    tpl?.variants[locale]?.[channel as 'sms' | 'email' | 'in_app']?.body ??
-    tpl?.variants.en?.[channel as 'sms' | 'email' | 'in_app']?.body ??
-    `[${templateId}]`;
-  return body.replace(/\{\{([a-z_.]+)\}\}/g, (_, key: string) => vars[key] ?? `{{${key}}}`);
-}
-
 function isChannelKilled(cfg: Cd09Notifications, channel: string): string | null {
   for (const ks of cfg.kill_switches) {
     if (ks.channel === channel && !ks.enabled) return ks.reason ?? 'kill_switch';
@@ -85,14 +72,33 @@ function isChannelKilled(cfg: Cd09Notifications, channel: string): string | null
   return null;
 }
 
+function channelsForRule(rule: NotificationRule, selector: RecipientSelector): string[] {
+  const ch = rule.channels;
+  if (Array.isArray(ch)) return ch;
+  if ('party' in selector || 'address' in selector) return ch?.party ?? [];
+  return ch?.staff ?? ch?.party ?? [];
+}
+
+function recipientKindLabel(selector: RecipientSelector): string {
+  if ('party' in selector) return `party:${selector.party}`;
+  if ('user' in selector) return `user:${selector.user}`;
+  if ('role' in selector) return `role:${selector.role}`;
+  if ('team' in selector) return `team:${selector.team}`;
+  if ('address' in selector) return 'address';
+  return 'unknown';
+}
+
 /** Evaluate CD-09 rules; enqueue outbox + notification_log inside the caller's transaction. */
-export async function enqueueNotifications(ctx: NotificationEventContext, tx: DbTx): Promise<number> {
+export async function enqueueNotifications(
+  ctx: NotificationEventContext,
+  tx: DbTx,
+): Promise<{ count: number; outboxId: string | null }> {
   const cfg = await getActiveConfig<Cd09Notifications>(ctx.tenantId, 'cd09_notifications');
-  if (!cfg) return 0;
+  if (!cfg) return { count: 0, outboxId: null };
 
   const locale = ctx.locale ?? 'en';
   const matching = cfg.rules.filter((r) => ruleMatches(r, ctx));
-  if (matching.length === 0) return 0;
+  if (matching.length === 0) return { count: 0, outboxId: null };
 
   const vars: Record<string, string> = {
     'case.reference': ctx.case.reference,
@@ -120,31 +126,34 @@ export async function enqueueNotifications(ctx: NotificationEventContext, tx: Db
   let count = 0;
   for (const rule of matching) {
     const templateId = pickTemplateId(rule, ctx.case.sensitivity);
-    const channels = Array.isArray(rule.channels)
-      ? rule.channels
-      : [...(rule.channels?.party ?? []), ...(rule.channels?.staff ?? [])];
+    const selectors = rule.to.length > 0 ? rule.to : [{ party: 'complainant' as const }];
 
-    for (const channel of new Set(channels)) {
-      const killReason = isChannelKilled(cfg, channel);
-      const preview = renderPreview(cfg, templateId, locale, channel, vars);
-      const status = killReason ? `suppressed:${killReason}` : 'queued';
+    for (const selector of selectors) {
+      const channels = channelsForRule(rule, selector);
+      for (const channel of new Set(channels)) {
+        const killReason = isChannelKilled(cfg, channel);
+        const { body } = renderTemplateBody(cfg, templateId, locale, channel, vars);
+        const status = killReason ? `suppressed:${killReason}` : 'queued';
 
-      await tx.insert(schema.notificationLog).values({
-        tenantId: ctx.tenantId,
-        caseId: ctx.caseId,
-        outboxId: outbox!.id,
-        eventKind: ctx.event,
-        recipientKind: rule.to.length ? JSON.stringify(rule.to[0]) : 'rule',
-        recipientAddressHash: piiLookupHash(`${ctx.caseId}:${rule.id}:${channel}`),
-        channel,
-        templateId,
-        locale,
-        renderedPreview: preview.slice(0, 500),
-        status,
-      });
-      count += 1;
+        await tx.insert(schema.notificationLog).values({
+          tenantId: ctx.tenantId,
+          caseId: ctx.caseId,
+          outboxId: outbox!.id,
+          eventKind: ctx.event,
+          ruleId: rule.id ?? null,
+          recipientSelector: selector,
+          recipientKind: recipientKindLabel(selector),
+          recipientAddressHash: piiLookupHash(`${ctx.caseId}:${rule.id}:${channel}:${recipientKindLabel(selector)}`),
+          channel,
+          templateId,
+          locale,
+          renderedPreview: body.slice(0, 500),
+          status,
+        });
+        count += 1;
+      }
     }
   }
 
-  return count;
+  return { count, outboxId: outbox!.id };
 }

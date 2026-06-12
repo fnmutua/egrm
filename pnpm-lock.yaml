@@ -23,6 +23,9 @@ importers:
       '@egrm/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@egrm/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
       '@fastify/cors':
         specifier: ^10.0.0
         version: 10.1.0
@@ -35,6 +38,9 @@ importers:
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
+      bullmq:
+        specifier: ^5.0.0
+        version: 5.78.0
       dotenv:
         specifier: ^16.4.0
         version: 16.6.1
@@ -110,6 +116,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@egrm/api':
+        specifier: workspace:*
+        version: link:../api
       '@egrm/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -148,6 +157,25 @@ importers:
 
   packages/core:
     devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/notifications:
+    dependencies:
+      '@egrm/config-schemas':
+        specifier: workspace:*
+        version: link:../config-schemas
+      nodemailer:
+        specifier: ^6.9.16
+        version: 6.10.1
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.21
+      '@types/nodemailer':
+        specifier: ^6.4.17
+        version: 6.4.24
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -4254,6 +4282,12 @@ packages:
     dependencies:
       undici-types: 6.21.0
 
+  /@types/nodemailer@6.4.24:
+    resolution: {integrity: sha512-Ww4u0rT9wQNXh4JiQaIwx3QWdcOFXzOjQA2zc+jtFYNmQiT4mIUqcDin51bDFdkzKubFnQCZNK7FIHlPKQ/q9w==}
+    dependencies:
+      '@types/node': 22.19.21
+    dev: true
+
   /@types/pg@8.20.0:
     resolution: {integrity: sha512-bEPFOaMAHTEP1EzpvHTbmwR8UsFyHSKsRisLIHVMXnpNefSbGA1bD6CVy+qKjGSqmZqNqBDV2azOBo8TgkcVow==}
     dependencies:
@@ -7182,6 +7216,11 @@ packages:
   /node-releases@2.0.47:
     resolution: {integrity: sha512-Uzmd6LXpouKo8EUK68IjH4+E01w/hXyV3R3g/geCJo+rXLNfh1xucB+LOzYEOQPSiUK3h/xZf0cQGcSsmyL2Og==}
     engines: {node: '>=18'}
+    dev: false
+
+  /nodemailer@6.10.1:
+    resolution: {integrity: sha512-Z+iLaBGVaSjbIzQ4pX6XV41HrooLsQ10ZWPUehGmuantvzWoDVBnmsdUcOIDM1t+yPor5pDhVlDESgOMEGxhHA==}
+    engines: {node: '>=6.0.0'}
     dev: false
 
   /nopt@8.1.0:
