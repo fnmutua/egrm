@@ -24,6 +24,12 @@ export const CD01_SUBSECTIONS = [
   { id: 'sec-footer', label: 'Footer & contact' },
 ];
 
+export const CD03_SUBSECTIONS = [
+  { id: 'sec-categories', label: 'Categories' },
+  { id: 'sec-classes', label: 'Sensitivity classes' },
+  { id: 'sec-priorities', label: 'Priorities' },
+];
+
 /** An entry in an admin section: either a config domain editor or a standalone admin page. */
 export type AdminEntry =
   | { type: 'domain'; domain: string }
@@ -87,8 +93,9 @@ export const DOMAIN_CATALOGUE: DomainMeta[] = [
     subsections: CD01_SUBSECTIONS },
   { domain: 'cd02_hierarchy', cd: 'CD-02', title: 'Administrative hierarchy', icon: 'i-lucide-network', strict: true,
     description: 'Ordered jurisdiction levels (arbitrary depth). The unit tree itself is managed under Units.' },
-  { domain: 'cd03_taxonomy', cd: 'CD-03', title: 'Case taxonomy', icon: 'i-lucide-tags', strict: false,
-    description: 'Case types, categories, sensitivity classes, priorities, expected outcomes, closure reasons.' },
+  { domain: 'cd03_taxonomy', cd: 'CD-03', title: 'Case taxonomy', icon: 'i-lucide-tags', strict: true,
+    description: 'Grievance categories shown at intake, sensitivity classes for protected handling, and the priority ladder.',
+    subsections: CD03_SUBSECTIONS },
   { domain: 'cd04_workflow', cd: 'CD-04', title: 'Workflow', icon: 'i-lucide-git-branch', strict: true,
     description: 'Statuses with semantic tags, transitions with role guards and effects, closure/appeal policy. Validated for reachability.' },
   { domain: 'cd05_sla', cd: 'CD-05', title: 'SLA plans & calendars', icon: 'i-lucide-timer', strict: false,

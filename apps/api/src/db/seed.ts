@@ -246,13 +246,24 @@ async function main() {
 
   await upsertActiveConfig(kisip!.id, 'cd03_taxonomy', {
     categories: [
-      { code: 'land_compensation', label: { en: 'Land & Compensation', sw: 'Ardhi na Fidia' } },
-      { code: 'project_implementation', label: { en: 'Project Implementation', sw: 'Utekelezaji wa Mradi' } },
-      { code: 'environmental', label: { en: 'Environmental', sw: 'Mazingira' } },
-      { code: 'social', label: { en: 'Social', sw: 'Kijamii' } },
-      { code: 'labour', label: { en: 'Labour & Employment', sw: 'Kazi na Ajira' } },
-      { code: 'corruption_fraud', label: { en: 'Corruption / Fraud', sw: 'Ufisadi / Udanganyifu' } },
-      { code: 'other', label: { en: 'Other', sw: 'Nyingine' } },
+      { code: 'land_compensation', label: { en: 'Land & Compensation', sw: 'Ardhi na Fidia' }, active: true },
+      { code: 'project_implementation', label: { en: 'Project Implementation', sw: 'Utekelezaji wa Mradi' }, active: true },
+      { code: 'environmental', label: { en: 'Environmental', sw: 'Mazingira' }, active: true },
+      { code: 'social', label: { en: 'Social', sw: 'Kijamii' }, active: true },
+      { code: 'labour', label: { en: 'Labour & Employment', sw: 'Kazi na Ajira' }, active: true },
+      { code: 'gbv_seah', label: { en: 'GBV / SEAH', sw: 'Ukatili wa Kijinsia' }, sensitivity_class: 'gbv_seah', active: true },
+      { code: 'corruption_fraud', label: { en: 'Corruption / Fraud', sw: 'Ufisadi / Udanganyifu' }, sensitivity_class: 'corruption', active: true },
+      { code: 'other', label: { en: 'Other', sw: 'Nyingine' }, active: true },
+    ],
+    sensitivity_classes: [
+      { code: 'gbv_seah', label: { en: 'GBV / SEAH', sw: 'Ukatili wa Kijinsia' }, restricted: true },
+      { code: 'corruption', label: { en: 'Corruption / Fraud', sw: 'Ufisadi' }, restricted: true },
+    ],
+    priorities: [
+      { code: 'low', label: { en: 'Low', sw: 'Chini' }, sla_multiplier: 1.5, is_default: false },
+      { code: 'normal', label: { en: 'Normal', sw: 'Kawaida' }, sla_multiplier: 1, is_default: true },
+      { code: 'high', label: { en: 'High', sw: 'Juu' }, sla_multiplier: 0.5, is_default: false },
+      { code: 'emergency', label: { en: 'Emergency', sw: 'Dharura' }, sla_multiplier: 0.25, is_default: false },
     ],
   }, admin!.id);
 

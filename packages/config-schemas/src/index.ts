@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { ConfigDomain } from '@egrm/core';
 import { cd01Identity } from './cd01-identity.js';
 import { cd02Hierarchy } from './cd02-hierarchy.js';
+import { cd03Taxonomy } from './cd03-taxonomy.js';
 import { cd04Workflow } from './cd04-workflow.js';
 import { cd06IntakeForms } from './cd06-intake-forms.js';
 import { cd07Numbering } from './cd07-numbering.js';
@@ -9,6 +10,7 @@ import { cd14Features } from './cd14-features.js';
 
 export * from './cd01-identity.js';
 export * from './cd02-hierarchy.js';
+export * from './cd03-taxonomy.js';
 export * from './cd04-workflow.js';
 export * from './cd06-intake-forms.js';
 export * from './cd07-numbering.js';
@@ -20,7 +22,7 @@ const permissive = z.record(z.string(), z.unknown());
 export const CONFIG_SCHEMAS: Record<ConfigDomain, z.ZodTypeAny> = {
   cd01_identity: cd01Identity,
   cd02_hierarchy: cd02Hierarchy,
-  cd03_taxonomy: permissive,
+  cd03_taxonomy: cd03Taxonomy,
   cd04_workflow: cd04Workflow,
   cd05_sla: permissive,
   cd06_intake_forms: cd06IntakeForms,

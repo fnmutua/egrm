@@ -48,7 +48,7 @@ export default async function publicRoutes(app: FastifyInstance) {
       anonymous_allowed: form.anonymous_allowed,
       consent_text: form.consent_text,
       fields: form.fields.filter((f) => f.enabled),
-      categories: taxonomy?.categories ?? [],
+      categories: (taxonomy?.categories ?? []).filter((c) => c.active !== false),
       levels: hierarchy.levels,
       units,
     };

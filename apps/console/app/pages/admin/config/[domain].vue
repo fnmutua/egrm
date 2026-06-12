@@ -169,6 +169,7 @@ onMounted(async () => {
           <div v-if="mode === 'form'">
             <ConfigIdentityEditor v-if="domain === 'cd01_identity'" :payload="payload" :section="activeSection" />
             <ConfigHierarchyEditor v-else-if="domain === 'cd02_hierarchy'" :payload="payload" />
+            <ConfigTaxonomyEditor v-else-if="domain === 'cd03_taxonomy'" :payload="payload" :section="activeSection" />
             <ConfigValueEditor v-else :model-value="payload" @update:model-value="payload = ($event as Record<string, any>)" />
           </div>
 
