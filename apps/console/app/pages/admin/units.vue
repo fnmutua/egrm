@@ -32,8 +32,12 @@ async function load() {
   levels.value = h.payload.levels;
 }
 
-const levelLabel = (code: string) => levels.value.find((l) => l.code === code)?.label ?? code;
-const levelIndex = (code: string) => levels.value.findIndex((l) => l.code === code);
+// Level codes are matched case-insensitively: they are admin-entered and may
+// drift in casing between the hierarchy config and stored unit rows.
+const levelLabel = (code: string) =>
+  levels.value.find((l) => l.code.toLowerCase() === code.toLowerCase())?.label ?? code;
+const levelIndex = (code: string) =>
+  levels.value.findIndex((l) => l.code.toLowerCase() === code.toLowerCase());
 /** Child level of a given level (one step down the hierarchy), if any. */
 const childLevelOf = (code: string): Level | undefined => {
   const idx = levelIndex(code);
@@ -160,7 +164,21 @@ const subtreeOf = (id: string): Unit[] => {
   return out;
 };
 
-const canPromote = (u: Unit) => levelIndex(u.levelCode) < levels.value.length - 1;
+/** Only one top-level unit may exist (single-root rule). */
+const hasRoot = computed(() => units.value.some((u) => u.parentId === null));
+
+const canPromote = (u: Unit) => {
+  if (levelIndex(u.levelCode) >= levels.value.length - 1) return false;
+  // Promotion makes the unit a root when its parent is the root: blocked while another root exists.
+  const parent = units.value.find((x) => x.id === u.parentId);
+  const newParentId = parent?.parentId ?? null;
+  return !(newParentId === null && units.value.some((x) => x.parentId === null && x.id !== u.id));
+};
+const promoteTooltip = (u: Unit) => {
+  if (levelIndex(u.levelCode) >= levels.value.length - 1) return 'Already at the top level';
+  if (!canPromote(u)) return 'Cannot promote: only one top-level unit is allowed';
+  return `Promote to ${levels.value[levelIndex(u.levelCode) + 1]?.label} (subtree moves with it)`;
+};
 /** Demotion shifts the whole subtree down: blocked if anything would drop below the lowest level. */
 const canDemote = (u: Unit) => {
   const minIdx = Math.min(levelIndex(u.levelCode), ...subtreeOf(u.id).map((d) => levelIndex(d.levelCode)));
@@ -170,7 +188,7 @@ const canDemote = (u: Unit) => {
 const demoteParents = (u: Unit) => {
   const subtreeIds = new Set(subtreeOf(u.id).map((d) => d.id));
   return units.value.filter(
-    (c) => c.id !== u.id && !subtreeIds.has(c.id) && c.levelCode === u.levelCode && c.active,
+    (c) => c.id !== u.id && !subtreeIds.has(c.id) && levelIndex(c.levelCode) === levelIndex(u.levelCode) && c.active,
   );
 };
 
@@ -182,6 +200,37 @@ async function promote(u: Unit) {
   } catch (e: unknown) {
     const data = (e as { data?: { error?: string } }).data;
     toast.add({ title: data?.error ?? 'Promote failed', color: 'error' });
+  }
+}
+
+// --- delete (leaf units only) ---
+const deleteOpen = ref(false);
+const deleteUnit = ref<Unit | null>(null);
+const deleting = ref(false);
+
+function openDelete(u: Unit) {
+  deleteUnit.value = u;
+  deleteOpen.value = true;
+}
+
+async function confirmDelete() {
+  if (!deleteUnit.value) return;
+  deleting.value = true;
+  try {
+    await api(`/api/v1/units/${deleteUnit.value.id}`, { method: 'DELETE' });
+    toast.add({ title: `"${deleteUnit.value.name}" deleted`, color: 'success' });
+    deleteOpen.value = false;
+    await load();
+  } catch (e: unknown) {
+    const data = (e as { data?: { error?: string } }).data;
+    const reasons: Record<string, string> = {
+      has_children: 'This unit still has child units.',
+      has_cases: 'Cases are attached to this unit. Deactivate it instead.',
+      has_role_assignments: 'Staff roles are scoped to this unit. Deactivate it instead.',
+    };
+    toast.add({ title: 'Cannot delete', description: reasons[data?.error ?? ''] ?? data?.error ?? 'Delete failed', color: 'error' });
+  } finally {
+    deleting.value = false;
   }
 }
 
@@ -229,7 +278,7 @@ onMounted(async () => {
   <div v-if="user" class="p-4 sm:p-8 max-w-5xl">
     <div class="flex items-start justify-between gap-3 mb-1 flex-wrap">
       <h1 class="text-2xl font-semibold">Jurisdiction units</h1>
-      <UButton v-if="topLevel" icon="i-lucide-plus" @click="openCreate(null)">
+      <UButton v-if="topLevel && !hasRoot" icon="i-lucide-plus" @click="openCreate(null)">
         Add {{ topLevel.label }}
       </UButton>
     </div>
@@ -302,7 +351,7 @@ onMounted(async () => {
                   <UButton
                     size="xs" variant="ghost" icon="i-lucide-arrow-big-up"
                     :disabled="!canPromote(row.unit)"
-                    :title="canPromote(row.unit) ? `Promote to ${levels[levelIndex(row.unit.levelCode) + 1]?.label} (subtree moves with it)` : 'Already at the top level'"
+                    :title="promoteTooltip(row.unit)"
                     @click="promote(row.unit)"
                   />
                   <UButton
@@ -317,6 +366,12 @@ onMounted(async () => {
                     :title="row.unit.active ? 'Deactivate' : 'Reactivate'"
                     @click="toggleActive(row.unit)"
                   />
+                  <UButton
+                    size="xs" variant="ghost" color="error" icon="i-lucide-trash-2"
+                    :disabled="row.childCount > 0"
+                    :title="row.childCount > 0 ? 'Cannot delete: has child units' : 'Delete'"
+                    @click="openDelete(row.unit)"
+                  />
                 </div>
               </td>
             </tr>
@@ -324,6 +379,20 @@ onMounted(async () => {
         </table>
       </div>
     </UCard>
+
+    <!-- Delete modal -->
+    <UModal
+      v-model:open="deleteOpen"
+      :title="deleteUnit ? `Delete ${deleteUnit.name}?` : 'Delete unit'"
+      description="This permanently removes the unit. Units with cases or role assignments cannot be deleted — deactivate those instead."
+    >
+      <template #footer>
+        <div class="flex justify-end gap-2 w-full">
+          <UButton variant="ghost" color="neutral" @click="deleteOpen = false">Cancel</UButton>
+          <UButton :loading="deleting" color="error" @click="confirmDelete">Delete</UButton>
+        </div>
+      </template>
+    </UModal>
 
     <!-- Demote modal -->
     <UModal

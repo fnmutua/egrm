@@ -205,9 +205,9 @@ async function main() {
 
   await upsertActiveConfig(kisip!.id, 'cd02_hierarchy', {
     levels: [
-      { code: 'settlement', label: 'Settlement', is_intake_default: true, is_confirmation_authority: false, can_be_assigned: true },
-      { code: 'county', label: 'County', is_intake_default: false, is_confirmation_authority: false, can_be_assigned: true },
-      { code: 'national', label: 'National', is_intake_default: false, is_confirmation_authority: true, can_be_assigned: true },
+      { code: 'settlement', label: 'Settlement', parent_code: 'county', is_intake_default: true, is_confirmation_authority: false, can_be_assigned: true },
+      { code: 'county', label: 'County', parent_code: 'national', is_intake_default: false, is_confirmation_authority: false, can_be_assigned: true },
+      { code: 'national', label: 'National', parent_code: null, is_intake_default: false, is_confirmation_authority: true, can_be_assigned: true },
     ],
   }, admin!.id);
 

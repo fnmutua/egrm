@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Cd02Hierarchy } from '../types.js';
 import { db, schema } from '../db/client.js';
@@ -26,6 +26,12 @@ const demoteBody = z.object({
 });
 
 type UnitRow = typeof schema.unit.$inferSelect;
+
+/** Case-insensitive level lookup: admin-entered codes may differ in casing from stored unit rows. */
+function levelIndexOf(hierarchy: Cd02Hierarchy, code: string): number {
+  const needle = code.toLowerCase();
+  return hierarchy.levels.findIndex((l) => l.code.toLowerCase() === needle);
+}
 
 /** All transitive descendants of a unit within a preloaded tenant unit list. */
 function descendantsOf(all: UnitRow[], rootId: string): UnitRow[] {
@@ -61,7 +67,7 @@ export default async function unitRoutes(app: FastifyInstance) {
 
     const hierarchy = await getActiveConfig<Cd02Hierarchy>(req.tenant.id, 'cd02_hierarchy');
     if (!hierarchy) return reply.code(503).send({ error: 'hierarchy_not_configured' });
-    const levelIdx = hierarchy.levels.findIndex((l) => l.code === level_code);
+    const levelIdx = levelIndexOf(hierarchy, level_code);
     if (levelIdx < 0) return reply.code(422).send({ error: 'unknown_level', details: { level_code } });
 
     // Parent must be exactly one level above (the next level in the ordered list).
@@ -72,7 +78,7 @@ export default async function unitRoutes(app: FastifyInstance) {
         .where(and(eq(schema.unit.tenantId, req.tenant.id), eq(schema.unit.id, parent_id)))
         .limit(1);
       if (!parent) return reply.code(422).send({ error: 'unknown_parent' });
-      const parentIdx = hierarchy.levels.findIndex((l) => l.code === parent.levelCode);
+      const parentIdx = levelIndexOf(hierarchy, parent.levelCode);
       if (parentIdx !== levelIdx + 1) {
         return reply.code(422).send({
           error: 'invalid_parent_level',
@@ -81,6 +87,14 @@ export default async function unitRoutes(app: FastifyInstance) {
       }
     } else if (levelIdx !== hierarchy.levels.length - 1) {
       return reply.code(422).send({ error: 'parent_required_below_top_level' });
+    } else {
+      // Single-root rule: only one top-level unit may exist.
+      const [root] = await db
+        .select({ id: schema.unit.id })
+        .from(schema.unit)
+        .where(and(eq(schema.unit.tenantId, req.tenant.id), isNull(schema.unit.parentId)))
+        .limit(1);
+      if (root) return reply.code(422).send({ error: 'top_level_unit_exists' });
     }
 
     try {
@@ -115,18 +129,27 @@ export default async function unitRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const hierarchy = await getActiveConfig<Cd02Hierarchy>(req.tenant.id, 'cd02_hierarchy');
     if (!hierarchy) return reply.code(503).send({ error: 'hierarchy_not_configured' });
-    const levelIdx = (code: string) => hierarchy.levels.findIndex((l) => l.code === code);
+    const levelIdx = (code: string) => levelIndexOf(hierarchy, code);
 
     const all = await db.select().from(schema.unit).where(eq(schema.unit.tenantId, req.tenant.id));
     const unit = all.find((u) => u.id === id);
     if (!unit) return reply.code(404).send({ error: 'not_found' });
 
     const idx = levelIdx(unit.levelCode);
+    if (idx < 0) return reply.code(422).send({ error: 'unknown_level', details: { level_code: unit.levelCode } });
     if (idx >= hierarchy.levels.length - 1) return reply.code(422).send({ error: 'cannot_promote_top_level' });
 
     const parent = all.find((u) => u.id === unit.parentId);
     const newParentId = parent?.parentId ?? null;
+    // Single-root rule: promoting into the top level would create a second root.
+    if (newParentId === null && all.some((u) => u.parentId === null && u.id !== unit.id)) {
+      return reply.code(422).send({ error: 'top_level_unit_exists' });
+    }
     const subtree = descendantsOf(all, unit.id);
+    const badLevel = subtree.find((d) => levelIdx(d.levelCode) < 0);
+    if (badLevel) {
+      return reply.code(422).send({ error: 'unknown_level', details: { unit: badLevel.id, level_code: badLevel.levelCode } });
+    }
 
     await db.transaction(async (tx) => {
       await tx
@@ -162,14 +185,19 @@ export default async function unitRoutes(app: FastifyInstance) {
 
     const hierarchy = await getActiveConfig<Cd02Hierarchy>(req.tenant.id, 'cd02_hierarchy');
     if (!hierarchy) return reply.code(503).send({ error: 'hierarchy_not_configured' });
-    const levelIdx = (code: string) => hierarchy.levels.findIndex((l) => l.code === code);
+    const levelIdx = (code: string) => levelIndexOf(hierarchy, code);
 
     const all = await db.select().from(schema.unit).where(eq(schema.unit.tenantId, req.tenant.id));
     const unit = all.find((u) => u.id === id);
     if (!unit) return reply.code(404).send({ error: 'not_found' });
 
     const idx = levelIdx(unit.levelCode);
+    if (idx < 0) return reply.code(422).send({ error: 'unknown_level', details: { level_code: unit.levelCode } });
     const subtree = descendantsOf(all, unit.id);
+    const badLevel = subtree.find((d) => levelIdx(d.levelCode) < 0);
+    if (badLevel) {
+      return reply.code(422).send({ error: 'unknown_level', details: { unit: badLevel.id, level_code: badLevel.levelCode } });
+    }
     const minIdx = Math.min(idx, ...subtree.map((d) => levelIdx(d.levelCode)));
     if (minIdx <= 0) {
       return reply.code(422).send({ error: 'cannot_demote_below_lowest_level' });
@@ -221,6 +249,16 @@ export default async function unitRoutes(app: FastifyInstance) {
       .limit(1);
     if (!existing) return reply.code(404).send({ error: 'not_found' });
 
+    // Single-root rule: re-parenting to null is only allowed if no other root exists.
+    if (parsed.data.parent_id === null && existing.parentId !== null) {
+      const [root] = await db
+        .select({ id: schema.unit.id })
+        .from(schema.unit)
+        .where(and(eq(schema.unit.tenantId, req.tenant.id), isNull(schema.unit.parentId)))
+        .limit(1);
+      if (root && root.id !== id) return reply.code(422).send({ error: 'top_level_unit_exists' });
+    }
+
     const [updated] = await db
       .update(schema.unit)
       .set({
@@ -241,5 +279,41 @@ export default async function unitRoutes(app: FastifyInstance) {
       data: { before: { name: existing.name, code: existing.code, active: existing.active }, after: parsed.data },
     });
     return { unit: updated };
+  });
+
+  /**
+   * Hard-delete a leaf unit. Only allowed when nothing depends on it:
+   * no child units, no cases, no role assignments. Otherwise deactivate instead.
+   */
+  app.delete('/api/v1/units/:id', { onRequest: [app.requirePermission('admin:hierarchy')] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+
+    const [existing] = await db
+      .select()
+      .from(schema.unit)
+      .where(and(eq(schema.unit.tenantId, req.tenant.id), eq(schema.unit.id, id)))
+      .limit(1);
+    if (!existing) return reply.code(404).send({ error: 'not_found' });
+
+    const [child] = await db.select({ id: schema.unit.id }).from(schema.unit).where(eq(schema.unit.parentId, id)).limit(1);
+    if (child) return reply.code(422).send({ error: 'has_children' });
+
+    const [caseRow] = await db.select({ id: schema.grmCase.id }).from(schema.grmCase).where(eq(schema.grmCase.unitId, id)).limit(1);
+    if (caseRow) return reply.code(422).send({ error: 'has_cases' });
+
+    const [assignment] = await db.select({ id: schema.userRole.id }).from(schema.userRole).where(eq(schema.userRole.unitId, id)).limit(1);
+    if (assignment) return reply.code(422).send({ error: 'has_role_assignments' });
+
+    await db.delete(schema.unit).where(eq(schema.unit.id, id));
+
+    await writeAudit({
+      tenantId: req.tenant.id,
+      actorId: req.user.sub,
+      action: 'unit.deleted',
+      entity: 'unit',
+      entityId: id,
+      data: { name: existing.name, code: existing.code, level_code: existing.levelCode },
+    });
+    return { ok: true };
   });
 }

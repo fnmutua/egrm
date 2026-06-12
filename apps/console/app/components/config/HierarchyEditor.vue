@@ -8,12 +8,24 @@
 interface Level {
   code: string;
   label: string;
+  parent_code?: string | null;
   is_intake_default: boolean;
   is_confirmation_authority: boolean;
   can_be_assigned: boolean;
 }
 
 const props = defineProps<{ payload: Record<string, any> }>();
+
+/**
+ * Parent links are the source of truth shown to the admin; the stored array
+ * order must always agree with them (levels[i] is parented by levels[i+1]).
+ */
+function relink() {
+  const list: Level[] = props.payload.levels;
+  list.forEach((l, i) => {
+    l.parent_code = list[i + 1]?.code ?? null;
+  });
+}
 
 function ensure() {
   if (!Array.isArray(props.payload.levels) || props.payload.levels.length === 0) {
@@ -26,6 +38,7 @@ function ensure() {
     l.is_confirmation_authority ??= false;
     l.can_be_assigned ??= true;
   }
+  relink();
 }
 ensure();
 watch(() => props.payload, ensure, { deep: false });
@@ -48,7 +61,36 @@ function moveDisplayed(from: number, to: number) {
   const [item] = list.splice(from, 1);
   list.splice(to, 0, item!);
   props.payload.levels = list.reverse();
+  relink();
 }
+
+// --- explicit parent selection ---
+const TOP = '__top__';
+const parentItems = (level: Level) => [
+  { value: TOP, label: 'None — top level' },
+  ...levels.value
+    .filter((l) => l !== level)
+    .map((l) => ({ value: l.code, label: `${l.label || '(unnamed)'} (${l.code || '?'})` })),
+];
+
+/** Re-seats the level directly below its chosen parent (or at the top), then relinks the chain. */
+function setParent(level: Level, value: string) {
+  const list = displayed.value.filter((l) => l !== level);
+  if (value === TOP) {
+    list.unshift(level);
+  } else {
+    const pi = list.findIndex((l) => l.code === value);
+    if (pi < 0) return;
+    list.splice(pi + 1, 0, level);
+  }
+  props.payload.levels = list.reverse();
+  relink();
+}
+
+const parentLabel = (level: Level) => {
+  const p = levels.value.find((l) => l.code === level.parent_code);
+  return p ? p.label || p.code : null;
+};
 
 // --- drag & drop ---
 const dragIndex = ref<number | null>(null);
@@ -76,10 +118,12 @@ function addLevel() {
     is_confirmation_authority: false,
     can_be_assigned: true,
   });
+  relink();
 }
 function removeLevel(level: Level) {
   if (levels.value.length <= 1) return;
   props.payload.levels = levels.value.filter((l) => l !== level);
+  relink();
 }
 
 /** Exactly one intake default: turning one on turns the others off. */
@@ -92,7 +136,8 @@ function setIntakeDefault(level: Level, on: boolean) {
 <template>
   <div>
     <p class="text-xs text-muted mb-3">
-      Top level first. Drag the cards (or use the arrows) to reorder. Cases route from the
+      Top level first. Each level is explicitly tied to its <b>parent level</b> — pick the parent
+      inside a card, or drag to rearrange (links update automatically). Cases route from the
       <b>intake default</b> level upward; exactly one level must carry that flag.
     </p>
 
@@ -115,6 +160,9 @@ function setIntakeDefault(level: Level, on: boolean) {
           <span class="text-xs text-muted w-5 shrink-0">{{ i + 1 }}.</span>
           <span class="font-medium truncate">{{ level.label || '(unnamed level)' }}</span>
           <UBadge v-if="level.code" size="sm" variant="subtle" color="neutral" class="font-mono">{{ level.code }}</UBadge>
+          <span v-if="parentLabel(level)" class="hidden sm:inline text-xs text-muted truncate">
+            under {{ parentLabel(level) }}
+          </span>
           <div class="hidden sm:flex items-center gap-1">
             <UBadge v-if="level.is_intake_default" size="sm" variant="subtle" color="primary">intake default</UBadge>
             <UBadge v-if="level.is_confirmation_authority" size="sm" variant="subtle" color="warning">confirms closure</UBadge>
@@ -140,9 +188,27 @@ function setIntakeDefault(level: Level, on: boolean) {
               <UInput v-model="level.label" class="w-full" />
             </UFormField>
             <UFormField label="Code" required help="Stable identifier used by units and workflow rules.">
-              <UInput v-model="level.code" class="w-full font-mono" placeholder="e.g. county" />
+              <UInput
+                v-model="level.code"
+                class="w-full font-mono"
+                placeholder="e.g. county"
+                @update:model-value="relink()"
+              />
             </UFormField>
           </div>
+          <UFormField
+            label="Parent level"
+            help="The level this one reports to. Changing it moves the level directly below its parent."
+          >
+            <USelectMenu
+              :model-value="level.parent_code ?? TOP"
+              :items="parentItems(level)"
+              value-key="value"
+              label-key="label"
+              class="w-full sm:w-72"
+              @update:model-value="setParent(level, $event as string)"
+            />
+          </UFormField>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div class="flex items-center justify-between gap-2 text-sm">
               <span>Intake default</span>
