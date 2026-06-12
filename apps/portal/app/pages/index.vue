@@ -15,7 +15,9 @@ interface IdentityPayload {
   statements: Record<string, L10n>;
   hero?: { title: L10n; subtitle?: L10n; image_url?: string };
   how_it_works?: { title: L10n; description?: L10n }[];
-  channels_display?: { hotline?: string; ussd_code?: string; email?: string; offices?: string[] };
+  channels_display?:
+    | { type: 'hotline' | 'ussd' | 'email' | 'office'; value: string }[]
+    | { hotline?: string; ussd_code?: string; email?: string; offices?: string[] };
   about?: { heading?: L10n; body: L10n };
   faq?: { question: L10n; answer: L10n }[];
   footer?: { address?: string; phone?: string; email?: string; privacy_note?: L10n };
@@ -54,13 +56,25 @@ const statementCards = computed(() => [
 const channels = computed(() => {
   const c = p.value?.channels_display;
   if (!c) return [];
-  const list: { icon: string; label: string; value: string }[] = [];
-  if (c.hotline) list.push({ icon: 'i-lucide-phone-call', label: locale.value === 'sw' ? 'Simu ya bure' : 'Toll-free hotline', value: c.hotline });
-  if (c.ussd_code) list.push({ icon: 'i-lucide-smartphone', label: 'USSD', value: c.ussd_code });
-  if (c.email) list.push({ icon: 'i-lucide-mail', label: locale.value === 'sw' ? 'Barua pepe' : 'Email', value: c.email });
-  for (const office of c.offices ?? []) {
-    list.push({ icon: 'i-lucide-building-2', label: locale.value === 'sw' ? 'Ofisi' : 'Walk-in', value: office });
+  const sw = locale.value === 'sw';
+  const display: Record<string, { icon: string; label: string }> = {
+    hotline: { icon: 'i-lucide-phone-call', label: sw ? 'Simu ya bure' : 'Toll-free hotline' },
+    ussd: { icon: 'i-lucide-smartphone', label: 'USSD' },
+    email: { icon: 'i-lucide-mail', label: sw ? 'Barua pepe' : 'Email' },
+    office: { icon: 'i-lucide-building-2', label: sw ? 'Ofisi' : 'Walk-in' },
+  };
+  // Current shape: ordered list of typed entries.
+  if (Array.isArray(c)) {
+    return c
+      .filter((ch) => ch.value)
+      .map((ch) => ({ ...display[ch.type] ?? display.office!, value: ch.value }));
   }
+  // Legacy object shape from older config versions.
+  const list: { icon: string; label: string; value: string }[] = [];
+  if (c.hotline) list.push({ ...display.hotline!, value: c.hotline });
+  if (c.ussd_code) list.push({ ...display.ussd!, value: c.ussd_code });
+  if (c.email) list.push({ ...display.email!, value: c.email });
+  for (const office of c.offices ?? []) list.push({ ...display.office!, value: office });
   return list;
 });
 
@@ -197,23 +211,19 @@ const heroSubtitle = computed(
       </section>
 
       <!-- About -->
-      <section v-if="p?.about && t(p.about.body)" class="max-w-5xl mx-auto px-4 py-14">
-        <div class="grid lg:grid-cols-3 gap-8 items-start">
-          <div class="lg:col-span-2">
-            <h2 class="text-2xl font-semibold mb-4">{{ t(p.about.heading) || 'About' }}</h2>
-            <p class="text-muted leading-relaxed whitespace-pre-line">{{ t(p.about.body) }}</p>
-          </div>
-          <div v-if="p.branding.partner_logos?.length" class="flex flex-wrap items-center gap-4 lg:justify-end">
-            <a
-              v-for="logo in p.branding.partner_logos"
-              :key="logo.name"
-              :href="logo.link || undefined"
-              target="_blank"
-              rel="noopener"
-            >
-              <img :src="logo.image_url" :alt="logo.name" :title="logo.name" class="h-12 object-contain" />
-            </a>
-          </div>
+      <section v-if="p?.about && t(p.about.body)" class="max-w-5xl mx-auto px-4 py-14 w-full">
+        <h2 class="text-2xl font-semibold mb-4">{{ t(p.about.heading) || 'About' }}</h2>
+        <p class="text-muted leading-relaxed whitespace-pre-line">{{ t(p.about.body) }}</p>
+        <div v-if="p.branding.partner_logos?.length" class="flex flex-wrap items-center gap-6 mt-8">
+          <a
+            v-for="logo in p.branding.partner_logos"
+            :key="logo.name"
+            :href="logo.link || undefined"
+            target="_blank"
+            rel="noopener"
+          >
+            <img :src="logo.image_url" :alt="logo.name" :title="logo.name" class="h-12 object-contain" />
+          </a>
         </div>
       </section>
 

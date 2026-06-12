@@ -54,8 +54,17 @@ function ensure() {
   p.hero.title ??= {};
   p.hero.subtitle ??= {};
   p.how_it_works ??= [];
-  p.channels_display ??= { offices: [] };
-  p.channels_display.offices ??= [];
+  // Channels: migrate the legacy object shape ({hotline, ussd_code, email, offices[]}) to the list form.
+  if (!Array.isArray(p.channels_display)) {
+    const old = p.channels_display ?? {};
+    const list: { type: string; value: string }[] = [];
+    if (old.hotline) list.push({ type: 'hotline', value: old.hotline });
+    if (old.ussd_code) list.push({ type: 'ussd', value: old.ussd_code });
+    if (old.email) list.push({ type: 'email', value: old.email });
+    for (const office of old.offices ?? []) list.push({ type: 'office', value: office });
+    if (list.length === 0) list.push({ type: 'hotline', value: '' });
+    p.channels_display = list;
+  }
   p.about ??= { heading: {}, body: {} };
   p.about.heading ??= {};
   p.about.body ??= {};
@@ -110,8 +119,16 @@ function addFaq() {
 function addPartnerLogo() {
   props.payload.branding.partner_logos.push({ name: '', image_url: '', link: '' });
 }
-function addOffice() {
-  props.payload.channels_display.offices.push('');
+
+const CHANNEL_TYPES = [
+  { value: 'hotline', label: 'Hotline', icon: 'i-lucide-phone-call', placeholder: '0800 …' },
+  { value: 'ussd', label: 'USSD', icon: 'i-lucide-smartphone', placeholder: '*XXX#' },
+  { value: 'email', label: 'Email', icon: 'i-lucide-mail', placeholder: 'grm@…' },
+  { value: 'office', label: 'Walk-in office', icon: 'i-lucide-building-2', placeholder: 'Office name / location' },
+];
+const channelPlaceholder = (type: string) => CHANNEL_TYPES.find((c) => c.value === type)?.placeholder ?? '';
+function addChannel() {
+  props.payload.channels_display.push({ type: 'hotline', value: '' });
 }
 function removeAt(arr: unknown[], i: number) {
   arr.splice(i, 1);
@@ -283,27 +300,28 @@ function removeAt(arr: unknown[], i: number) {
     <!-- Channels -->
     <section v-show="show('sec-channels')" id="sec-channels">
       <h3 class="text-sm font-semibold text-muted uppercase tracking-wide mb-1">Other channels</h3>
-      <p class="text-xs text-muted mb-3">Display-only: tells visitors the other ways to file a grievance.</p>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <UFormField label="Hotline">
-          <UInput v-model="payload.channels_display.hotline" class="w-full" placeholder="0800 …" />
-        </UFormField>
-        <UFormField label="USSD code">
-          <UInput v-model="payload.channels_display.ussd_code" class="w-full" placeholder="*XXX#" />
-        </UFormField>
-        <UFormField label="Email">
-          <UInput v-model="payload.channels_display.email" class="w-full" placeholder="grm@…" />
-        </UFormField>
-      </div>
-      <UFormField label="Walk-in offices" class="mt-3">
-        <div class="space-y-2">
-          <div v-for="(_, i) in payload.channels_display.offices" :key="i" class="flex items-center gap-2">
-            <UInput v-model="payload.channels_display.offices[i]" class="flex-1" />
-            <UButton size="xs" variant="ghost" color="error" icon="i-lucide-x" @click="removeAt(payload.channels_display.offices, i)" />
-          </div>
-          <UButton size="xs" variant="soft" icon="i-lucide-plus" @click="addOffice">Add office</UButton>
+      <p class="text-xs text-muted mb-3">
+        Display-only: tells visitors the other ways to file a grievance. Add as many as needed — at least one must remain.
+      </p>
+      <div class="space-y-2">
+        <div v-for="(ch, i) in payload.channels_display" :key="i" class="flex items-center gap-2">
+          <USelectMenu
+            v-model="ch.type"
+            :items="CHANNEL_TYPES"
+            value-key="value"
+            label-key="label"
+            class="w-44 shrink-0"
+          />
+          <UInput v-model="ch.value" class="flex-1" :placeholder="channelPlaceholder(ch.type)" />
+          <UButton
+            size="xs" variant="ghost" color="error" icon="i-lucide-x"
+            :disabled="payload.channels_display.length <= 1"
+            :title="payload.channels_display.length <= 1 ? 'At least one channel must remain' : 'Remove channel'"
+            @click="removeAt(payload.channels_display, i)"
+          />
         </div>
-      </UFormField>
+        <UButton size="xs" variant="soft" icon="i-lucide-plus" @click="addChannel">Add channel</UButton>
+      </div>
     </section>
 
     <!-- About -->

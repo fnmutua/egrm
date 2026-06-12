@@ -96,11 +96,12 @@ export const kisipIdentity = {
       },
     },
   ],
-  channels_display: {
-    hotline: '0800 720 720',
-    email: 'grm@kisip.go.ke',
-    offices: ['County KISIP coordination offices', 'Settlement Executive Committee (SEC) offices'],
-  },
+  channels_display: [
+    { type: 'hotline', value: '0800 720 720' },
+    { type: 'email', value: 'grm@kisip.go.ke' },
+    { type: 'office', value: 'County KISIP coordination offices' },
+    { type: 'office', value: 'Settlement Executive Committee (SEC) offices' },
+  ],
   about: {
     heading: { en: 'About this mechanism', sw: 'Kuhusu utaratibu huu' },
     body: {

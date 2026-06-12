@@ -54,14 +54,18 @@ export const cd01Identity = z.object({
   how_it_works: z
     .array(z.object({ title: localizedText, description: localizedText.optional() }))
     .optional(),
-  /** Other intake routes advertised on the landing page (display-only; CD-08 governs behaviour). */
+  /**
+   * Other intake routes advertised on the landing page (display-only; CD-08 governs behaviour).
+   * Free-form list, but when present it must keep at least one entry.
+   */
   channels_display: z
-    .object({
-      hotline: z.string().optional(),
-      ussd_code: z.string().optional(),
-      email: z.string().optional(),
-      offices: z.array(z.string()).optional(),
-    })
+    .array(
+      z.object({
+        type: z.enum(['hotline', 'ussd', 'email', 'office']),
+        value: z.string().min(1),
+      }),
+    )
+    .min(1, 'At least one channel must remain')
     .optional(),
   about: z
     .object({
