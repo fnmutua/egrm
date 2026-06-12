@@ -59,11 +59,12 @@ export type AdminEntry =
   | { type: 'page'; label: string; icon: string; to: string; description: string };
 
 /** Sidebar grouping for the admin area, in display order. Related tools live together. */
-export const ADMIN_SECTIONS: { label: string; entries: AdminEntry[] }[] = [
+export const ADMIN_SECTIONS: { label: string; icon?: string; entries: AdminEntry[] }[] = [
   { label: 'Identity', entries: [{ type: 'domain', domain: 'cd01_identity' }] },
   { label: 'Roles & permissions', entries: [{ type: 'domain', domain: 'cd10_org_access' }] },
   {
     label: 'Jurisdiction & hierarchy',
+    icon: 'i-lucide-network',
     entries: [
       { type: 'domain', domain: 'cd02_hierarchy' },
       {
