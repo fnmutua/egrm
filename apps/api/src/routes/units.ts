@@ -20,6 +20,29 @@ const updateBody = z.object({
   active: z.boolean().optional(),
 });
 
+const demoteBody = z.object({
+  /** New parent (must sit at the unit's current level). */
+  parent_id: z.string().uuid(),
+});
+
+type UnitRow = typeof schema.unit.$inferSelect;
+
+/** All transitive descendants of a unit within a preloaded tenant unit list. */
+function descendantsOf(all: UnitRow[], rootId: string): UnitRow[] {
+  const out: UnitRow[] = [];
+  const queue = [rootId];
+  while (queue.length) {
+    const id = queue.shift()!;
+    for (const u of all) {
+      if (u.parentId === id) {
+        out.push(u);
+        queue.push(u.id);
+      }
+    }
+  }
+  return out;
+}
+
 /** Jurisdiction unit tree management (CD-02 instances; GEN-CFG-10). */
 export default async function unitRoutes(app: FastifyInstance) {
   app.get('/api/v1/units', { onRequest: [app.requirePermission('admin:hierarchy')] }, async (req) => {
@@ -81,6 +104,109 @@ export default async function unitRoutes(app: FastifyInstance) {
       }
       throw e;
     }
+  });
+
+  /**
+   * Promote a unit one level up (e.g. Settlement → County). The whole subtree
+   * shifts up with it so parent/child levels stay adjacent. The new parent is
+   * the former grandparent (null when promoting into the top level).
+   */
+  app.post('/api/v1/units/:id/promote', { onRequest: [app.requirePermission('admin:hierarchy')] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const hierarchy = await getActiveConfig<Cd02Hierarchy>(req.tenant.id, 'cd02_hierarchy');
+    if (!hierarchy) return reply.code(503).send({ error: 'hierarchy_not_configured' });
+    const levelIdx = (code: string) => hierarchy.levels.findIndex((l) => l.code === code);
+
+    const all = await db.select().from(schema.unit).where(eq(schema.unit.tenantId, req.tenant.id));
+    const unit = all.find((u) => u.id === id);
+    if (!unit) return reply.code(404).send({ error: 'not_found' });
+
+    const idx = levelIdx(unit.levelCode);
+    if (idx >= hierarchy.levels.length - 1) return reply.code(422).send({ error: 'cannot_promote_top_level' });
+
+    const parent = all.find((u) => u.id === unit.parentId);
+    const newParentId = parent?.parentId ?? null;
+    const subtree = descendantsOf(all, unit.id);
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(schema.unit)
+        .set({ levelCode: hierarchy.levels[idx + 1]!.code, parentId: newParentId })
+        .where(eq(schema.unit.id, unit.id));
+      for (const d of subtree) {
+        const dIdx = levelIdx(d.levelCode);
+        await tx.update(schema.unit).set({ levelCode: hierarchy.levels[dIdx + 1]!.code }).where(eq(schema.unit.id, d.id));
+      }
+    });
+
+    await writeAudit({
+      tenantId: req.tenant.id,
+      actorId: req.user.sub,
+      action: 'unit.promoted',
+      entity: 'unit',
+      entityId: unit.id,
+      data: { from: unit.levelCode, to: hierarchy.levels[idx + 1]!.code, subtree_size: subtree.length },
+    });
+    return { ok: true };
+  });
+
+  /**
+   * Demote a unit one level down (e.g. County → Settlement) under a new parent
+   * at its former level. The subtree shifts down with it; rejected if any
+   * descendant would fall below the lowest level.
+   */
+  app.post('/api/v1/units/:id/demote', { onRequest: [app.requirePermission('admin:hierarchy')] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const parsed = demoteBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+
+    const hierarchy = await getActiveConfig<Cd02Hierarchy>(req.tenant.id, 'cd02_hierarchy');
+    if (!hierarchy) return reply.code(503).send({ error: 'hierarchy_not_configured' });
+    const levelIdx = (code: string) => hierarchy.levels.findIndex((l) => l.code === code);
+
+    const all = await db.select().from(schema.unit).where(eq(schema.unit.tenantId, req.tenant.id));
+    const unit = all.find((u) => u.id === id);
+    if (!unit) return reply.code(404).send({ error: 'not_found' });
+
+    const idx = levelIdx(unit.levelCode);
+    const subtree = descendantsOf(all, unit.id);
+    const minIdx = Math.min(idx, ...subtree.map((d) => levelIdx(d.levelCode)));
+    if (minIdx <= 0) {
+      return reply.code(422).send({ error: 'cannot_demote_below_lowest_level' });
+    }
+
+    const parent = all.find((u) => u.id === parsed.data.parent_id);
+    if (!parent) return reply.code(422).send({ error: 'unknown_parent' });
+    if (parent.id === unit.id || subtree.some((d) => d.id === parent.id)) {
+      return reply.code(422).send({ error: 'parent_inside_subtree' });
+    }
+    if (levelIdx(parent.levelCode) !== idx) {
+      return reply.code(422).send({
+        error: 'invalid_parent_level',
+        details: { expected_parent_level: unit.levelCode, got: parent.levelCode },
+      });
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(schema.unit)
+        .set({ levelCode: hierarchy.levels[idx - 1]!.code, parentId: parent.id })
+        .where(eq(schema.unit.id, unit.id));
+      for (const d of subtree) {
+        const dIdx = levelIdx(d.levelCode);
+        await tx.update(schema.unit).set({ levelCode: hierarchy.levels[dIdx - 1]!.code }).where(eq(schema.unit.id, d.id));
+      }
+    });
+
+    await writeAudit({
+      tenantId: req.tenant.id,
+      actorId: req.user.sub,
+      action: 'unit.demoted',
+      entity: 'unit',
+      entityId: unit.id,
+      data: { from: unit.levelCode, to: hierarchy.levels[idx - 1]!.code, new_parent: parent.id, subtree_size: subtree.length },
+    });
+    return { ok: true };
   });
 
   app.patch('/api/v1/units/:id', { onRequest: [app.requirePermission('admin:hierarchy')] }, async (req, reply) => {
