@@ -145,6 +145,66 @@ export default async function caseRoutes(app: FastifyInstance) {
     };
   });
 
+  app.get('/api/v1/cases/:id/notifications', { onRequest: [app.requirePermission('case:read')] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const [c] = await db
+      .select({
+        id: schema.grmCase.id,
+        unitId: schema.grmCase.unitId,
+        assigneeId: schema.grmCase.assigneeId,
+        sensitivity: schema.grmCase.sensitivity,
+      })
+      .from(schema.grmCase)
+      .where(and(eq(schema.grmCase.tenantId, req.tenant.id), eq(schema.grmCase.id, id)))
+      .limit(1);
+    if (!c) return reply.code(404).send({ error: 'not_found' });
+
+    const allowed = await canAccessCase(req.tenant.id, req.user, req.user.sub, {
+      unitId: c.unitId,
+      assigneeId: c.assigneeId,
+      sensitivity: c.sensitivity,
+    });
+    if (!allowed) return reply.code(404).send({ error: 'not_found' });
+
+    const rows = await db
+      .select({
+        id: schema.notificationLog.id,
+        eventKind: schema.notificationLog.eventKind,
+        ruleId: schema.notificationLog.ruleId,
+        recipientKind: schema.notificationLog.recipientKind,
+        channel: schema.notificationLog.channel,
+        templateId: schema.notificationLog.templateId,
+        locale: schema.notificationLog.locale,
+        status: schema.notificationLog.status,
+        renderedPreview: schema.notificationLog.renderedPreview,
+        providerMessageId: schema.notificationLog.providerMessageId,
+        attempts: schema.notificationLog.attempts,
+        createdAt: schema.notificationLog.createdAt,
+        updatedAt: schema.notificationLog.updatedAt,
+      })
+      .from(schema.notificationLog)
+      .where(and(eq(schema.notificationLog.tenantId, req.tenant.id), eq(schema.notificationLog.caseId, id)))
+      .orderBy(desc(schema.notificationLog.createdAt));
+
+    return {
+      notifications: rows.map((r) => ({
+        id: r.id,
+        event_kind: r.eventKind,
+        rule_id: r.ruleId,
+        recipient_kind: r.recipientKind,
+        channel: r.channel,
+        template_id: r.templateId,
+        locale: r.locale,
+        status: r.status,
+        rendered_preview: r.renderedPreview,
+        provider_message_id: r.providerMessageId,
+        attempts: r.attempts,
+        created_at: r.createdAt,
+        updated_at: r.updatedAt,
+      })),
+    };
+  });
+
   app.post('/api/v1/cases', { onRequest: [app.requirePermission('case:create_assisted')] }, async (req, reply) => {
     const parsed = assistedBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
