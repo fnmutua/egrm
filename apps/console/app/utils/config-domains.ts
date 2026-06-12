@@ -7,11 +7,84 @@ export interface DomainMeta {
   icon: string;
   /** Domains with strict zod schemas server-side; others are free-form JSON until later phases. */
   strict: boolean;
+  /** In-page anchors shown as sub-items in the admin sidebar. */
+  subsections?: { id: string; label: string }[];
 }
+
+export const CD01_SUBSECTIONS = [
+  { id: 'sec-identity', label: 'Identity' },
+  { id: 'sec-languages', label: 'Languages' },
+  { id: 'sec-branding', label: 'Colors & logos' },
+  { id: 'sec-hero', label: 'Hero' },
+  { id: 'sec-how', label: 'How it works' },
+  { id: 'sec-channels', label: 'Channels' },
+  { id: 'sec-about', label: 'About' },
+  { id: 'sec-statements', label: 'Statements' },
+  { id: 'sec-faq', label: 'FAQ' },
+  { id: 'sec-footer', label: 'Footer & contact' },
+];
+
+/** An entry in an admin section: either a config domain editor or a standalone admin page. */
+export type AdminEntry =
+  | { type: 'domain'; domain: string }
+  | { type: 'page'; label: string; icon: string; to: string; description: string };
+
+/** Sidebar grouping for the admin area, in display order. Related tools live together. */
+export const ADMIN_SECTIONS: { label: string; entries: AdminEntry[] }[] = [
+  { label: 'Identity', entries: [{ type: 'domain', domain: 'cd01_identity' }] },
+  {
+    label: 'Jurisdiction & hierarchy',
+    entries: [
+      { type: 'domain', domain: 'cd02_hierarchy' },
+      {
+        type: 'page',
+        label: 'Jurisdiction units',
+        icon: 'i-lucide-map-pin',
+        to: '/admin/units',
+        description: 'The unit tree itself: instances of the hierarchy levels (counties, settlements, …).',
+      },
+    ],
+  },
+  {
+    label: 'Case setup',
+    entries: [
+      { type: 'domain', domain: 'cd03_taxonomy' },
+      { type: 'domain', domain: 'cd04_workflow' },
+      { type: 'domain', domain: 'cd05_sla' },
+      { type: 'domain', domain: 'cd07_numbering' },
+    ],
+  },
+  {
+    label: 'Intake & channels',
+    entries: [
+      { type: 'domain', domain: 'cd06_intake_forms' },
+      { type: 'domain', domain: 'cd08_channels' },
+    ],
+  },
+  {
+    label: 'Organisation',
+    entries: [
+      { type: 'domain', domain: 'cd10_org_access' },
+      { type: 'domain', domain: 'cd11_committees' },
+      { type: 'domain', domain: 'cd12_referrals' },
+    ],
+  },
+  { label: 'Communication', entries: [{ type: 'domain', domain: 'cd09_notifications' }] },
+  {
+    label: 'Platform',
+    entries: [
+      { type: 'domain', domain: 'cd13_reporting' },
+      { type: 'domain', domain: 'cd14_features' },
+      { type: 'domain', domain: 'cd15_dashboards' },
+      { type: 'domain', domain: 'cd16_ai' },
+    ],
+  },
+];
 
 export const DOMAIN_CATALOGUE: DomainMeta[] = [
   { domain: 'cd01_identity', cd: 'CD-01', title: 'Identity & branding', icon: 'i-lucide-palette', strict: true,
-    description: 'Tenant name, locales, colors, and the mandatory free-of-charge / non-retaliation / confidentiality statements.' },
+    description: 'Tenant name, locales, colors, and the mandatory free-of-charge / non-retaliation / confidentiality statements.',
+    subsections: CD01_SUBSECTIONS },
   { domain: 'cd02_hierarchy', cd: 'CD-02', title: 'Administrative hierarchy', icon: 'i-lucide-network', strict: true,
     description: 'Ordered jurisdiction levels (arbitrary depth). The unit tree itself is managed under Units.' },
   { domain: 'cd03_taxonomy', cd: 'CD-03', title: 'Case taxonomy', icon: 'i-lucide-tags', strict: false,

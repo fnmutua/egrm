@@ -1,4 +1,6 @@
 <script setup lang="ts">
+definePageMeta({ layout: 'admin' });
+
 const route = useRoute();
 const { api } = useApi();
 const { user, fetchMe } = useAuth();
@@ -117,6 +119,18 @@ async function activate(version: number) {
   }
 }
 
+// Subsection panels: the sidebar's sub-items set the hash; only that panel is rendered.
+const activeSection = computed(
+  () => route.hash?.slice(1) || meta?.subsections?.[0]?.id || '',
+);
+const activeSectionLabel = computed(
+  () => meta?.subsections?.find((s) => s.id === activeSection.value)?.label ?? '',
+);
+// Jump back to the top of the pane when switching panels.
+watch(activeSection, () => {
+  document.querySelector('main')?.scrollTo({ top: 0 });
+});
+
 onMounted(async () => {
   const me = await fetchMe();
   if (!me) return navigateTo('/login');
@@ -126,9 +140,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="user" class="p-8 max-w-6xl mx-auto">
-    <UButton to="/admin" variant="ghost" icon="i-lucide-arrow-left" class="mb-4">All configuration</UButton>
-
+  <div v-if="user" class="p-8 max-w-6xl">
     <div class="flex items-center gap-3 mb-1">
       <UIcon :name="meta?.icon ?? 'i-lucide-settings'" class="text-2xl text-primary" />
       <h1 class="text-2xl font-semibold">{{ meta?.title ?? domain }}</h1>
@@ -143,14 +155,19 @@ onMounted(async () => {
         <UCard>
           <template #header>
             <div class="flex items-center justify-between gap-3">
-              <UTabs v-model="mode" :items="modeItems" :content="false" size="xs" />
+              <div class="flex items-center gap-3 min-w-0">
+                <UTabs v-model="mode" :items="modeItems" :content="false" size="xs" />
+                <UBadge v-if="mode === 'form' && activeSectionLabel" variant="subtle" color="primary" class="shrink-0">
+                  {{ activeSectionLabel }}
+                </UBadge>
+              </div>
               <span class="text-xs text-muted shrink-0">loaded from {{ loadedFrom }}</span>
             </div>
           </template>
 
           <!-- Form mode -->
           <div v-if="mode === 'form'">
-            <ConfigIdentityEditor v-if="domain === 'cd01_identity'" :payload="payload" />
+            <ConfigIdentityEditor v-if="domain === 'cd01_identity'" :payload="payload" :section="activeSection" />
             <ConfigValueEditor v-else :model-value="payload" @update:model-value="payload = ($event as Record<string, any>)" />
           </div>
 

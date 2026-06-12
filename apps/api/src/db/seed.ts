@@ -34,6 +34,121 @@ async function upsertActiveConfig(tenantId: string, domain: ConfigDomain, payloa
   });
 }
 
+/** Full landing-page branding for the KISIP reference tenant (CD-01). */
+export const kisipIdentity = {
+  name: 'KISIP GRM',
+  legal_name: 'Kenya Informal Settlements Improvement Project',
+  programme: 'Kenya Informal Settlements Improvement Project (KISIP)',
+  locales: { default: 'en', enabled: ['en', 'sw'] },
+  timezone: 'Africa/Nairobi',
+  branding: { primary_color: '#0f3a5e', accent_color: '#d97706' },
+  statements: {
+    free_of_charge: {
+      en: 'Submitting a grievance is completely free of charge.',
+      sw: 'Kuwasilisha malalamiko ni bure kabisa.',
+    },
+    non_retaliation: {
+      en: 'No one will face retaliation for submitting a grievance.',
+      sw: 'Hakuna mtu atakayedhulumiwa kwa kuwasilisha malalamiko.',
+    },
+    confidentiality: {
+      en: 'Your information is handled confidentially.',
+      sw: 'Taarifa zako zinashughulikiwa kwa siri.',
+    },
+  },
+  hero: {
+    title: {
+      en: 'Report a grievance about KISIP works in your settlement',
+      sw: 'Wasilisha malalamiko kuhusu kazi za KISIP katika makazi yako',
+    },
+    subtitle: {
+      en: 'Free, confidential, and answered within published timelines. You can also track an existing case with your reference number.',
+      sw: 'Bure, kwa siri, na hujibiwa ndani ya muda uliowekwa. Unaweza pia kufuatilia kesi iliyopo kwa nambari yako ya kumbukumbu.',
+    },
+  },
+  how_it_works: [
+    {
+      title: { en: 'Submit', sw: 'Wasilisha' },
+      description: {
+        en: 'Online, by phone, or at your county KISIP office. You may remain anonymous.',
+        sw: 'Mtandaoni, kwa simu, au katika ofisi ya KISIP ya kaunti yako. Unaweza kubaki bila kujulikana.',
+      },
+    },
+    {
+      title: { en: 'Acknowledged', sw: 'Imepokelewa' },
+      description: {
+        en: 'You receive a reference number immediately and an acknowledgement within 2 working days.',
+        sw: 'Unapokea nambari ya kumbukumbu mara moja na uthibitisho ndani ya siku 2 za kazi.',
+      },
+    },
+    {
+      title: { en: 'Investigated', sw: 'Inachunguzwa' },
+      description: {
+        en: 'The responsible team investigates and works on a resolution within 30 days.',
+        sw: 'Timu husika huchunguza na kutafuta suluhisho ndani ya siku 30.',
+      },
+    },
+    {
+      title: { en: 'Resolved', sw: 'Imetatuliwa' },
+      description: {
+        en: 'You are informed of the outcome. If unsatisfied, you can appeal within 30 days.',
+        sw: 'Unafahamishwa matokeo. Usiporidhika, unaweza kukata rufaa ndani ya siku 30.',
+      },
+    },
+  ],
+  channels_display: {
+    hotline: '0800 720 720',
+    email: 'grm@kisip.go.ke',
+    offices: ['County KISIP coordination offices', 'Settlement Executive Committee (SEC) offices'],
+  },
+  about: {
+    heading: { en: 'About this mechanism', sw: 'Kuhusu utaratibu huu' },
+    body: {
+      en: 'The Kenya Informal Settlements Improvement Project (KISIP) improves living conditions in informal settlements through tenure regularization and infrastructure investment. This grievance redress mechanism lets residents and other stakeholders raise concerns about project activities — including land and compensation, construction works, environmental and social impacts — and receive a documented response.',
+      sw: 'Mradi wa Kuboresha Makazi Yasiyo Rasmi Kenya (KISIP) unaboresha hali ya maisha katika makazi yasiyo rasmi kupitia urasimishaji wa umiliki na uwekezaji wa miundombinu. Utaratibu huu wa kushughulikia malalamiko unawawezesha wakazi na wadau wengine kuibua hoja kuhusu shughuli za mradi — ikiwemo ardhi na fidia, kazi za ujenzi, athari za kimazingira na kijamii — na kupata majibu yaliyorekodiwa.',
+    },
+  },
+  faq: [
+    {
+      question: { en: 'Who can submit a grievance?', sw: 'Nani anaweza kuwasilisha malalamiko?' },
+      answer: {
+        en: 'Anyone affected by or concerned about KISIP activities: residents, workers, business owners, or organizations.',
+        sw: 'Yeyote aliyeathiriwa au mwenye wasiwasi kuhusu shughuli za KISIP: wakazi, wafanyakazi, wafanyabiashara, au mashirika.',
+      },
+    },
+    {
+      question: { en: 'Can I remain anonymous?', sw: 'Naweza kubaki bila kujulikana?' },
+      answer: {
+        en: 'Yes. You can submit without giving your name. Keep your reference number safe — it is the only way to follow up on an anonymous case.',
+        sw: 'Ndiyo. Unaweza kuwasilisha bila kutoa jina lako. Tunza nambari yako ya kumbukumbu — ndiyo njia pekee ya kufuatilia kesi isiyo na jina.',
+      },
+    },
+    {
+      question: { en: 'How long will it take?', sw: 'Itachukua muda gani?' },
+      answer: {
+        en: 'You get an acknowledgement within 2 working days and a resolution target of 30 days. Complex cases may take longer; you will be kept informed.',
+        sw: 'Unapata uthibitisho ndani ya siku 2 za kazi na lengo la utatuzi ni siku 30. Kesi ngumu zaweza kuchukua muda zaidi; utaendelea kufahamishwa.',
+      },
+    },
+    {
+      question: { en: 'What happens to my personal data?', sw: 'Data yangu binafsi inatumikaje?' },
+      answer: {
+        en: 'Your details are encrypted, visible only to authorized GRM staff, and used solely to process your grievance in line with the privacy notice.',
+        sw: 'Taarifa zako zimesimbwa, zinaonekana tu kwa wafanyakazi walioidhinishwa wa GRM, na hutumika tu kushughulikia malalamiko yako kwa mujibu wa taarifa ya faragha.',
+      },
+    },
+  ],
+  footer: {
+    address: 'State Department for Housing and Urban Development, P.O. Box 30450-00100, Nairobi',
+    phone: '0800 720 720',
+    email: 'grm@kisip.go.ke',
+    privacy_note: {
+      en: 'Personal data is processed in accordance with the Data Protection Act, 2019.',
+      sw: 'Data binafsi inashughulikiwa kwa mujibu wa Sheria ya Ulinzi wa Data, 2019.',
+    },
+  },
+};
+
 async function main() {
   // Tenant
   let [kisip] = await db.select().from(schema.tenant).where(eq(schema.tenant.code, 'kisip')).limit(1);
@@ -85,27 +200,7 @@ async function main() {
   }
 
   // Active config versions
-  await upsertActiveConfig(kisip!.id, 'cd01_identity', {
-    name: 'KISIP GRM',
-    legal_name: 'Kenya Informal Settlements Improvement Project',
-    locales: { default: 'en', enabled: ['en', 'sw'] },
-    timezone: 'Africa/Nairobi',
-    branding: { primary_color: '#0f3a5e' },
-    statements: {
-      free_of_charge: {
-        en: 'Submitting a grievance is completely free of charge.',
-        sw: 'Kuwasilisha malalamiko ni bure kabisa.',
-      },
-      non_retaliation: {
-        en: 'No one will face retaliation for submitting a grievance.',
-        sw: 'Hakuna mtu atakayedhulumiwa kwa kuwasilisha malalamiko.',
-      },
-      confidentiality: {
-        en: 'Your information is handled confidentially.',
-        sw: 'Taarifa zako zinashughulikiwa kwa siri.',
-      },
-    },
-  }, admin!.id);
+  await upsertActiveConfig(kisip!.id, 'cd01_identity', kisipIdentity, admin!.id);
 
   await upsertActiveConfig(kisip!.id, 'cd02_hierarchy', {
     levels: [

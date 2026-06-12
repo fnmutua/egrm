@@ -14,8 +14,13 @@ export const cd01Identity = z.object({
   timezone: z.string().default('Africa/Nairobi'),
   branding: z.object({
     logo_url: z.string().optional(),
+    favicon_url: z.string().optional(),
     primary_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#0f3a5e'),
     accent_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    /** Co-branding (implementing agency, donor) shown in about/footer. */
+    partner_logos: z
+      .array(z.object({ name: z.string().min(1), image_url: z.string().min(1), link: z.string().optional() }))
+      .optional(),
   }),
   /** Mandatory display items — presence enforced (KUSP2 FR-PUB-12/14). */
   statements: z.object({
@@ -23,6 +28,42 @@ export const cd01Identity = z.object({
     non_retaliation: localizedText,
     confidentiality: localizedText,
   }),
+  /** Landing page hero. Falls back to a generic headline when absent. */
+  hero: z
+    .object({
+      title: localizedText,
+      subtitle: localizedText.optional(),
+      image_url: z.string().optional(),
+    })
+    .optional(),
+  /** "How it works" process steps, rendered in order. */
+  how_it_works: z
+    .array(z.object({ title: localizedText, description: localizedText.optional() }))
+    .optional(),
+  /** Other intake routes advertised on the landing page (display-only; CD-08 governs behaviour). */
+  channels_display: z
+    .object({
+      hotline: z.string().optional(),
+      ussd_code: z.string().optional(),
+      email: z.string().optional(),
+      offices: z.array(z.string()).optional(),
+    })
+    .optional(),
+  about: z
+    .object({
+      heading: localizedText.optional(),
+      body: localizedText,
+    })
+    .optional(),
+  faq: z.array(z.object({ question: localizedText, answer: localizedText })).optional(),
+  footer: z
+    .object({
+      address: z.string().optional(),
+      phone: z.string().optional(),
+      email: z.string().optional(),
+      privacy_note: localizedText.optional(),
+    })
+    .optional(),
 }).superRefine((cfg, ctx) => {
   for (const [key, text] of Object.entries(cfg.statements)) {
     for (const locale of cfg.locales.enabled) {

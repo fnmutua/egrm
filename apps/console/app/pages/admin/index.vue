@@ -1,4 +1,6 @@
 <script setup lang="ts">
+definePageMeta({ layout: 'admin' });
+
 const { api } = useApi();
 const { user, fetchMe } = useAuth();
 
@@ -23,64 +25,65 @@ onMounted(async () => {
 });
 
 const byDomain = computed(() => new Map(rows.value.map((r) => [r.domain, r])));
+const configuredCount = computed(() => rows.value.filter((r) => r.active_version).length);
 </script>
 
 <template>
-  <div v-if="user" class="p-8 max-w-6xl mx-auto">
-    <div class="flex items-center justify-between mb-2">
-      <h1 class="text-2xl font-semibold">Administration</h1>
-      <UButton to="/" variant="ghost" icon="i-lucide-arrow-left">Dashboard</UButton>
-    </div>
+  <div v-if="user" class="p-8 max-w-4xl">
+    <h1 class="text-2xl font-semibold mb-1">Configuration overview</h1>
     <p class="text-muted mb-6">
-      Tenant configuration registry — every domain is versioned: draft → validate → activate, with full history and rollback.
+      Every domain is versioned: draft → validate → activate, with full history and rollback.
+      <template v-if="!loading">{{ configuredCount }} of {{ rows.length }} domains configured.</template>
     </p>
 
-    <div class="mb-6">
-      <UCard>
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="font-medium">Jurisdiction units</div>
-            <div class="text-sm text-muted">Manage the unit tree (instances of the CD-02 levels): counties, settlements, …</div>
-          </div>
-          <UButton to="/admin/units" icon="i-lucide-network" variant="outline">Manage units</UButton>
-        </div>
-      </UCard>
-    </div>
-
     <div v-if="loading" class="text-muted p-8 text-center">Loading…</div>
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-      <UCard
-        v-for="meta in DOMAIN_CATALOGUE"
-        :key="meta.domain"
-        class="hover:ring-2 ring-primary/40 cursor-pointer transition"
-        @click="navigateTo(`/admin/config/${meta.domain}`)"
-      >
-        <div class="flex items-start gap-3">
-          <UIcon :name="meta.icon" class="text-xl text-primary mt-0.5 shrink-0" />
-          <div class="min-w-0">
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="font-medium">{{ meta.title }}</span>
-              <UBadge size="sm" variant="subtle" color="neutral">{{ meta.cd }}</UBadge>
-            </div>
-            <p class="text-xs text-muted mt-1 line-clamp-2">{{ meta.description }}</p>
-            <div class="flex items-center gap-2 mt-2">
-              <UBadge
-                v-if="byDomain.get(meta.domain)?.active_version"
-                size="sm" color="success" variant="subtle"
-              >
-                v{{ byDomain.get(meta.domain)!.active_version }} active
-              </UBadge>
-              <UBadge v-else size="sm" color="warning" variant="subtle">not configured</UBadge>
-              <UBadge
-                v-if="byDomain.get(meta.domain)?.draft_count"
-                size="sm" color="info" variant="subtle"
-              >
-                {{ byDomain.get(meta.domain)!.draft_count }} draft(s)
-              </UBadge>
-            </div>
-          </div>
-        </div>
-      </UCard>
+    <div v-else class="space-y-6">
+      <div v-for="section in ADMIN_SECTIONS" :key="section.label">
+        <h2 class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">{{ section.label }}</h2>
+        <UCard :ui="{ body: 'p-0 sm:p-0' }">
+          <ul class="divide-y divide-default">
+            <li
+              v-for="(entry, i) in section.entries"
+              :key="i"
+              class="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-elevated/50 cursor-pointer transition"
+              @click="navigateTo(entry.type === 'page' ? entry.to : `/admin/config/${entry.domain}`)"
+            >
+              <template v-if="entry.type === 'page'">
+                <div class="flex items-center gap-3 min-w-0">
+                  <UIcon :name="entry.icon" class="text-primary shrink-0" />
+                  <div class="min-w-0">
+                    <span class="font-medium text-sm">{{ entry.label }}</span>
+                    <p class="text-xs text-muted truncate">{{ entry.description }}</p>
+                  </div>
+                </div>
+                <UIcon name="i-lucide-chevron-right" class="text-muted shrink-0" />
+              </template>
+              <template v-else>
+                <div class="flex items-center gap-3 min-w-0">
+                  <UIcon :name="domainMeta(entry.domain)?.icon ?? 'i-lucide-settings'" class="text-primary shrink-0" />
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium text-sm">{{ domainMeta(entry.domain)?.title }}</span>
+                      <UBadge size="sm" variant="subtle" color="neutral">{{ domainMeta(entry.domain)?.cd }}</UBadge>
+                    </div>
+                    <p class="text-xs text-muted truncate">{{ domainMeta(entry.domain)?.description }}</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  <UBadge v-if="byDomain.get(entry.domain)?.draft_count" size="sm" color="info" variant="subtle">
+                    {{ byDomain.get(entry.domain)!.draft_count }} draft(s)
+                  </UBadge>
+                  <UBadge v-if="byDomain.get(entry.domain)?.active_version" size="sm" color="success" variant="subtle">
+                    v{{ byDomain.get(entry.domain)!.active_version }} active
+                  </UBadge>
+                  <UBadge v-else size="sm" color="warning" variant="subtle">not configured</UBadge>
+                  <UIcon name="i-lucide-chevron-right" class="text-muted" />
+                </div>
+              </template>
+            </li>
+          </ul>
+        </UCard>
+      </div>
     </div>
   </div>
 </template>

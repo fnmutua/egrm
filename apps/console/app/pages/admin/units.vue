@@ -1,4 +1,6 @@
 <script setup lang="ts">
+definePageMeta({ layout: 'admin' });
+
 const { api } = useApi();
 const { user, fetchMe } = useAuth();
 const toast = useToast();
@@ -99,8 +101,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="user" class="p-8 max-w-5xl mx-auto">
-    <UButton to="/admin" variant="ghost" icon="i-lucide-arrow-left" class="mb-4">Administration</UButton>
+  <div v-if="user" class="p-8 max-w-5xl">
     <h1 class="text-2xl font-semibold mb-1">Jurisdiction units</h1>
     <p class="text-muted mb-6">
       Instances of the configured hierarchy levels
