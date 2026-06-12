@@ -151,12 +151,25 @@ export const kisipIdentity = {
 };
 
 async function main() {
+  const extraHostnames = (process.env.SEED_TENANT_HOSTNAMES ?? '')
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  const seedHostnames = ['localhost', ...extraHostnames];
+
   // Tenant
   let [kisip] = await db.select().from(schema.tenant).where(eq(schema.tenant.code, 'kisip')).limit(1);
   if (!kisip) {
     [kisip] = await db
       .insert(schema.tenant)
-      .values({ code: 'kisip', name: 'KISIP — Kenya Informal Settlements Improvement Project', hostnames: ['localhost'] })
+      .values({ code: 'kisip', name: 'KISIP — Kenya Informal Settlements Improvement Project', hostnames: seedHostnames })
+      .returning();
+  } else if (extraHostnames.length) {
+    const merged = [...new Set([...(kisip.hostnames ?? []), ...extraHostnames])];
+    [kisip] = await db
+      .update(schema.tenant)
+      .set({ hostnames: merged })
+      .where(eq(schema.tenant.id, kisip.id))
       .returning();
   }
 

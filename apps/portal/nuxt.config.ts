@@ -7,7 +7,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       apiBase: process.env.NUXT_PUBLIC_API_BASE ?? 'http://localhost:4100',
-      tenant: process.env.NUXT_PUBLIC_TENANT ?? 'kisip2',
+      tenant: process.env.NUXT_PUBLIC_TENANT ?? 'kisip',
     },
   },
 });

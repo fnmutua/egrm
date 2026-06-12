@@ -27,4 +27,8 @@ pnpm dev                               # api :4100, console :3100, portal :3200
 
 Seeded login (console): `admin@kisip.local` / `ChangeMe!2026`.
 
-The worker (`pnpm dev:worker`) is excluded from `pnpm dev` until Phase 2 — it needs a Redis-compatible server (e.g. Memurai on Windows). Containerization comes back at deployment time.
+The worker (`pnpm dev:worker`) is excluded from `pnpm dev` until Phase 2 — it needs a Redis-compatible server (e.g. Memurai on Windows).
+
+## Deploy to Railway
+
+See [`docs/deploy-railway.md`](docs/deploy-railway.md) for Docker-based deployment of **api**, **portal**, and **console** with PostgreSQL.

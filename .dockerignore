@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+**/.output
+**/dist
+.git
+.cursor
+specs
+reference
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+.turbo
+**/terminals
