@@ -3,13 +3,13 @@
  * Dedicated form for CD-02 Administrative hierarchy.
  * Levels are collapsible cards, ordered top level first, reorderable by
  * drag & drop or arrow buttons. The stored payload keeps the platform
- * convention: array ordered lowest (intake) level first.
+ * convention: array ordered lowest level first.
  */
 interface Level {
   code: string;
   label: string;
   parent_code?: string | null;
-  is_intake_default: boolean;
+  allows_intake: boolean;
   is_confirmation_authority: boolean;
   can_be_assigned: boolean;
 }
@@ -30,11 +30,12 @@ function relink() {
 function ensure() {
   if (!Array.isArray(props.payload.levels) || props.payload.levels.length === 0) {
     props.payload.levels = [
-      { code: 'unit', label: 'Unit', is_intake_default: true, is_confirmation_authority: false, can_be_assigned: true },
+      { code: 'unit', label: 'Unit', allows_intake: true, is_confirmation_authority: false, can_be_assigned: true },
     ];
   }
   for (const l of props.payload.levels) {
-    l.is_intake_default ??= false;
+    l.allows_intake ??= l.is_intake_default ?? false;
+    delete l.is_intake_default;
     l.is_confirmation_authority ??= false;
     l.can_be_assigned ??= true;
   }
@@ -114,7 +115,7 @@ function addLevel() {
   props.payload.levels.unshift({
     code: '',
     label: '',
-    is_intake_default: false,
+    allows_intake: false,
     is_confirmation_authority: false,
     can_be_assigned: true,
   });
@@ -126,10 +127,8 @@ function removeLevel(level: Level) {
   relink();
 }
 
-/** Exactly one intake default: turning one on turns the others off. */
-function setIntakeDefault(level: Level, on: boolean) {
-  if (on) for (const l of levels.value) l.is_intake_default = l === level;
-  else level.is_intake_default = false;
+function levelAllowsIntake(level: Level, on: boolean) {
+  level.allows_intake = on;
 }
 </script>
 
@@ -137,8 +136,9 @@ function setIntakeDefault(level: Level, on: boolean) {
   <div>
     <p class="text-xs text-muted mb-3">
       Top level first. Each level is explicitly tied to its <b>parent level</b> — pick the parent
-      inside a card, or drag to rearrange (links update automatically). Cases route from the
-      <b>intake default</b> level upward; exactly one level must carry that flag.
+      inside a card, or drag to rearrange (links update automatically). Enable
+      <b>allows intake</b> on any level where cases may be submitted; one or more levels
+      may allow intake.
     </p>
 
     <div class="space-y-2">
@@ -164,7 +164,7 @@ function setIntakeDefault(level: Level, on: boolean) {
             under {{ parentLabel(level) }}
           </span>
           <div class="hidden sm:flex items-center gap-1">
-            <UBadge v-if="level.is_intake_default" size="sm" variant="subtle" color="primary">intake default</UBadge>
+            <UBadge v-if="level.allows_intake" size="sm" variant="subtle" color="primary">allows intake</UBadge>
             <UBadge v-if="level.is_confirmation_authority" size="sm" variant="subtle" color="warning">confirms closure</UBadge>
             <UBadge v-if="level.can_be_assigned" size="sm" variant="subtle" color="neutral">assignable</UBadge>
           </div>
@@ -211,8 +211,8 @@ function setIntakeDefault(level: Level, on: boolean) {
           </UFormField>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div class="flex items-center justify-between gap-2 text-sm">
-              <span>Intake default</span>
-              <USwitch :model-value="level.is_intake_default" @update:model-value="setIntakeDefault(level, $event)" />
+              <span>Allows intake</span>
+              <USwitch :model-value="level.allows_intake" @update:model-value="levelAllowsIntake(level, $event)" />
             </div>
             <div class="flex items-center justify-between gap-2 text-sm">
               <span>Confirms closure</span>

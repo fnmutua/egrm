@@ -43,12 +43,12 @@ interface Transition {
 
 const props = defineProps<{ payload: Record<string, any>; section?: string }>();
 const { api } = useApi();
+const { roleNames, loadRoleNames } = useTenantRoles();
 
 const show = (id: string) => !props.section || props.section === id;
 
 const locales = ref<string[]>(['en']);
 const hierarchyLevels = ref<{ code: string; label: string }[]>([]);
-const knownRoles = ['administrator', 'grm_officer', 'grm_officer_national', 'me_analyst'];
 
 onMounted(async () => {
   try {
@@ -64,6 +64,7 @@ onMounted(async () => {
   } catch {
     /* defaults */
   }
+  await loadRoleNames();
   ensure();
 });
 
@@ -421,8 +422,18 @@ const reachabilityHint = computed(() => {
               </div>
             </UFormField>
 
-            <UFormField label="Allowed roles" required :help="`Comma-separated role names. Known: ${knownRoles.join(', ')}`">
-              <UInput :model-value="rolesText(t)" class="w-full font-mono" placeholder="grm_officer, grm_officer_national" @update:model-value="setRolesText(t, $event as string)" />
+            <UFormField label="Allowed roles" required :help="roleNames.length ? 'From CD-10 org & access.' : 'Define roles under Org & access (CD-10), then re-open this editor.'">
+              <USelectMenu
+                v-if="roleNames.length"
+                v-model="t.roles"
+                :items="roleNames.map((n) => ({ value: n, label: n }))"
+                value-key="value"
+                label-key="label"
+                multiple
+                class="w-full font-mono"
+                placeholder="Select roles..."
+              />
+              <UInput v-else :model-value="rolesText(t)" class="w-full font-mono" placeholder="grm_officer" @update:model-value="setRolesText(t, $event as string)" />
             </UFormField>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">

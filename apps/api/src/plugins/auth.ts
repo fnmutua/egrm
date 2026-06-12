@@ -10,6 +10,9 @@ export interface AuthUser {
   email: string;
   name: string;
   permissions: string[];
+  tenantWide: boolean;
+  jurisdictionRoots: string[];
+  sensitiveClasses: string[];
 }
 
 declare module '@fastify/jwt' {
@@ -35,7 +38,6 @@ export default fp(async function authPlugin(app: FastifyInstance) {
     } catch {
       return reply.code(401).send({ error: 'unauthorized' });
     }
-    // A token minted for one tenant must never work against another (GEN-CFG-05).
     if (req.user.tenantId !== req.tenant.id) {
       return reply.code(403).send({ error: 'tenant_mismatch' });
     }

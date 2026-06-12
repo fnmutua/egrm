@@ -9,6 +9,8 @@ import configRoutes from './routes/config.js';
 import publicRoutes from './routes/public.js';
 import caseRoutes from './routes/cases.js';
 import unitRoutes from './routes/units.js';
+import roleRoutes from './routes/roles.js';
+import userRoutes from './routes/users.js';
 
 const app = Fastify({ logger: true });
 
@@ -25,6 +27,8 @@ await app.register(configRoutes);
 await app.register(publicRoutes);
 await app.register(caseRoutes);
 await app.register(unitRoutes);
+await app.register(roleRoutes);
+await app.register(userRoutes);
 
 try {
   await app.listen({ port: env.API_PORT, host: '0.0.0.0' });

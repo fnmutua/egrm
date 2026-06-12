@@ -43,6 +43,46 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
+/** Grouped for role editor UIs (console / CD-10). */
+export const PERMISSION_GROUPS: { label: string; permissions: readonly Permission[] }[] = [
+  {
+    label: 'Case handling',
+    permissions: PERMISSIONS.filter((p) => p.startsWith('case:')),
+  },
+  {
+    label: 'Threads & attachments',
+    permissions: PERMISSIONS.filter((p) => p.startsWith('thread:') || p.startsWith('attachment:')),
+  },
+  {
+    label: 'Sensitive cases',
+    permissions: PERMISSIONS.filter((p) => p.startsWith('sensitive:')),
+  },
+  {
+    label: 'Tasks & committees',
+    permissions: PERMISSIONS.filter((p) => p.startsWith('task:') || p.startsWith('committee:')),
+  },
+  {
+    label: 'Reporting & dashboards',
+    permissions: PERMISSIONS.filter((p) => p.startsWith('report:') || p.startsWith('dashboard:')),
+  },
+  {
+    label: 'Administration',
+    permissions: PERMISSIONS.filter((p) => p.startsWith('admin:')),
+  },
+];
+
+/** Wildcard families tenants may use in role definitions, e.g. `case:*`, `admin:*`. */
+export const PERMISSION_WILDCARDS = ['case:*', 'thread:*', 'attachment:*', 'admin:*'] as const;
+
+export function isValidPermissionPattern(pattern: string): boolean {
+  if ((PERMISSION_WILDCARDS as readonly string[]).includes(pattern)) return true;
+  if (pattern.endsWith(':*')) {
+    const family = pattern.slice(0, -1);
+    return PERMISSIONS.some((p) => p.startsWith(family));
+  }
+  return PERMISSIONS.includes(pattern as Permission);
+}
+
 /** Wildcard families usable in role definitions, e.g. `case:*`, `admin:*`. */
 export function expandPermission(pattern: string): Permission[] {
   if (!pattern.endsWith(':*')) {

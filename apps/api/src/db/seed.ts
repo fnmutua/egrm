@@ -4,6 +4,69 @@ import { and, eq } from 'drizzle-orm';
 import type { ConfigDomain } from '@egrm/core';
 import { validateConfig } from '@egrm/config-schemas';
 import { db, pool, schema } from './client.js';
+import { syncRolesFromOrgAccess } from '../services/org-access.js';
+
+/** KISIP CD-10 role catalogue (spec 11, aligned with plus-admin patterns). */
+export const kisipOrgAccess = {
+  roles: [
+    {
+      name: 'administrator',
+      label: 'Platform administrator',
+      description: 'Full configuration and case oversight; separate from day-to-day GRM handling.',
+      permissions: ['admin:*', 'case:*', 'thread:*', 'attachment:*', 'report:*', 'dashboard:manage', 'task:manage'],
+      sensitive_classes: [],
+      mfa_required: true,
+    },
+    {
+      name: 'grm_officer',
+      label: 'GRM officer',
+      description: 'Settlement/county grievance handling at assigned jurisdiction.',
+      permissions: [
+        'case:read', 'case:create_assisted', 'case:transition', 'case:assign',
+        'thread:reply_external', 'thread:note_internal', 'thread:read',
+        'attachment:upload', 'attachment:download', 'task:manage',
+      ],
+      sensitive_classes: [],
+      mfa_required: false,
+    },
+    {
+      name: 'grm_officer_national',
+      label: 'National GRM officer',
+      description: 'Escalated cases, closure confirmation, sensitive routing.',
+      permissions: ['case:*', 'thread:*', 'attachment:*', 'report:view', 'sensitive:read', 'sensitive:handle', 'task:manage'],
+      sensitive_classes: [],
+      mfa_required: false,
+    },
+    {
+      name: 'gbv_officer',
+      label: 'GBV / SEAH focal',
+      description: 'Designated handler for GBV/SEAH sensitivity class.',
+      permissions: [
+        'case:read', 'case:transition', 'case:assign', 'thread:*', 'attachment:*',
+        'sensitive:read', 'sensitive:handle', 'task:manage',
+      ],
+      sensitive_classes: ['gbv_seah'],
+      mfa_required: true,
+    },
+    {
+      name: 'me_analyst',
+      label: 'M&E analyst',
+      description: 'Read-only operational and aggregate reporting.',
+      permissions: ['report:view', 'report:export'],
+      sensitive_classes: [],
+      mfa_required: false,
+    },
+  ],
+  departments: [
+    { code: 'national_grm', name: 'National GRM unit', description: 'Programme-wide coordination' },
+    { code: 'county_coordination', name: 'County coordination', description: 'County-level GRM focal points' },
+  ],
+  auth_policy: {
+    password_min_length: 12,
+    session_idle_minutes: 60,
+    mfa_required_roles: ['administrator', 'gbv_officer'],
+  },
+};
 
 async function upsertActiveConfig(tenantId: string, domain: ConfigDomain, payload: unknown, changedBy: string) {
   const parsed = validateConfig(domain, payload);
@@ -173,25 +236,13 @@ async function main() {
       .returning();
   }
 
-  // Roles (KISIP profile, doc 11)
-  const roleDefs: Record<string, string[]> = {
-    administrator: ['admin:*', 'case:*', 'thread:*', 'attachment:*', 'report:*', 'dashboard:manage', 'task:manage'],
-    grm_officer: ['case:read', 'case:create_assisted', 'case:transition', 'case:assign', 'thread:reply_external', 'thread:note_internal', 'thread:read', 'attachment:upload', 'attachment:download', 'task:manage'],
-    grm_officer_national: ['case:*', 'thread:*', 'attachment:*', 'report:view', 'sensitive:read', 'sensitive:handle'],
-    me_analyst: ['report:view', 'report:export'],
-  };
-  const roleIds: Record<string, string> = {};
-  for (const [name, permissions] of Object.entries(roleDefs)) {
-    let [r] = await db
-      .select()
-      .from(schema.role)
-      .where(and(eq(schema.role.tenantId, kisip!.id), eq(schema.role.name, name)))
-      .limit(1);
-    if (!r) {
-      [r] = await db.insert(schema.role).values({ tenantId: kisip!.id, name, permissions }).returning();
-    }
-    roleIds[name] = r!.id;
-  }
+  // Roles from CD-10 catalogue (synced to role table)
+  await syncRolesFromOrgAccess(kisip!.id, kisipOrgAccess);
+  const roleRows = await db
+    .select({ id: schema.role.id, name: schema.role.name })
+    .from(schema.role)
+    .where(eq(schema.role.tenantId, kisip!.id));
+  const roleIds = Object.fromEntries(roleRows.map((r) => [r.name, r.id]));
 
   // Admin user
   const adminEmail = 'admin@kisip.local';
@@ -218,9 +269,9 @@ async function main() {
 
   await upsertActiveConfig(kisip!.id, 'cd02_hierarchy', {
     levels: [
-      { code: 'settlement', label: 'Settlement', parent_code: 'county', is_intake_default: true, is_confirmation_authority: false, can_be_assigned: true },
-      { code: 'county', label: 'County', parent_code: 'national', is_intake_default: false, is_confirmation_authority: false, can_be_assigned: true },
-      { code: 'national', label: 'National', parent_code: null, is_intake_default: false, is_confirmation_authority: true, can_be_assigned: true },
+      { code: 'settlement', label: 'Settlement', parent_code: 'county', allows_intake: true, is_confirmation_authority: false, can_be_assigned: true },
+      { code: 'county', label: 'County', parent_code: 'national', allows_intake: true, is_confirmation_authority: false, can_be_assigned: true },
+      { code: 'national', label: 'National', parent_code: null, allows_intake: false, is_confirmation_authority: true, can_be_assigned: true },
     ],
   }, admin!.id);
 
@@ -391,6 +442,8 @@ async function main() {
     custom_dashboards: true,
     ai_assistance: true,
   }, admin!.id);
+
+  await upsertActiveConfig(kisip!.id, 'cd10_org_access', kisipOrgAccess, admin!.id);
 
   console.log('Seed complete.');
   console.log(`  Tenant: kisip (${kisip!.id})`);

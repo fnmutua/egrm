@@ -11,6 +11,12 @@ export interface DomainMeta {
   subsections?: { id: string; label: string }[];
 }
 
+export const CD10_SUBSECTIONS = [
+  { id: 'sec-roles', label: 'Roles & permissions' },
+  { id: 'sec-departments', label: 'Departments' },
+  { id: 'sec-auth', label: 'Authentication policy' },
+];
+
 export const CD01_SUBSECTIONS = [
   { id: 'sec-identity', label: 'Identity' },
   { id: 'sec-languages', label: 'Languages' },
@@ -55,6 +61,7 @@ export type AdminEntry =
 /** Sidebar grouping for the admin area, in display order. Related tools live together. */
 export const ADMIN_SECTIONS: { label: string; entries: AdminEntry[] }[] = [
   { label: 'Identity', entries: [{ type: 'domain', domain: 'cd01_identity' }] },
+  { label: 'Roles & permissions', entries: [{ type: 'domain', domain: 'cd10_org_access' }] },
   {
     label: 'Jurisdiction & hierarchy',
     entries: [
@@ -87,7 +94,6 @@ export const ADMIN_SECTIONS: { label: string; entries: AdminEntry[] }[] = [
   {
     label: 'Organisation',
     entries: [
-      { type: 'domain', domain: 'cd10_org_access' },
       { type: 'domain', domain: 'cd11_committees' },
       { type: 'domain', domain: 'cd12_referrals' },
     ],
@@ -127,8 +133,9 @@ export const DOMAIN_CATALOGUE: DomainMeta[] = [
     description: 'Per-channel enablement and settings: web, assisted, USSD, SMS, hotline, email, partner API.' },
   { domain: 'cd09_notifications', cd: 'CD-09', title: 'Notifications', icon: 'i-lucide-bell', strict: false,
     description: 'Event subscriptions, recipient selectors, templates per locale and channel, kill switches, sender identities.' },
-  { domain: 'cd10_org_access', cd: 'CD-10', title: 'Org & access', icon: 'i-lucide-shield', strict: false,
-    description: 'Departments/teams, role definitions, jurisdiction scoping rules, authentication policy.' },
+  { domain: 'cd10_org_access', cd: 'CD-10', title: 'Org & access', icon: 'i-lucide-shield', strict: true,
+    description: 'Role definitions (permission sets), departments/teams, and authentication policy. Roles sync to the database on activation.',
+    subsections: CD10_SUBSECTIONS },
   { domain: 'cd11_committees', cd: 'CD-11', title: 'Committees', icon: 'i-lucide-users', strict: false,
     description: 'Committee definitions per level, rosters, workflow bindings for decision records.' },
   { domain: 'cd12_referrals', cd: 'CD-12', title: 'Referral directory', icon: 'i-lucide-external-link', strict: false,

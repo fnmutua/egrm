@@ -1,10 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { hasPermission } from '@egrm/core';
 import { db, schema } from '../db/client.js';
 import { decryptPII } from '../services/crypto.js';
 import { createCase } from '../services/intake.js';
 import { writeAudit } from '../services/audit.js';
+import { canAccessCase, caseVisibilityFilter, sensitivityListFilter } from '../services/access.js';
 
 const listQuery = z.object({
   status: z.string().optional(),
@@ -20,17 +22,22 @@ const assistedBody = z.object({
   values: z.record(z.string(), z.unknown()),
 });
 
-/** Staff case endpoints (GEN-CASE-01/03, GEN-INT-03). Jurisdiction-subtree scoping lands in Phase 3. */
+/** Staff case endpoints with jurisdiction-subtree scoping (spec 07 §2.2). */
 export default async function caseRoutes(app: FastifyInstance) {
   app.get('/api/v1/cases', { onRequest: [app.requirePermission('case:read')] }, async (req, reply) => {
     const parsed = listQuery.safeParse(req.query);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_query' });
     const { status, q, page, page_size } = parsed.data;
 
+    const scopeFilter = await caseVisibilityFilter(req.tenant.id, req.user, req.user.sub);
+    const sensitivityFilter = sensitivityListFilter(req.user, req.user.sub);
+
     const where = and(
       eq(schema.grmCase.tenantId, req.tenant.id),
       status ? eq(schema.grmCase.status, status) : undefined,
       q ? or(ilike(schema.grmCase.reference, `%${q}%`), ilike(schema.grmCase.summary, `%${q}%`)) : undefined,
+      scopeFilter,
+      sensitivityFilter,
     );
 
     const [rows, [count]] = await Promise.all([
@@ -46,6 +53,7 @@ export default async function caseRoutes(app: FastifyInstance) {
           channel: schema.grmCase.channel,
           anonymous: schema.grmCase.anonymous,
           priority: schema.grmCase.priority,
+          sensitivity: schema.grmCase.sensitivity,
           createdAt: schema.grmCase.createdAt,
           unitName: schema.unit.name,
         })
@@ -70,8 +78,15 @@ export default async function caseRoutes(app: FastifyInstance) {
       .limit(1);
     if (!c) return reply.code(404).send({ error: 'not_found' });
 
+    const allowed = await canAccessCase(req.tenant.id, req.user, req.user.sub, {
+      unitId: c.unitId,
+      assigneeId: c.assigneeId,
+      sensitivity: c.sensitivity,
+    });
+    if (!allowed) return reply.code(404).send({ error: 'not_found' });
+
     let complainant = null;
-    if (c.partyId) {
+    if (c.partyId && hasPermission(req.user.permissions, 'case:read')) {
       const [p] = await db.select().from(schema.party).where(eq(schema.party.id, c.partyId)).limit(1);
       if (p) {
         complainant = {
@@ -82,7 +97,6 @@ export default async function caseRoutes(app: FastifyInstance) {
           age_band: p.ageBand,
           preferred_language: p.preferredLanguage,
         };
-        // PII access on a case detail is itself an auditable event (GEN-SEC-07).
         await writeAudit({
           tenantId: req.tenant.id,
           actorId: req.user.sub,

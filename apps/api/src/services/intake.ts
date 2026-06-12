@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { and, eq, gte } from 'drizzle-orm';
 import type { Cd02Hierarchy, Cd04Workflow, Cd06IntakeForms, Cd07Numbering } from '@egrm/config-schemas';
+import { intakeLevels as hierarchyIntakeLevels } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
 import { encryptPII, piiLookupHash } from './crypto.js';
 import { getActiveConfig } from './config.js';
@@ -74,7 +75,8 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
   // Initial status & level from config (CD-04 / CD-02).
   const initialStatus = workflow.initial.default;
   const statusTag = workflow.statuses.find((s) => s.name === initialStatus)?.tag ?? 'open';
-  const intakeLevel = hierarchy.levels.find((l) => l.is_intake_default) ?? hierarchy.levels[0]!;
+  const intakeLevels = hierarchyIntakeLevels(hierarchy);
+  const fallbackIntakeLevel = intakeLevels[0]!;
 
   // Resolve unit if provided.
   const unitId = str(input.values.unit_id);
@@ -86,6 +88,12 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
       .where(and(eq(schema.unit.tenantId, input.tenantId), eq(schema.unit.id, unitId)))
       .limit(1);
     if (!unitRow) return { ok: false, code: 422, error: 'unknown_unit' };
+    const unitLevelAllowsIntake = intakeLevels.some(
+      (l) => l.code.toLowerCase() === unitRow!.levelCode.toLowerCase(),
+    );
+    if (!unitLevelAllowsIntake) {
+      return { ok: false, code: 422, error: 'unit_not_at_intake_level' };
+    }
   }
 
   // Tracking verifier: submitter phone/email, or a one-time PIN for anonymous cases.
@@ -147,7 +155,7 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
         caseType: form.case_type,
         status: initialStatus,
         statusTag,
-        levelCode: unitRow?.levelCode ?? intakeLevel.code,
+        levelCode: unitRow?.levelCode ?? fallbackIntakeLevel.code,
         unitId: unitRow?.id ?? null,
         partyId,
         anonymous: input.anonymous,

@@ -66,11 +66,11 @@ const ESC_ACTION_TYPES = [
 
 const props = defineProps<{ payload: Record<string, any>; section?: string }>();
 const { api } = useApi();
+const { roleNames, loadRoleNames } = useTenantRoles();
 
 const show = (id: string) => !props.section || props.section === id;
 
 const workflowStatuses = ref<string[]>([]);
-const knownRoles = ['grm_officer', 'grm_officer_national', 'administrator', 'me_analyst'];
 
 onMounted(async () => {
   try {
@@ -79,6 +79,7 @@ onMounted(async () => {
   } catch {
     /* optional cross-ref */
   }
+  await loadRoleNames();
   ensure();
 });
 
@@ -486,7 +487,15 @@ function setConditionText(r: EscRule, text: string) {
             />
           </UFormField>
           <UFormField label="Role (optional)" class="grow sm:grow-0 sm:w-48">
-            <UInput v-model="rem.role" class="font-mono" :placeholder="knownRoles[0]" />
+            <USelectMenu
+              v-if="roleNames.length"
+              v-model="rem.role"
+              :items="[{ value: '', label: '—' }, ...roleNames.map((n) => ({ value: n, label: n }))]"
+              value-key="value"
+              label-key="label"
+              class="font-mono w-full"
+            />
+            <UInput v-else v-model="rem.role" class="font-mono" placeholder="grm_officer" />
           </UFormField>
           <UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" class="mb-1" @click="removeReminder(ri)" />
         </div>

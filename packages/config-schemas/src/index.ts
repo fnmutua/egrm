@@ -8,6 +8,7 @@ import { cd05Sla } from './cd05-sla.js';
 import { cd06IntakeForms } from './cd06-intake-forms.js';
 import { cd07Numbering } from './cd07-numbering.js';
 import { cd14Features } from './cd14-features.js';
+import { cd10OrgAccess } from './cd10-org-access.js';
 
 export * from './cd01-identity.js';
 export * from './cd02-hierarchy.js';
@@ -17,6 +18,7 @@ export * from './cd05-sla.js';
 export * from './cd06-intake-forms.js';
 export * from './cd07-numbering.js';
 export * from './cd14-features.js';
+export * from './cd10-org-access.js';
 
 /** Domains not yet strictly modeled accept any object during Phase 0/1; tightened per phase. */
 const permissive = z.record(z.string(), z.unknown());
@@ -31,7 +33,7 @@ export const CONFIG_SCHEMAS: Record<ConfigDomain, z.ZodTypeAny> = {
   cd07_numbering: cd07Numbering,
   cd08_channels: permissive,
   cd09_notifications: permissive,
-  cd10_org_access: permissive,
+  cd10_org_access: cd10OrgAccess,
   cd11_committees: permissive,
   cd12_referrals: permissive,
   cd13_reporting: permissive,

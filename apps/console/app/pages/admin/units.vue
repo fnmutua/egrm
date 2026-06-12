@@ -16,7 +16,8 @@ interface Unit {
 interface Level {
   code: string;
   label: string;
-  is_intake_default: boolean;
+  allows_intake?: boolean;
+  is_intake_default?: boolean;
 }
 
 const units = ref<Unit[]>([]);

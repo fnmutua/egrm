@@ -42,6 +42,8 @@ export const role = pgTable(
     name: text('name').notNull(),
     /** Permission patterns from the platform catalogue, wildcards allowed (e.g. case:*). */
     permissions: text('permissions').array().notNull().default([]),
+    /** Sensitivity class codes this role may read/handle (from CD-10). */
+    sensitiveClasses: text('sensitive_classes').array().notNull().default([]),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('role_tenant_name').on(t.tenantId, t.name)],

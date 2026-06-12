@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { CONFIG_DOMAINS, type ConfigDomain } from '@egrm/core';
-import { validateConfig } from '@egrm/config-schemas';
+import { validateConfig, type Cd10OrgAccess } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
 import { writeAudit } from '../services/audit.js';
 import { invalidateConfigCache } from '../services/config.js';
+import { syncRolesFromOrgAccess } from '../services/org-access.js';
 
 function parseDomain(value: string): ConfigDomain | undefined {
   return (CONFIG_DOMAINS as readonly string[]).includes(value) ? (value as ConfigDomain) : undefined;
@@ -221,6 +222,11 @@ export default async function configRoutes(app: FastifyInstance) {
           .update(schema.configVersion)
           .set({ status: 'active', activatedAt: new Date() })
           .where(eq(schema.configVersion.id, draft.id));
+
+        if (domain === 'cd10_org_access') {
+          await syncRolesFromOrgAccess(req.tenant.id, revalidated.data as Cd10OrgAccess);
+        }
+
         return { code: 200 as const, body: { domain, version, status: 'active' } };
       });
 
