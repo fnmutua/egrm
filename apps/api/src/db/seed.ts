@@ -1,0 +1,224 @@
+/** Seed the dev database with the KISIP reference tenant (tenant profile, doc 11). */
+import bcrypt from 'bcryptjs';
+import { and, eq } from 'drizzle-orm';
+import type { ConfigDomain } from '@egrm/core';
+import { validateConfig } from '@egrm/config-schemas';
+import { db, pool, schema } from './client.js';
+
+async function upsertActiveConfig(tenantId: string, domain: ConfigDomain, payload: unknown, changedBy: string) {
+  const parsed = validateConfig(domain, payload);
+  if (!parsed.success) {
+    throw new Error(`Seed config invalid for ${domain}: ${JSON.stringify(parsed.error.issues, null, 2)}`);
+  }
+  const existing = await db
+    .select({ id: schema.configVersion.id })
+    .from(schema.configVersion)
+    .where(
+      and(
+        eq(schema.configVersion.tenantId, tenantId),
+        eq(schema.configVersion.domain, domain),
+        eq(schema.configVersion.status, 'active'),
+      ),
+    )
+    .limit(1);
+  if (existing.length > 0) return;
+  await db.insert(schema.configVersion).values({
+    tenantId,
+    domain,
+    version: 1,
+    status: 'active',
+    payload: parsed.data,
+    changeNote: 'seed',
+    changedBy,
+    activatedAt: new Date(),
+  });
+}
+
+async function main() {
+  // Tenant
+  let [kisip] = await db.select().from(schema.tenant).where(eq(schema.tenant.code, 'kisip')).limit(1);
+  if (!kisip) {
+    [kisip] = await db
+      .insert(schema.tenant)
+      .values({ code: 'kisip', name: 'KISIP — Kenya Informal Settlements Improvement Project', hostnames: ['localhost'] })
+      .returning();
+  }
+
+  // Roles (KISIP profile, doc 11)
+  const roleDefs: Record<string, string[]> = {
+    administrator: ['admin:*', 'case:*', 'thread:*', 'attachment:*', 'report:*', 'dashboard:manage', 'task:manage'],
+    grm_officer: ['case:read', 'case:create_assisted', 'case:transition', 'case:assign', 'thread:reply_external', 'thread:note_internal', 'thread:read', 'attachment:upload', 'attachment:download', 'task:manage'],
+    grm_officer_national: ['case:*', 'thread:*', 'attachment:*', 'report:view', 'sensitive:read', 'sensitive:handle'],
+    me_analyst: ['report:view', 'report:export'],
+  };
+  const roleIds: Record<string, string> = {};
+  for (const [name, permissions] of Object.entries(roleDefs)) {
+    let [r] = await db
+      .select()
+      .from(schema.role)
+      .where(and(eq(schema.role.tenantId, kisip!.id), eq(schema.role.name, name)))
+      .limit(1);
+    if (!r) {
+      [r] = await db.insert(schema.role).values({ tenantId: kisip!.id, name, permissions }).returning();
+    }
+    roleIds[name] = r!.id;
+  }
+
+  // Admin user
+  const adminEmail = 'admin@kisip.local';
+  let [admin] = await db
+    .select()
+    .from(schema.appUser)
+    .where(and(eq(schema.appUser.tenantId, kisip!.id), eq(schema.appUser.email, adminEmail)))
+    .limit(1);
+  if (!admin) {
+    [admin] = await db
+      .insert(schema.appUser)
+      .values({
+        tenantId: kisip!.id,
+        email: adminEmail,
+        passwordHash: await bcrypt.hash('ChangeMe!2026', 10),
+        displayName: 'Platform Administrator',
+      })
+      .returning();
+    await db.insert(schema.userRole).values({ userId: admin!.id, roleId: roleIds.administrator! });
+  }
+
+  // Active config versions
+  await upsertActiveConfig(kisip!.id, 'cd01_identity', {
+    name: 'KISIP GRM',
+    legal_name: 'Kenya Informal Settlements Improvement Project',
+    locales: { default: 'en', enabled: ['en', 'sw'] },
+    timezone: 'Africa/Nairobi',
+    branding: { primary_color: '#0f3a5e' },
+    statements: {
+      free_of_charge: {
+        en: 'Submitting a grievance is completely free of charge.',
+        sw: 'Kuwasilisha malalamiko ni bure kabisa.',
+      },
+      non_retaliation: {
+        en: 'No one will face retaliation for submitting a grievance.',
+        sw: 'Hakuna mtu atakayedhulumiwa kwa kuwasilisha malalamiko.',
+      },
+      confidentiality: {
+        en: 'Your information is handled confidentially.',
+        sw: 'Taarifa zako zinashughulikiwa kwa siri.',
+      },
+    },
+  }, admin!.id);
+
+  await upsertActiveConfig(kisip!.id, 'cd02_hierarchy', {
+    levels: [
+      { code: 'settlement', label: 'Settlement', is_intake_default: true, is_confirmation_authority: false, can_be_assigned: true },
+      { code: 'county', label: 'County', is_intake_default: false, is_confirmation_authority: false, can_be_assigned: true },
+      { code: 'national', label: 'National', is_intake_default: false, is_confirmation_authority: true, can_be_assigned: true },
+    ],
+  }, admin!.id);
+
+  await upsertActiveConfig(kisip!.id, 'cd04_workflow', {
+    case_type: 'grievance',
+    statuses: [
+      { name: 'Received', tag: 'open' },
+      { name: 'Sorting', tag: 'open' },
+      { name: 'Investigation', tag: 'in_progress' },
+      { name: 'Escalated', tag: 'in_progress' },
+      { name: 'Returned', tag: 'in_progress' },
+      { name: 'Resolved', tag: 'resolved' },
+      { name: 'Closed', tag: 'closed' },
+      { name: 'Rejected', tag: 'rejected' },
+      { name: 'In Court', tag: 'on_hold' },
+    ],
+    initial: {
+      default: 'Sorting',
+      rules: [{ if: { flag: 'in_court' }, then: 'In Court' }],
+    },
+    transitions: [
+      { from: ['Sorting'], to: 'Investigation', roles: ['grm_officer'] },
+      { from: ['Sorting'], to: 'Rejected', roles: ['grm_officer'], requires: { note: true } },
+      { from: ['Sorting', 'Investigation', 'Returned'], to: 'Escalated', roles: ['grm_officer'], effects: [{ move_level: 'up' }, { restart_sla: 'stage' }] },
+      { from: ['Escalated'], to: 'Returned', roles: ['grm_officer_national'], effects: [{ move_level: 'down' }] },
+      { from: ['Investigation', 'Escalated', 'Returned'], to: 'Resolved', roles: ['grm_officer'], requires: { fields: ['resolution_summary'] } },
+      { from: ['Resolved'], to: 'Closed', roles: ['grm_officer_national'], guard: 'confirmation' },
+      { from: ['In Court'], to: 'Investigation', roles: ['grm_officer_national'] },
+    ],
+    closure: {
+      confirmation: { required_when: { resolved_below: 'national' }, authority_level: 'national' },
+      satisfaction: { enabled: true, channels: ['sms'] },
+    },
+    appeal: { enabled: true, window_days: 30, routes_to: 'next_level' },
+  }, admin!.id);
+
+  await upsertActiveConfig(kisip!.id, 'cd03_taxonomy', {
+    categories: [
+      { code: 'land_compensation', label: { en: 'Land & Compensation', sw: 'Ardhi na Fidia' } },
+      { code: 'project_implementation', label: { en: 'Project Implementation', sw: 'Utekelezaji wa Mradi' } },
+      { code: 'environmental', label: { en: 'Environmental', sw: 'Mazingira' } },
+      { code: 'social', label: { en: 'Social', sw: 'Kijamii' } },
+      { code: 'labour', label: { en: 'Labour & Employment', sw: 'Kazi na Ajira' } },
+      { code: 'corruption_fraud', label: { en: 'Corruption / Fraud', sw: 'Ufisadi / Udanganyifu' } },
+      { code: 'other', label: { en: 'Other', sw: 'Nyingine' } },
+    ],
+  }, admin!.id);
+
+  await upsertActiveConfig(kisip!.id, 'cd06_intake_forms', {
+    case_type: 'grievance',
+    anonymous_allowed: true,
+    consent_text: {
+      en: 'I consent to my personal data being used to process this grievance, per the privacy notice.',
+      sw: 'Ninakubali data yangu binafsi itumike kushughulikia malalamiko haya, kwa mujibu wa taarifa ya faragha.',
+    },
+    fields: [
+      { key: 'name', type: 'text', section: 'complainant', required: true, label: { en: 'Full name', sw: 'Jina kamili' } },
+      { key: 'phone', type: 'phone', section: 'complainant', required: true, label: { en: 'Phone number', sw: 'Nambari ya simu' } },
+      { key: 'email', type: 'email', section: 'complainant', required: false, label: { en: 'Email (optional)', sw: 'Barua pepe (hiari)' } },
+      { key: 'gender', type: 'select', section: 'complainant', required: false, label: { en: 'Gender', sw: 'Jinsia' }, options: [
+        { value: 'female', label: { en: 'Female', sw: 'Mwanamke' } },
+        { value: 'male', label: { en: 'Male', sw: 'Mwanaume' } },
+        { value: 'prefer_not_say', label: { en: 'Prefer not to say', sw: 'Sipendi kusema' } },
+      ] },
+      { key: 'unit_id', type: 'select', section: 'grievance', required: true, label: { en: 'Settlement / location', sw: 'Makazi / eneo' }, options_ref: 'units' },
+      { key: 'categories', type: 'multiselect', section: 'grievance', required: true, label: { en: 'Category', sw: 'Aina' }, options_ref: 'taxonomy:categories' },
+      { key: 'date_occurred', type: 'date', section: 'grievance', required: false, label: { en: 'When did it occur?', sw: 'Ilitokea lini?' } },
+      { key: 'summary', type: 'text', section: 'grievance', required: true, label: { en: 'Summary', sw: 'Muhtasari' } },
+      { key: 'description', type: 'textarea', section: 'grievance', required: true, label: { en: 'Describe your grievance', sw: 'Eleza malalamiko yako' } },
+      { key: 'expected_outcome', type: 'textarea', section: 'outcome', required: false, label: { en: 'What outcome do you expect?', sw: 'Unatarajia matokeo gani?' } },
+    ],
+  }, admin!.id);
+
+  await upsertActiveConfig(kisip!.id, 'cd07_numbering', {
+    pattern: 'GRM-{YYYY}-{seq:4}',
+    scope: 'yearly',
+    verifier_required: true,
+  }, admin!.id);
+
+  // Sample unit tree: national → 2 counties → 3 settlements
+  const existingUnits = await db.select({ id: schema.unit.id }).from(schema.unit).where(eq(schema.unit.tenantId, kisip!.id)).limit(1);
+  if (existingUnits.length === 0) {
+    const [national] = await db.insert(schema.unit).values({ tenantId: kisip!.id, levelCode: 'national', name: 'National', code: 'KE' }).returning();
+    const [nairobi] = await db.insert(schema.unit).values({ tenantId: kisip!.id, levelCode: 'county', parentId: national!.id, name: 'Nairobi', code: 'KE-047' }).returning();
+    const [mombasa] = await db.insert(schema.unit).values({ tenantId: kisip!.id, levelCode: 'county', parentId: national!.id, name: 'Mombasa', code: 'KE-001' }).returning();
+    await db.insert(schema.unit).values([
+      { tenantId: kisip!.id, levelCode: 'settlement', parentId: nairobi!.id, name: 'Mukuru kwa Njenga', code: 'SET-001' },
+      { tenantId: kisip!.id, levelCode: 'settlement', parentId: nairobi!.id, name: 'Kibera Soweto East', code: 'SET-002' },
+      { tenantId: kisip!.id, levelCode: 'settlement', parentId: mombasa!.id, name: 'Likoni', code: 'SET-003' },
+    ]);
+  }
+
+  await upsertActiveConfig(kisip!.id, 'cd14_features', {
+    appeals: true,
+    satisfaction_survey: true,
+    custom_dashboards: true,
+    ai_assistance: true,
+  }, admin!.id);
+
+  console.log('Seed complete.');
+  console.log(`  Tenant: kisip (${kisip!.id})`);
+  console.log(`  Login:  ${adminEmail} / ChangeMe!2026`);
+}
+
+main()
+  .catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  })
+  .finally(() => pool.end());

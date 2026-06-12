@@ -1,0 +1,24 @@
+{
+  "name": "egrm",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Generic, multi-tenant electronic Grievance Redress Mechanism platform",
+  "packageManager": "pnpm@9.10.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev --filter=!@egrm/worker",
+    "dev:worker": "pnpm --filter @egrm/worker dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "db:migrate": "pnpm --filter @egrm/api db:migrate",
+    "db:seed": "pnpm --filter @egrm/api db:seed"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.0"
+  }
+}

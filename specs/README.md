@@ -22,6 +22,7 @@ Derived from:
 | 09 | [09-api-integrations.md](09-api-integrations.md) | REST surface, webhooks, gateway adapters, export/anti-lock-in |
 | 10 | [10-requirements-catalogue.md](10-requirements-catalogue.md) | Traceable GEN-* requirements with priorities and source mapping |
 | 11 | [11-tenant-profiles.md](11-tenant-profiles.md) | KISIP and KUSP2 expressed as configuration — proof of genericity |
+| 12 | [12-development-plan.md](12-development-plan.md) | Development plan: Nuxt 4 + Nuxt UI v4 / Node.js stack, monorepo, 7 delivery phases, team & timeline |
 
 ## Reading guide
 

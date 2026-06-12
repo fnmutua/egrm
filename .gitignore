@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.output/
+.nuxt/
+.turbo/
+*.log
+.env
+.env.*
+!.env.example
+coverage/
+.DS_Store
+specs/egrm-specifications.html

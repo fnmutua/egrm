@@ -20,6 +20,7 @@ DOCS = [
     "09-api-integrations.md",
     "10-requirements-catalogue.md",
     "11-tenant-profiles.md",
+    "12-development-plan.md",
 ]
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 
