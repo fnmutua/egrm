@@ -131,9 +131,6 @@ watch(activeSection, () => {
   document.querySelector('main')?.scrollTo({ top: 0 });
 });
 
-/** Permissions editor needs maximum horizontal space; widen layout for CD-10 first. */
-const wideEditorLayout = computed(() => domain === 'cd10_org_access');
-
 onMounted(async () => {
   const me = await fetchMe();
   if (!me) return navigateTo('/login');
@@ -143,11 +140,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div
-    v-if="user"
-    class="p-4 sm:p-6 lg:p-8 w-full"
-    :class="wideEditorLayout ? 'max-w-none' : 'max-w-6xl'"
-  >
+  <div v-if="user" class="p-4 sm:p-6 lg:p-8 w-full max-w-none">
     <div class="flex items-center gap-3 mb-1 flex-wrap">
       <UIcon :name="meta?.icon ?? 'i-lucide-settings'" class="text-2xl text-primary" />
       <h1 class="text-2xl font-semibold">{{ meta?.title ?? domain }}</h1>
@@ -156,12 +149,9 @@ onMounted(async () => {
     </div>
     <p class="text-muted mb-6 max-w-3xl">{{ meta?.description }}</p>
 
-    <div
-      class="grid grid-cols-1 gap-4 lg:gap-6"
-      :class="wideEditorLayout ? 'xl:grid-cols-12' : 'lg:grid-cols-3'"
-    >
-      <!-- Editor -->
-      <div class="min-w-0 space-y-4" :class="wideEditorLayout ? 'xl:col-span-10' : 'lg:col-span-2'">
+    <!-- Editor fills the page; version history is a narrow sticky rail on the far right. -->
+    <div class="flex flex-col xl:flex-row xl:items-start gap-4 xl:gap-5">
+      <div class="min-w-0 flex-1 space-y-4">
         <UCard>
           <template #header>
             <div class="flex items-center justify-between gap-x-3 gap-y-1 flex-wrap">
@@ -182,6 +172,8 @@ onMounted(async () => {
             <ConfigTaxonomyEditor v-else-if="domain === 'cd03_taxonomy'" :payload="payload" :section="activeSection" />
             <ConfigWorkflowEditor v-else-if="domain === 'cd04_workflow'" :payload="payload" :section="activeSection" />
             <ConfigSlaEditor v-else-if="domain === 'cd05_sla'" :payload="payload" :section="activeSection" />
+            <ConfigIntakeFormsEditor v-else-if="domain === 'cd06_intake_forms'" :payload="payload" :section="activeSection" />
+            <ConfigChannelsEditor v-else-if="domain === 'cd08_channels'" :payload="payload" :section="activeSection" />
             <ConfigOrgAccessEditor v-else-if="domain === 'cd10_org_access'" :payload="payload" :section="activeSection" />
             <ConfigValueEditor v-else :model-value="payload" @update:model-value="payload = ($event as Record<string, any>)" />
           </div>
@@ -219,55 +211,53 @@ onMounted(async () => {
         </p>
       </div>
 
-      <!-- History (compact rail on the right when wide) -->
-      <UCard
-        class="min-w-0 shrink-0"
-        :class="wideEditorLayout ? 'xl:col-span-2 xl:sticky xl:top-4 xl:self-start' : ''"
-        :ui="wideEditorLayout ? { body: 'p-3 sm:p-3', header: 'px-3 py-2 sm:px-3' } : undefined"
-      >
-        <template #header>
-          <span class="font-medium" :class="wideEditorLayout ? 'text-sm' : ''">Version history</span>
-        </template>
-        <div v-if="versions.length === 0" class="text-sm text-muted">No versions yet.</div>
-        <ol :class="wideEditorLayout ? 'space-y-2' : 'space-y-3'">
-          <li
-            v-for="v in versions"
-            :key="v.version"
-            class="border-b border-default pb-2 last:border-0"
-            :class="wideEditorLayout ? 'text-xs' : 'text-sm'"
-          >
-            <div class="flex items-center justify-between gap-1">
-              <div class="flex items-center gap-1.5 min-w-0">
-                <span class="font-mono font-medium shrink-0">v{{ v.version }}</span>
-                <UBadge
-                  size="sm" variant="subtle"
-                  :color="v.status === 'active' ? 'success' : v.status === 'draft' ? 'info' : 'neutral'"
-                >
-                  {{ v.status }}
-                </UBadge>
+      <!-- Version history: compact rail, far right on desktop -->
+      <aside class="w-full xl:w-36 shrink-0 xl:sticky xl:top-4 xl:self-start">
+        <UCard :ui="{ body: 'p-2 sm:p-2', header: 'px-2 py-1.5 sm:px-2' }">
+          <template #header>
+            <span class="text-xs font-semibold text-muted uppercase tracking-wide">Versions</span>
+          </template>
+          <div v-if="versions.length === 0" class="text-[11px] text-muted px-1">None yet</div>
+          <ol class="space-y-1.5">
+            <li
+              v-for="v in versions"
+              :key="v.version"
+              class="rounded-md border border-default/80 px-1.5 py-1.5 text-[11px] leading-tight"
+              :class="v.status === 'active' ? 'bg-primary/5 border-primary/20' : ''"
+            >
+              <div class="flex items-center justify-between gap-0.5">
+                <div class="min-w-0">
+                  <span class="font-mono font-medium">v{{ v.version }}</span>
+                  <UBadge
+                    size="xs" variant="subtle" class="ml-1 align-middle"
+                    :color="v.status === 'active' ? 'success' : v.status === 'draft' ? 'info' : 'neutral'"
+                  >
+                    {{ v.status === 'active' ? 'live' : v.status === 'draft' ? 'draft' : 'old' }}
+                  </UBadge>
+                </div>
+                <div class="flex shrink-0">
+                  <UButton
+                    size="xs" variant="ghost" color="neutral" icon="i-lucide-eye"
+                    class="size-6 p-0" title="Load into editor" @click="loadPayload(v.version)"
+                  />
+                  <UButton
+                    v-if="v.status !== 'active'"
+                    size="xs" variant="ghost" color="primary" icon="i-lucide-play"
+                    class="size-6 p-0"
+                    :loading="activating === v.version"
+                    :title="v.status === 'retired' ? 'Roll back' : 'Activate'"
+                    @click="activate(v.version)"
+                  />
+                </div>
               </div>
-              <div class="flex gap-0.5 shrink-0">
-                <UButton size="xs" variant="ghost" icon="i-lucide-eye" title="Load into editor" @click="loadPayload(v.version)" />
-                <UButton
-                  v-if="v.status !== 'active'"
-                  size="xs"
-                  :variant="wideEditorLayout ? 'ghost' : 'soft'"
-                  icon="i-lucide-play"
-                  :loading="activating === v.version"
-                  :title="v.status === 'retired' ? 'Roll back to this version' : 'Activate'"
-                  @click="activate(v.version)"
-                >
-                  <span v-if="!wideEditorLayout">{{ v.status === 'retired' ? 'Rollback' : 'Activate' }}</span>
-                </UButton>
-              </div>
-            </div>
-            <div class="text-muted mt-1 leading-snug" :class="wideEditorLayout ? 'text-[11px]' : 'text-xs'">
-              <time>{{ new Date(v.createdAt).toLocaleString() }}</time>
-              <p v-if="v.changeNote" class="mt-0.5 line-clamp-2" :title="v.changeNote">{{ v.changeNote }}</p>
-            </div>
-          </li>
-        </ol>
-      </UCard>
+              <time class="block text-muted mt-0.5 truncate" :title="new Date(v.createdAt).toLocaleString()">
+                {{ new Date(v.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) }}
+              </time>
+              <p v-if="v.changeNote" class="text-muted mt-0.5 line-clamp-2" :title="v.changeNote">{{ v.changeNote }}</p>
+            </li>
+          </ol>
+        </UCard>
+      </aside>
     </div>
   </div>
 </template>

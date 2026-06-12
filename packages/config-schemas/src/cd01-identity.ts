@@ -55,8 +55,8 @@ export const cd01Identity = z.object({
     .array(z.object({ title: localizedText, description: localizedText.optional() }))
     .optional(),
   /**
+   * @deprecated Use CD-08 `public_channels` — kept for legacy portal fallback only.
    * Other intake routes advertised on the landing page (display-only; CD-08 governs behaviour).
-   * Free-form list, but when present it must keep at least one entry.
    */
   channels_display: z
     .array(

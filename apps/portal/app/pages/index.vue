@@ -31,6 +31,20 @@ const { data: identity } = await useFetch<{ payload: IdentityPayload }>('/api/v1
   headers: { 'x-tenant': config.public.tenant },
 });
 
+/** Public contact routes (CD-08) — preferred source for "Other ways to reach us". */
+const { data: channelsConfig } = await useFetch<{
+  payload?: {
+    public_channels?: { type: string; value: string; enabled?: boolean; show_on_portal?: boolean }[];
+    modules?: {
+      mobile_app?: { enabled?: boolean; ios_url?: string; android_url?: string; show_on_portal?: boolean };
+    };
+  };
+}>('/api/v1/config/cd08_channels', {
+  baseURL: config.public.apiBase,
+  headers: { 'x-tenant': config.public.tenant },
+  ignoreResponseError: true,
+});
+
 const p = computed(() => identity.value?.payload);
 const locales = computed(() => p.value?.locales.enabled ?? ['en']);
 const locale = useCookie<string>('egrm_locale', { default: () => '' });
@@ -54,16 +68,25 @@ const statementCards = computed(() => [
 ]);
 
 const channels = computed(() => {
-  const c = p.value?.channels_display;
-  if (!c) return [];
   const sw = locale.value === 'sw';
   const display: Record<string, { icon: string; label: string }> = {
     hotline: { icon: 'i-lucide-phone-call', label: sw ? 'Simu ya bure' : 'Toll-free hotline' },
     ussd: { icon: 'i-lucide-smartphone', label: 'USSD' },
     email: { icon: 'i-lucide-mail', label: sw ? 'Barua pepe' : 'Email' },
     office: { icon: 'i-lucide-building-2', label: sw ? 'Ofisi' : 'Walk-in' },
+    sms: { icon: 'i-lucide-message-square', label: 'SMS' },
   };
-  // Current shape: ordered list of typed entries.
+
+  const fromCd08 = channelsConfig.value?.payload?.public_channels;
+  if (Array.isArray(fromCd08) && fromCd08.length > 0) {
+    return fromCd08
+      .filter((ch) => ch.enabled !== false && ch.show_on_portal !== false && ch.value)
+      .map((ch) => ({ ...display[ch.type] ?? display.office!, value: ch.value }));
+  }
+
+  const c = p.value?.channels_display;
+  if (!c) return [];
+  // Legacy CD-01 shape: ordered list of typed entries.
   if (Array.isArray(c)) {
     return c
       .filter((ch) => ch.value)
@@ -77,6 +100,32 @@ const channels = computed(() => {
   for (const office of c.offices ?? []) list.push({ ...display.office!, value: office });
   return list;
 });
+
+const mobileAppLinks = computed(() => {
+  const mod = channelsConfig.value?.payload?.modules?.mobile_app;
+  if (!mod?.enabled || mod.show_on_portal === false) return [];
+  const sw = locale.value === 'sw';
+  const links: { icon: string; label: string; value: string; href: string }[] = [];
+  if (mod.ios_url?.trim()) {
+    links.push({
+      icon: 'i-lucide-smartphone',
+      label: sw ? 'Programu ya iOS' : 'iOS app',
+      value: sw ? 'Pakua kwenye App Store' : 'Download on App Store',
+      href: mod.ios_url.trim(),
+    });
+  }
+  if (mod.android_url?.trim()) {
+    links.push({
+      icon: 'i-lucide-smartphone',
+      label: sw ? 'Programu ya Android' : 'Android app',
+      value: sw ? 'Pakua kwenye Google Play' : 'Download on Google Play',
+      href: mod.android_url.trim(),
+    });
+  }
+  return links;
+});
+
+const reachUsItems = computed(() => [...channels.value, ...mobileAppLinks.value]);
 
 const faqItems = computed(() =>
   (p.value?.faq ?? [])
@@ -195,15 +244,24 @@ const heroSubtitle = computed(
       </section>
 
       <!-- Other channels -->
-      <section v-if="channels.length" class="border-y border-default bg-elevated/30">
+      <section v-if="reachUsItems.length" class="border-y border-default bg-elevated/30">
         <div class="max-w-5xl mx-auto px-4 py-10">
           <h2 class="text-xl font-semibold mb-6">{{ ui.otherChannels }}</h2>
           <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div v-for="(c, i) in channels" :key="i" class="flex items-start gap-3">
+            <div v-for="(c, i) in reachUsItems" :key="i" class="flex items-start gap-3">
               <UIcon :name="c.icon" class="text-xl shrink-0 mt-0.5 text-primary" />
               <div>
                 <div class="text-xs text-muted">{{ c.label }}</div>
-                <div class="text-sm font-medium">{{ c.value }}</div>
+                <a
+                  v-if="'href' in c && c.href"
+                  :href="c.href"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-sm font-medium text-primary hover:underline"
+                >
+                  {{ c.value }}
+                </a>
+                <div v-else class="text-sm font-medium">{{ c.value }}</div>
               </div>
             </div>
           </div>

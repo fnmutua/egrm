@@ -423,6 +423,26 @@ async function main() {
     verifier_required: true,
   }, admin!.id);
 
+  await upsertActiveConfig(kisip!.id, 'cd08_channels', {
+    public_channels: [
+      { type: 'hotline', value: '0800 720 720', enabled: true, show_on_portal: true },
+      { type: 'email', value: 'grm@kisip.go.ke', enabled: true, show_on_portal: true },
+      { type: 'office', value: 'County KISIP coordination offices', enabled: true, show_on_portal: true },
+      { type: 'office', value: 'Settlement Executive Committee (SEC) offices', enabled: true, show_on_portal: true },
+    ],
+    modules: {
+      web_portal: { enabled: true },
+      assisted: { enabled: true, source_channels: ['walk_in', 'phone', 'letter', 'community_meeting', 'complaint_box'] },
+      hotline: { enabled: true },
+      mobile_app: { enabled: false, show_on_portal: true },
+      email_inbound: { enabled: false },
+      ussd: { enabled: false },
+      sms: { enabled: false },
+      partner_api: { enabled: false },
+      chatbot: { enabled: false },
+    },
+  }, admin!.id);
+
   // Sample unit tree: national → 2 counties → 3 settlements
   const existingUnits = await db.select({ id: schema.unit.id }).from(schema.unit).where(eq(schema.unit.tenantId, kisip!.id)).limit(1);
   if (existingUnits.length === 0) {

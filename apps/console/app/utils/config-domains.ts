@@ -11,6 +11,18 @@ export interface DomainMeta {
   subsections?: { id: string; label: string }[];
 }
 
+export const CD08_SUBSECTIONS = [
+  { id: 'sec-public', label: 'Other ways to reach us' },
+  { id: 'sec-modules', label: 'Intake modules' },
+];
+
+export const CD06_SUBSECTIONS = [
+  { id: 'sec-general', label: 'Form settings' },
+  { id: 'sec-complainant', label: 'Complainant' },
+  { id: 'sec-grievance', label: 'Grievance' },
+  { id: 'sec-outcome', label: 'Expected outcome' },
+];
+
 export const CD10_SUBSECTIONS = [
   { id: 'sec-roles', label: 'Roles & permissions' },
   { id: 'sec-departments', label: 'Departments' },
@@ -127,11 +139,13 @@ export const DOMAIN_CATALOGUE: DomainMeta[] = [
     description: 'Acknowledgement/response/resolution targets, per-status durations, working calendars, reminder ladder, and auto-escalation rules.',
     subsections: CD05_SUBSECTIONS },
   { domain: 'cd06_intake_forms', cd: 'CD-06', title: 'Intake forms', icon: 'i-lucide-clipboard-list', strict: true,
-    description: 'The standardized intake dataset: field-by-field enablement, requiredness, labels per locale, options, anonymity policy, consent text.' },
+    description: 'The standardized intake dataset: field-by-field enablement, requiredness, labels per locale, options, anonymity policy, consent text.',
+    subsections: CD06_SUBSECTIONS },
   { domain: 'cd07_numbering', cd: 'CD-07', title: 'Reference numbering', icon: 'i-lucide-hash', strict: true,
     description: 'Reference pattern (e.g. GRM-{YYYY}-{seq:4}), sequence scope, verifier requirement for public tracking.' },
-  { domain: 'cd08_channels', cd: 'CD-08', title: 'Channels', icon: 'i-lucide-radio', strict: false,
-    description: 'Per-channel enablement and settings: web, assisted, USSD, SMS, hotline, email, partner API.' },
+  { domain: 'cd08_channels', cd: 'CD-08', title: 'Channels', icon: 'i-lucide-radio', strict: true,
+    description: 'Public contact routes (portal landing page) and intake channel module enablement.',
+    subsections: CD08_SUBSECTIONS },
   { domain: 'cd09_notifications', cd: 'CD-09', title: 'Notifications', icon: 'i-lucide-bell', strict: false,
     description: 'Event subscriptions, recipient selectors, templates per locale and channel, kill switches, sender identities.' },
   { domain: 'cd10_org_access', cd: 'CD-10', title: 'Org & access', icon: 'i-lucide-shield', strict: true,

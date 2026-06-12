@@ -83,12 +83,12 @@ export default async function configRoutes(app: FastifyInstance) {
     },
   );
 
-  // Active version of a domain. cd01_identity is publicly readable for portal theming.
+  // Active version of a domain. cd01_identity + cd08_channels are publicly readable (portal landing).
   app.get('/api/v1/config/:domain', async (req, reply) => {
     const domain = parseDomain((req.params as { domain: string }).domain);
     if (!domain) return reply.code(404).send({ error: 'unknown_domain' });
 
-    if (domain !== 'cd01_identity') {
+    if (domain !== 'cd01_identity' && domain !== 'cd08_channels') {
       await app.authenticate(req, reply);
       if (reply.sent) return;
     }

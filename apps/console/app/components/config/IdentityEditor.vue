@@ -120,16 +120,6 @@ function addPartnerLogo() {
   props.payload.branding.partner_logos.push({ name: '', image_url: '', link: '' });
 }
 
-const CHANNEL_TYPES = [
-  { value: 'hotline', label: 'Hotline', icon: 'i-lucide-phone-call', placeholder: '0800 …' },
-  { value: 'ussd', label: 'USSD', icon: 'i-lucide-smartphone', placeholder: '*XXX#' },
-  { value: 'email', label: 'Email', icon: 'i-lucide-mail', placeholder: 'grm@…' },
-  { value: 'office', label: 'Walk-in office', icon: 'i-lucide-building-2', placeholder: 'Office name / location' },
-];
-const channelPlaceholder = (type: string) => CHANNEL_TYPES.find((c) => c.value === type)?.placeholder ?? '';
-function addChannel() {
-  props.payload.channels_display.push({ type: 'hotline', value: '' });
-}
 function removeAt(arr: unknown[], i: number) {
   arr.splice(i, 1);
 }
@@ -297,31 +287,16 @@ function removeAt(arr: unknown[], i: number) {
       </div>
     </section>
 
-    <!-- Channels -->
+    <!-- Channels (managed in CD-08 — link only) -->
     <section v-show="show('sec-channels')" id="sec-channels">
       <h3 class="text-sm font-semibold text-muted uppercase tracking-wide mb-1">Other channels</h3>
-      <p class="text-xs text-muted mb-3">
-        Display-only: tells visitors the other ways to file a grievance. Add as many as needed — at least one must remain.
-      </p>
-      <div class="space-y-2">
-        <div v-for="(ch, i) in payload.channels_display" :key="i" class="flex items-center gap-2">
-          <USelectMenu
-            v-model="ch.type"
-            :items="CHANNEL_TYPES"
-            value-key="value"
-            label-key="label"
-            class="w-44 shrink-0"
-          />
-          <UInput v-model="ch.value" class="flex-1" :placeholder="channelPlaceholder(ch.type)" />
-          <UButton
-            size="xs" variant="ghost" color="error" icon="i-lucide-x"
-            :disabled="payload.channels_display.length <= 1"
-            :title="payload.channels_display.length <= 1 ? 'At least one channel must remain' : 'Remove channel'"
-            @click="removeAt(payload.channels_display, i)"
-          />
-        </div>
-        <UButton size="xs" variant="soft" icon="i-lucide-plus" @click="addChannel">Add channel</UButton>
-      </div>
+      <UAlert color="info" variant="subtle" title="Edit under Intake &amp; channels">
+        <template #description>
+          Public contact routes (hotline, email, walk-in offices) are configured in
+          <NuxtLink to="/admin/config/cd08_channels#sec-public" class="text-primary underline">Channels (CD-08) → Other ways to reach us</NuxtLink>.
+          That section powers the portal landing page block of the same name.
+        </template>
+      </UAlert>
     </section>
 
     <!-- About -->
