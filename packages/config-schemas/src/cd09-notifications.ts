@@ -133,24 +133,41 @@ export const notificationTemplate = z.object({
   ),
 });
 
+/** Provider gateway credentials (spec 06 §2 — keys may move to vault in production). */
+export const providerConnection = z.object({
+  provider: z.string().optional(),
+  /** API key / bearer token / SMTP password (stored encrypted at rest in production). */
+  api_token: z.string().optional(),
+  /** API base URL or SMTP host when required by the provider. */
+  api_url: z.string().optional(),
+  enabled: z.boolean().default(true),
+});
+
+export const emailSenderIdentity = providerConnection.extend({
+  from_name: z.string().optional(),
+  from_address: z.string().optional(),
+});
+
+export const smsSenderIdentity = providerConnection.extend({
+  sender_id: z.string().optional(),
+});
+
+export const whatsappSenderIdentity = providerConnection.extend({
+  /** Meta / Twilio business phone number id. */
+  phone_number_id: z.string().optional(),
+  /** E.164 number or display label shown to recipients. */
+  display_number: z.string().optional(),
+});
+
 export const cd09Notifications = z
   .object({
     rules: z.array(notificationRule).default([]),
     templates: z.array(notificationTemplate).min(1),
     senders: z
       .object({
-        email: z
-          .object({
-            from_name: z.string().optional(),
-            from_address: z.string().optional(),
-          })
-          .default({}),
-        sms: z
-          .object({
-            sender_id: z.string().optional(),
-            provider: z.string().optional(),
-          })
-          .default({}),
+        email: emailSenderIdentity.default({}),
+        sms: smsSenderIdentity.default({}),
+        whatsapp: whatsappSenderIdentity.default({}),
       })
       .default({}),
     quiet_hours: z
@@ -485,8 +502,9 @@ export function defaultNotificationPack(): Cd09Notifications {
     templates,
     rules,
     senders: {
-      email: { from_name: 'GRM', from_address: '' },
-      sms: { sender_id: 'GRM', provider: '' },
+      email: { from_name: 'GRM', from_address: '', provider: '', api_token: '', enabled: true },
+      sms: { sender_id: 'GRM', provider: '', api_token: '', enabled: true },
+      whatsapp: { display_number: '', phone_number_id: '', provider: '', api_token: '', enabled: false },
     },
     quiet_hours: {
       enabled: false,

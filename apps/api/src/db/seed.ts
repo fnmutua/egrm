@@ -445,8 +445,29 @@ async function main() {
 
   const kisipNotifications = defaultNotificationPack();
   kisipNotifications.senders = {
-    email: { from_name: 'KISIP GRM', from_address: 'grm@kisip.go.ke' },
-    sms: { sender_id: 'KISIP', provider: 'advanta' },
+    email: {
+      from_name: 'KISIP GRM',
+      from_address: 'grm@kisip.go.ke',
+      provider: 'smtp',
+      api_url: '',
+      api_token: '',
+      enabled: true,
+    },
+    sms: {
+      sender_id: 'KISIP',
+      provider: 'advanta',
+      api_url: '',
+      api_token: '',
+      enabled: true,
+    },
+    whatsapp: {
+      display_number: '',
+      phone_number_id: '',
+      provider: 'meta',
+      api_url: '',
+      api_token: '',
+      enabled: false,
+    },
   };
   await upsertActiveConfig(kisip!.id, 'cd09_notifications', kisipNotifications, admin!.id);
 

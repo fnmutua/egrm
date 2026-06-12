@@ -65,15 +65,45 @@ onMounted(async () => {
   ensure();
 });
 
+const PROVIDER_PRESETS = {
+  email: [
+    { value: 'smtp', label: 'SMTP' },
+    { value: 'gmail', label: 'Gmail' },
+    { value: 'sendgrid', label: 'SendGrid' },
+    { value: 'mailgun', label: 'Mailgun' },
+    { value: 'ses', label: 'Amazon SES' },
+  ],
+  sms: [
+    { value: 'advanta', label: 'Advanta' },
+    { value: 'africas_talking', label: "Africa's Talking" },
+    { value: 'twilio', label: 'Twilio' },
+  ],
+  whatsapp: [
+    { value: 'meta', label: 'Meta Cloud API' },
+    { value: 'twilio', label: 'Twilio WhatsApp' },
+  ],
+} as const;
+
+function ensureSenderIdentity(sender: Record<string, unknown>) {
+  sender.enabled ??= true;
+  sender.provider ??= '';
+  sender.api_token ??= '';
+  sender.api_url ??= '';
+}
+
 function ensure() {
   const p = props.payload;
   if (!Array.isArray(p.templates) || p.templates.length === 0) {
     Object.assign(p, defaultNotificationPack());
   }
   p.rules ??= [];
-  p.senders ??= { email: {}, sms: {} };
+  p.senders ??= { email: {}, sms: {}, whatsapp: {} };
   p.senders.email ??= {};
   p.senders.sms ??= {};
+  p.senders.whatsapp ??= {};
+  ensureSenderIdentity(p.senders.email);
+  ensureSenderIdentity(p.senders.sms);
+  ensureSenderIdentity(p.senders.whatsapp);
   p.quiet_hours ??= {
     enabled: false,
     timezone: 'Africa/Nairobi',
@@ -485,22 +515,124 @@ function varToken(name: string) {
     <section v-if="show('sec-senders')" id="sec-senders" class="space-y-4">
       <div>
         <h2 class="text-sm font-semibold">Sender identities</h2>
-        <p class="text-xs text-muted mt-0.5">From-address and SMS sender ID shown to recipients.</p>
+        <p class="text-xs text-muted mt-0.5">
+          From-address, sender ID, and provider API credentials per outbound channel (spec 06 §2).
+        </p>
       </div>
-      <div class="grid sm:grid-cols-2 gap-4 max-w-2xl">
-        <UFormField label="Email from name">
-          <UInput v-model="payload.senders.email.from_name" class="w-full" placeholder="GRM" />
-        </UFormField>
-        <UFormField label="Email from address">
-          <UInput v-model="payload.senders.email.from_address" class="w-full" placeholder="grm@tenant.go.ke" />
-        </UFormField>
-        <UFormField label="SMS sender ID">
-          <UInput v-model="payload.senders.sms.sender_id" class="w-full" placeholder="KISIP" />
-        </UFormField>
-        <UFormField label="SMS provider profile">
-          <UInput v-model="payload.senders.sms.provider" class="w-full" placeholder="advanta" />
-        </UFormField>
-      </div>
+
+      <UCard :ui="{ body: 'p-4 space-y-3' }">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-mail" class="size-4 text-primary" />
+            <span class="text-sm font-medium">Email</span>
+          </div>
+          <USwitch v-model="payload.senders.email.enabled" size="sm" />
+        </div>
+        <div v-if="payload.senders.email.enabled" class="grid sm:grid-cols-2 gap-3">
+          <UFormField label="From name">
+            <UInput v-model="payload.senders.email.from_name" class="w-full" placeholder="GRM" />
+          </UFormField>
+          <UFormField label="From address">
+            <UInput v-model="payload.senders.email.from_address" class="w-full" placeholder="grm@tenant.go.ke" />
+          </UFormField>
+          <UFormField label="Provider">
+            <USelectMenu
+              v-model="payload.senders.email.provider"
+              :items="[...PROVIDER_PRESETS.email]"
+              value-key="value"
+              label-key="label"
+              class="w-full"
+            />
+          </UFormField>
+          <UFormField label="API URL / SMTP host" help="Provider endpoint or mail server hostname.">
+            <UInput v-model="payload.senders.email.api_url" class="w-full" placeholder="smtp.example.com" />
+          </UFormField>
+          <UFormField label="API token" help="API key or SMTP password — stored in tenant config." class="sm:col-span-2">
+            <UInput
+              v-model="payload.senders.email.api_token"
+              type="password"
+              class="w-full font-mono"
+              placeholder="••••••••"
+              autocomplete="off"
+            />
+          </UFormField>
+        </div>
+      </UCard>
+
+      <UCard :ui="{ body: 'p-4 space-y-3' }">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-message-square" class="size-4 text-primary" />
+            <span class="text-sm font-medium">SMS</span>
+          </div>
+          <USwitch v-model="payload.senders.sms.enabled" size="sm" />
+        </div>
+        <div v-if="payload.senders.sms.enabled" class="grid sm:grid-cols-2 gap-3">
+          <UFormField label="Sender ID">
+            <UInput v-model="payload.senders.sms.sender_id" class="w-full" placeholder="KISIP" />
+          </UFormField>
+          <UFormField label="Provider">
+            <USelectMenu
+              v-model="payload.senders.sms.provider"
+              :items="[...PROVIDER_PRESETS.sms]"
+              value-key="value"
+              label-key="label"
+              class="w-full"
+            />
+          </UFormField>
+          <UFormField label="API URL" help="Gateway base URL if not the provider default.">
+            <UInput v-model="payload.senders.sms.api_url" class="w-full" placeholder="https://…" />
+          </UFormField>
+          <UFormField label="API token">
+            <UInput
+              v-model="payload.senders.sms.api_token"
+              type="password"
+              class="w-full font-mono"
+              placeholder="••••••••"
+              autocomplete="off"
+            />
+          </UFormField>
+        </div>
+      </UCard>
+
+      <UCard :ui="{ body: 'p-4 space-y-3' }">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-message-circle" class="size-4 text-primary" />
+            <span class="text-sm font-medium">WhatsApp</span>
+          </div>
+          <USwitch v-model="payload.senders.whatsapp.enabled" size="sm" />
+        </div>
+        <div v-if="payload.senders.whatsapp.enabled" class="grid sm:grid-cols-2 gap-3">
+          <UFormField label="Display number" help="Business number shown to recipients (E.164).">
+            <UInput v-model="payload.senders.whatsapp.display_number" class="w-full" placeholder="+254…" />
+          </UFormField>
+          <UFormField label="Phone number ID" help="Meta / Twilio business phone number id.">
+            <UInput v-model="payload.senders.whatsapp.phone_number_id" class="w-full font-mono" />
+          </UFormField>
+          <UFormField label="Provider">
+            <USelectMenu
+              v-model="payload.senders.whatsapp.provider"
+              :items="[...PROVIDER_PRESETS.whatsapp]"
+              value-key="value"
+              label-key="label"
+              class="w-full"
+            />
+          </UFormField>
+          <UFormField label="API URL" help="Graph API or gateway URL override.">
+            <UInput v-model="payload.senders.whatsapp.api_url" class="w-full" placeholder="https://graph.facebook.com/…" />
+          </UFormField>
+          <UFormField label="API token" help="Permanent access token or account auth token." class="sm:col-span-2">
+            <UInput
+              v-model="payload.senders.whatsapp.api_token"
+              type="password"
+              class="w-full font-mono"
+              placeholder="••••••••"
+              autocomplete="off"
+            />
+          </UFormField>
+        </div>
+      </UCard>
     </section>
 
     <section v-if="show('sec-delivery')" id="sec-delivery" class="space-y-4">
