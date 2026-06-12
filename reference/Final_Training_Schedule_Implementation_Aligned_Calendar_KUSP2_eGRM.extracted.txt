@@ -1,0 +1,213 @@
+|  | Second Kenya Urban Support Program (KUSP2) “Making Kenyan Towns Work!” |  |
+
+MINISTRY OF LANDS, PUBLIC WORKS, HOUSING AND URBAN DEVELOPMENT
+State Department for Housing and Urban Development
+CONSULTANCY SERVICES FOR DESIGN, PREPARATION OF TECHNICAL SPECIFICATIONS AND BIDDING DOCUMENT FOR AN ELECTRONIC GRIEVANCE MANAGEMENT SYSTEM (e-GRM)
+Contract No. KE - MOTI – 434503 - CS - INDV
+KUSP2 e-GRM – TRAINING SCHEDULE
+(Implementation-aligned calendar for Phase 2 – 3 months)
+Submitted by
+Yapo Jesus Ekie (Individual Consultant)
+February, 2026
+# 1. Document Control
+This Training Schedule defines the implementation-aligned calendar, sequencing, and evidence requirements for training and knowledge transfer activities for the KUSP2 electronic Grievance Redress Mechanism (e-GRM) Phase 2 implementation. It complements the training strategy and curriculum requirements already specified in the KUSP2 e-GRM Terms of Reference (ToR) and operational manuals, by translating them into a week-by-week delivery plan aligned to the three-month implementation milestones.
+| Item | Description | Owner | Notes |
+| Document title | KUSP2 e-GRM – Training Schedule (Implementation-aligned calendar) | NPCT / Supplier | Procurement-ready annex / deliverable D6 support |
+| Version | 1.0 | Supplier (Implementing Firm) | Initial issue for Phase 2 procurement package |
+| Date | February 2026 | Supplier (Implementing Firm) | To be updated at contract signature |
+| Period covered | Weeks 1–12 (3 months) + post go-live refresher outline | Supplier (Implementing Firm) | Weeks are counted from Contract Effective Date (T0) |
+
+## 1.1 Purpose
+The purpose of this document is to provide a clear, testable and operational training delivery schedule that bidders can commit to, and that the Client can use to manage implementation readiness and acceptance. The schedule is designed to ensure that training is delivered at the point it is needed (aligned to solution releases, pilot rollout, UAT, and go-live), rather than being delivered as a standalone activity at the end of the project.
+## 1.2 Scope and relationship to other documents
+This schedule covers training preparation, Training of Trainers (ToT), role-based end-user training, administrator coaching, UAT participant training, go-live training, and post go-live refresher sessions. It is aligned to the three-month Phase 2 implementation timeline and deliverables structure (D1 to D9). It should be read together with the ToR training requirements (tracks, modules, materials and evidence) and the system operation and maintenance manuals, which provide detailed workflow guidance and operational procedures.
+## 1.3 Scheduling assumptions and principles
+To remain procurement-ready and adaptable to contract award dates, this schedule is presented in relative weeks counted from the Contract Effective Date (T0). The Supplier shall confirm exact calendar dates during mobilization and incorporate them into the approved Implementation Plan (Deliverable D1). The schedule is based on the following principles, which are necessary to protect adoption, compliance, and acceptance within a compressed three-month delivery period:
+Training is aligned to solution readiness: users are trained on functionality that exists in the training environment and reflects the latest tested configuration baseline.
+Training is role-based and workflow-driven: each track focuses on the end-to-end tasks that the role performs, including confidentiality, data quality, and service standards.
+Training is evidence-based: completion evidence (attendance, assessments, evaluation summaries and training report) is treated as acceptance material, not optional paperwork.
+Training is bilingual for user-facing materials: public-facing and frontline materials are provided in English and Kiswahili, using accessibility-aware authoring practices.
+Training supports sustainability: ToT and administrator coaching are used to enable cascade training and reduce long-term dependency on the Supplier.
+If implementation dependencies shift (for example, telecom channel readiness), the Supplier shall adjust the sequence of channel-specific training while maintaining the overall adoption pathway: baseline web and assisted intake training must remain on the critical path for go-live, while additional-channel training may be staged once integrations are enabled.
+# 2. Training Plan Summary
+## 2.1 Training objectives
+Training under KUSP2 e-GRM Phase 2 is intended to achieve operational readiness, governance readiness, and compliance readiness across national, county and municipal stakeholders. The objectives below are framed as measurable outcomes that should be validated during UAT, go-live readiness checks, and early hypercare review.
+Ensure that each user role can execute required workflows correctly, end-to-end, using the configured system states, forms, categories, SLAs and templates.
+Ensure that assisted intake users can register grievances received via phone or in-person using the standardized intake dataset, issue a reference number, and provide appropriate acknowledgement.
+Ensure that administrators and super-users can manage routine configuration and user administration tasks without software development, while maintaining configuration governance and auditability.
+Ensure that safeguards and sensitive-case focal persons can apply SEA/SH and other sensitive grievance protocols using restricted-access workflows and safe communication rules.
+Ensure that reporting users can produce standard dashboards and exports, interpret KPI definitions, and generate privacy-safe reporting outputs for program monitoring and disclosure.
+Achievement of these objectives shall be verified through practical exercises, scenario-based assessments, and evidence captured in the training completion report and UAT sign-off pack, as applicable.
+## 2.2 Target audiences and training tracks
+Training is delivered using role-based tracks. These tracks reflect the distributed KUSP2 operating model, in which municipal and county actors handle day-to-day case management while NPCT provides national oversight, configuration governance and consolidated reporting. Each track includes hands-on practice in a controlled training environment.
+Track A – System Administrators (NPCT and designated administrators).
+Track B – Supervisors/Managers (NPCT/CPCT/municipal leaders responsible for queue oversight and escalation).
+Track C – GRM Officers/Handlers (municipal/county/national users who process cases through the lifecycle).
+Track D – Assisted Intake Agents (front office, hotline/call handlers, and staff registering walk-in/phone cases).
+Track E – M&E and Reporting Users (users responsible for dashboards, exports and KPI interpretation).
+Track F – Safeguards / Sensitive Case Focal Persons (including SEA/SH pathway users with restricted access).
+The curriculum for each track is defined in Section 4, including required learning outcomes, practical exercises, and assessment methods that can be used to verify competence prior to go-live.
+## 2.3 Delivery modalities and language plan
+Given the national footprint and the compressed Phase 2 period, training will use a blended approach to balance reach, cost, and hands-on effectiveness. The modality for each session is specified in the calendar in Section 3; however, the following baseline delivery approach applies throughout Phase 2.
+Virtual instructor-led sessions for NPCT and dispersed county/municipal participants, supported by recorded demonstrations and screen-sharing.
+In-person or hybrid sessions for pilot municipalities and for critical ToT events where hands-on coaching is necessary to ensure adoption.
+Short, scenario-based practical labs using the training environment and sample grievance cases that reflect realistic KUSP2 contexts.
+Bilingual delivery for key user-facing and frontline materials (English and Kiswahili), with translated templates and job aids.
+Where connectivity constraints exist, the Supplier shall adapt the delivery method by using lighter-weight materials (PDF job aids, printed quick reference guides) and by scheduling shorter, repeated sessions rather than long continuous workshops.
+## 2.4 Training governance, responsibilities and prerequisites
+Training delivery requires coordinated inputs from the Supplier and the Client to avoid late-stage delays. Responsibilities shall be confirmed during mobilization and recorded in the Implementation Plan (D1). The minimum prerequisites below must be met for training sessions that involve hands-on exercises.
+A training environment is available (TEST/UAT or STAGING as approved), with sample data and configured workflows reflecting the latest tested release.
+Training user accounts are provisioned for each role with time-bound credentials and permissions matching the target role (including restricted roles for sensitive-case sessions).
+Training materials are available in the agreed language(s), and any required policy content (privacy notice wording, public portal content, channel scripts) has been approved or provided in draft for training use.
+Pilot municipality participants and NPCT focal persons are nominated early to support UAT and training scheduling within Weeks 8–11.
+If a prerequisite is not met, the Supplier shall not proceed with a hands-on session using workarounds that could create incorrect user expectations; instead, the session shall be converted to a briefing/demo and rescheduled for hands-on completion once the environment is ready.
+# 3. Implementation-Aligned Training Schedule (Weeks 1–12)
+## 3.1 Alignment to Phase 2 milestones
+The training calendar below is aligned to the minimum Phase 2 milestone structure used in the procurement package. In practical terms, training accelerates after the first working release is available for demonstration (Week 4), peaks during the pilot and UAT window (Weeks 9–11), and culminates with go-live readiness and hypercare transition activities (Week 12).
+For clarity, the schedule assumes the following implementation stage gates: D1 at end of Week 2; D2 at end of Week 3; a first working increment at Week 4; staging-ready beta at Week 8; pilot and UAT in Weeks 9–11; and go-live/handover at Week 12.
+## 3.2 Week-by-week training calendar
+The tables referenced below provide a week-by-week calendar that a bidder can adopt as a baseline. Each activity includes the target audience, duration, modality, prerequisites, and required outputs/evidence. Where a week includes multiple sessions, they are listed as separate rows to enable clear resourcing and tracking.
+Tables 3-1A, 3-1B and 3-1C are presented on landscape pages to maintain readability of the procurement-ready schedule.
+### Table 3-1A: Week-by-week Training Calendar (Weeks 1–4)
+| Week | Implementation milestone / context | Training activity / session | Target audience | Duration | Modality | Prerequisites | Outputs / evidence (minimum) |
+| Week 1 | Mobilization kickoff; access to inputs | Training needs confirmation workshop (training governance, participant profiling, ToT nominations) | NPCT focal persons; Supplier leads | 1 session (2–3 hrs) | Virtual | D1 mobilization started; draft participant list | Approved participant profiling template; actions register |
+| Week 1 | Mobilization kickoff | Orientation briefing: e-GRM scope, channels and adoption approach | NPCT leadership; NPCT GRM Secretariat; ICT focal | 1 session (2 hrs) | Virtual | Kickoff complete; access to Phase 1 inputs | Briefing deck/recording; attendance register |
+| Week 2 | D1 preparation | Curriculum and materials design workshop (confirm tracks, modules, exercises and assessments) | NPCT GRM lead; safeguards; M&E; Supplier training lead | 1 session (3 hrs) | Virtual | Draft curriculum outline available | Curriculum outline v1; decisions log |
+| Week 2 | D1 preparation | Training environment readiness planning (accounts, sample data, access rules) | NPCT ICT/System Admin; Supplier DevOps | 1 session (2 hrs) | Virtual | Environment plan agreed; access approvals initiated | Training environment setup checklist; access tracker |
+| Week 3 | D2 due end Week 3 | Admin coaching 1: user provisioning, roles/teams, environment navigation (foundation) | Track A (Administrators) | 1 session (4 hrs) | Virtual | Training environment available; admin accounts provisioned | Attendance; practical exercise results; admin coaching notes |
+| Week 3 | Environments ready | Prototype walkthrough for super-users (core intake, routing, SLA overview) | ToT candidates; Track B supervisors; Track C leads | 2 sessions (2 hrs each) | Virtual | Core workflows configured in training environment | Feedback log; updated training scenarios |
+| Week 4 | Sprint 1 release (core intake + case mgmt) | Training of Trainers (ToT) – Part 1: core workflows and data standards | ToT candidates (NPCT + pilot municipality/county super-users) | 2 days (12–14 hrs total) | In-person/Hybrid | Release 1 demo available; stable training dataset | ToT attendance; trainer assessment; trainer kit v1 |
+| Week 4 | Sprint 1 release | UAT participant orientation: how to execute scripts and log defects | Pilot UAT participants (all tracks) | 1 session (2 hrs) | Virtual | UAT plan and tools agreed | UAT onboarding attendance; defect logging guide |
+
+### Table 3-1B: Week-by-week Training Calendar (Weeks 5–8)
+| Week | Implementation milestone / context | Training activity / session | Target audience | Duration | Modality | Prerequisites | Outputs / evidence (minimum) |
+| Week 5 | Build/configure channels & reporting | Track C training 1: case handling lifecycle (intake to closure) | Handlers (municipal/county/national) | 2 sessions (3 hrs each) | Virtual | Release 1 in training env; user accounts ready | Attendance; scenario exercise outputs; quiz/assessment |
+| Week 5 | Build/configure channels & reporting | Track D training 1: assisted intake + acknowledgement scripts (phone/in-person) | Assisted intake officers; hotline operators | 2 sessions (2.5 hrs each) | Virtual | Assisted intake screens available; scripts draft | Attendance; role-play results; updated scripts |
+| Week 6 | Channels/compliance iteration | Track B training 1: supervision, queue management, escalation and SLA monitoring | Supervisors/managers | 2 sessions (3 hrs each) | Virtual | Queues and SLA plans configured; sample overdue cases | Attendance; practical lab outputs; supervisor checklist |
+| Week 6 | Channels/compliance iteration | Track F training 1: sensitive case identification, restricted access and safe communication | Safeguards focal persons; sensitive case handlers | 1 session (4 hrs) | Virtual | Sensitive workflows configured; restricted accounts provisioned | Attendance; scenario assessment; confidentiality job aid sign-off |
+| Week 7 | Pre-beta stabilization | Admin coaching 2: configuration governance (categories, forms, templates, SLAs, controlled lists) | Track A (Administrators) | 1 session (6 hrs) | Virtual | Config objects available; governance rules agreed | Configuration workbook exercise; admin coaching report |
+| Week 7 | Pre-beta stabilization | Track E training 1: dashboards, KPI interpretation, exports and privacy-safe reporting | M&E and reporting users | 1 session (4 hrs) | Virtual | Reports available in training environment | Attendance; export exercise outputs; reporting user checklist |
+| Week 8 | Sprint 2 beta in staging; training materials finalization | Training of Trainers (ToT) – Part 2: reporting, channel SOPs, troubleshooting clinics facilitation | ToT candidates; super-users | 1 day (6–7 hrs) | Hybrid | Staging beta available; training materials near-final | ToT completion certificates; trainer kit final |
+| Week 8 | Beta ready for pilot/UAT | UAT refresher training: end-to-end scenarios + regression focus | Pilot UAT participants | 1 session (3 hrs) | Virtual | UAT environment stable; UAT scripts issued | Attendance; updated UAT question log |
+
+### Table 3-1C: Week-by-week Training Calendar (Weeks 9–12)
+| Week | Implementation milestone / context | Training activity / session | Target audience | Duration | Modality | Prerequisites | Outputs / evidence (minimum) |
+| Week 9 | Pilot rollout + UAT | Pilot municipality on-site coaching clinic 1 (hands-on handling + assisted intake) | Pilot municipality users (Tracks B/C/D) | 1–2 days (as agreed) | In-person | Pilot environment accessible; local devices/connectivity | Clinic report; attendance; prioritized issues list |
+| Week 9 | Pilot rollout + UAT | Sensitive case clinic (pilot focal persons): safe handling drills and referral recording | Pilot safeguards focal persons (Track F) | 1 session (3 hrs) | In-person / Virtual | Restricted access confirmed; referral SOP agreed | Clinic report; assessment outputs |
+| Week 10 | Pilot rollout + UAT | Pilot municipality coaching clinic 2 (reporting, oversight and data quality) | Pilot supervisors; reporting users (Tracks B/E) | 1 day (6 hrs) | In-person / Hybrid | Pilot data available for reporting; dashboards configured | Clinic report; sample reporting pack |
+| Week 10 | Pilot rollout + UAT | Helpdesk/L1 support readiness training (issue triage, escalation, evidence capture) | NPCT helpdesk/L1; ICT support; super-users | 1 session (3 hrs) | Virtual | Support process agreed; severity definitions agreed | Support readiness checklist; ticket templates |
+| Week 11 | UAT completion and go-live readiness | Go-live readiness training: cutover roles, communications templates, downtime procedures | NPCT; pilot supervisors; ICT/admins | 1 session (3 hrs) | Virtual | UAT results near-final; cutover plan draft | Go-live readiness attendance; checklist sign-off |
+| Week 11 | UAT completion | Refresher micro-sessions (role-specific) based on UAT defects/trends | All pilot users (as needed) | Up to 3 short sessions (1 hr each) | Virtual | Targeted defect fixes deployed | Attendance; refresher notes; updated job aids |
+| Week 12 | Go-live + hypercare + handover | Go-live day briefing and final user Q&A clinic | NPCT; pilot users; support team | 1 session (2 hrs) | Virtual | Production ready; user accounts active | Attendance; issue log entries |
+| Week 12 | Hypercare transition | Operations handover training: routine admin, reporting cadence, backup/restore evidence, change control | Track A admins; NPCT governance leads | 1 session (4 hrs) | Virtual | Handover dossier draft; as-built parameters available | Handover training report; sign-off actions |
+
+The week-by-week calendar is intentionally front-loaded with planning, ToT and administrator coaching, and then shifts to hands-on role-based delivery during the pilot/UAT window. If additional municipalities are included beyond the pilot scope during Phase 2, the Supplier shall apply the same sequencing logic: orientation, role-based training, and targeted coaching aligned to rollout readiness, without reducing the depth of training for sensitive-case handling and confidentiality controls.
+## 3.3 Training sequencing notes and critical path controls
+Training activities that are on the critical path for go-live are those that enable safe and correct intake, case handling, supervision, and restricted sensitive-case handling. The Supplier shall therefore apply the following sequencing controls so that training does not create acceptance risk:
+Do not deliver hands-on training on configuration objects (forms, SLAs, templates, routing) until the configuration baseline is stable enough for training use, and changes are controlled through the change log.
+Deliver assisted intake training before pilot rollout begins, including scripts and privacy-safe messaging rules, because assisted intake is a baseline channel for inclusion.
+Deliver sensitive-case training before any pilot municipality is permitted to handle SEA/SH-related cases in the system, and verify access controls with a practical drill.
+Conduct short refresher sessions during UAT based on observed defects and user questions, so that go-live readiness reflects real performance rather than initial exposure.
+These sequencing controls protect confidentiality and service quality, and they enable a defensible acceptance process by ensuring that trained users have practiced the same workflows that are validated during UAT and commissioning.
+# 4. Curriculum Breakdown (Role-Based Tracks)
+This section defines the curriculum for each training track, including modules, learning outcomes, practical exercises and assessment methods. The modules reflect the minimum curriculum expectations already defined in the ToR and are presented here in a format that can be directly mapped to session plans and training materials.
+## 4.1 Track A – System Administrators
+Track A prepares NPCT and designated administrators to manage the system sustainably after handover. The focus is on safe administration, configuration governance, auditability, and operational readiness. Training is delivered through coaching-style sessions with practical exercises in the administration console.
+Module A1: Environment overview and access management (DEV/TEST/STAGING/PROD), account lifecycle and segregation of duties.
+Module A2: User and organization management (roles, departments, teams, jurisdictions) and onboarding/offboarding procedures.
+Module A3: Configuration governance for help topics, controlled lists (counties/municipalities), forms/fields, SLA plans, schedules and escalation rules.
+Module A4: Template and content management (English/Kiswahili), privacy notice placement, and privacy-safe messaging rules.
+Module A5: Audit logs, system logs, monitoring basics, and evidence extraction for compliance and troubleshooting.
+Module A6: Change control and release promotion (DEV to TEST to STAGING to PROD), rollback planning and configuration snapshot management.
+Practical exercises for Track A include creating and disabling users, updating a controlled list safely (active/inactive approach), modifying an SLA plan in a non-production environment, exporting configuration evidence, and completing an operational readiness checklist. Assessment is based on completion of a supervised admin task checklist and a short scenario-based quiz on governance and confidentiality.
+## 4.2 Track B – Supervisors / Managers
+Track B equips supervisors to manage workload, enforce service standards, and maintain quality and confidentiality across decentralized teams. Training emphasizes queue oversight, escalation management, documentation discipline, and reporting interpretation.
+Module B1: Supervisor dashboard use (open, due, overdue, escalated queues) and workload balancing using assignment rules.
+Module B2: SLA monitoring and escalation triggers, including supervisory actions for overdue and at-risk cases.
+Module B3: Quality control checks for closure (required fields, resolution summaries, evidence completeness) and handling of reopened/appeal cases.
+Module B4: Safe communications oversight (template use, suppression rules for sensitive cases, and review of communication logs).
+Module B5: Governance responsibilities (data quality enforcement, configuration change requests, and incident escalation).
+Practical exercises for Track B include queue review and reassignment drills, SLA breach escalation simulation, and closure review using a checklist. Assessment is based on a scenario-based supervisor exercise pack and a short evaluation of how the supervisor would respond to specific risk cases (overdue backlog, sensitive-case misrouting, and incomplete closures).
+## 4.3 Track C – GRM Officers / Handlers
+Track C is the primary operational training for users who will triage, investigate, communicate, resolve and close grievances. Training is delivered through end-to-end workflow scenarios that mirror KUSP2 practice, with emphasis on accurate data capture, documentation discipline, and respectful communication.
+Module C1: Intake validation and triage (classification, location, category/help topic, priority, sensitivity flag) and assignment workflow.
+Module C2: Investigation and action logging (tasks, internal notes, attachments/evidence handling, decision rationale recording).
+Module C3: Communication with complainants (request for information, status updates, resolution and closure messages), using approved templates and privacy-safe rules.
+Module C4: Resolution and closure (outcome recording, closure controls, satisfaction capture, and reopen/appeal initiation).
+Module C5: Referral and escalation (municipal to county to national), including recording referral destinations and maintaining an auditable trail.
+Practical exercises for Track C include executing a full workflow scenario from registration to closure, handling a case that becomes overdue and requires escalation, and completing a closure with required fields and evidence. Assessment is based on completion of an individual case-handling practical test (with a scoring rubric) and a short knowledge check on confidentiality and data quality rules.
+## 4.4 Track D – Assisted Intake Agents
+Track D prepares front office and hotline operators to register grievances on behalf of complainants, issue reference numbers, provide acknowledgement, and apply privacy and consent scripts. Because assisted intake is essential for inclusion, this track is treated as go-live critical even where telecom channels are staged.
+Module D1: Assisted intake workflow (creating a grievance for a walk-in or phone caller) using the standardized intake dataset.
+Module D2: Acknowledgement scripts and reference number communication, including guidance on what timelines to communicate and how to manage expectations.
+Module D3: Consent capture and privacy notice scripting for assisted intake, including handling of anonymous submissions.
+Module D4: Duplicate detection and linking practices (where the same issue is submitted through multiple channels).
+Module D5: Escalation triggers and safe handoff to supervisors or sensitive-case focal persons when a case is high-risk.
+Practical exercises for Track D include a role-play assisted intake call, completion of minimum mandatory fields in the training environment, and issuance of an acknowledgement using a template. Assessment is based on a supervised role-play checklist and a short quiz covering consent, confidentiality, and safe messaging rules.
+## 4.5 Track E – M&E and Reporting Users
+Track E enables M&E and reporting users to generate, interpret and share reports responsibly. The emphasis is on KPI definitions, disaggregation, export controls, and privacy-safe reporting for broader circulation.
+Module E1: Standard dashboards and filters (volumes, categories, status distribution, backlog and timeliness) with disaggregation by geography and channel.
+Module E2: KPI definitions and interpretation (acknowledgement, first response, resolution/closure, escalation, reopen rates).
+Module E3: Export procedures (CSV/XLSX/PDF) and data protection controls (who can export what; privacy-safe variants).
+Module E4: Preparing quarterly/annual reporting packs and trend narratives based on system outputs.
+Module E5: Data quality checks and anomaly identification (duplicates, missing fields, misclassification) and feedback loops to operations.
+Practical exercises for Track E include producing a standard reporting pack from sample data, applying filters correctly, and generating a privacy-safe export. Assessment is based on a reporting practical exercise and a short written interpretation of a sample dashboard (what it means and what management action could follow).
+## 4.6 Track F – Safeguards / Sensitive Case Focal Persons
+Track F supports safe and confidential handling of SEA/SH and other sensitive grievances. Training must be delivered before go-live for any sites expected to receive sensitive grievances, and must be reinforced with practical drills that confirm restricted access and safe communications.
+Module F1: Identification and triage of sensitive grievances, including use of sensitivity flags and category-based routing rules.
+Module F2: Restricted access workflows and need-to-know principles (who can view, edit, export, and how access is reviewed).
+Module F3: Survivor-centred handling expectations and minimal sensitive data capture (what to record and what not to record).
+Module F4: Referral recording and follow-up tracking (recording destination, dates, and safe status updates without narrative disclosure).
+Module F5: Safe communications protocols, including suppression/redaction rules for insecure channels and handling of attachments.
+Practical exercises for Track F include a restricted-access drill, a referral recording scenario, and a safe communications exercise. Assessment is based on completion of a sensitive-case scenario pack, supervisor validation, and confirmation that access rights and audit logging are functioning as configured.
+## 4.7 Cross-cutting modules applied across tracks
+In addition to track-specific modules, the Supplier shall apply the following cross-cutting content across all tracks to ensure consistent understanding of governance and compliance obligations:
+GRM fundamentals and KUSP2 context, including service standards, non-retaliation and fee-free access principles.
+Data protection basics for GRM users, including consent, data minimization and lawful information sharing.
+Documentation quality standards (what must be recorded, use of internal notes vs external messages, and auditability expectations).
+Business continuity during downtime, including offline intake capture and later reconciliation.
+These cross-cutting modules ensure a consistent baseline of ethical and compliant operation, and they reduce the risk that good system configuration is undermined by inconsistent human practice.
+# 5. Training Logistics, Participant Planning and Evidence
+## 5.1 Participant planning assumptions
+KUSP2 operates across 45 counties and 79 municipalities, which means training must be planned for scale even if the Phase 2 implementation period focuses on NPCT readiness and a defined pilot rollout. The assumptions below provide a practical baseline for bidders to plan resource needs and for the Client to understand what is expected during Phase 2.
+National level (NPCT): administrators, national GRM administrators, safeguards specialists, ICT staff, and M&E/reporting users participate in Track A, B, E and F sessions.
+Pilot municipalities/counties: a Client-selected set of pilot sites participate in Tracks B, C, D and F, and provide UAT participants representing real operational roles.
+ToT candidates: a small set of super-users is nominated from NPCT and pilot sites, with the expectation that they support cascade training during and after Phase 2.
+Session sizing: virtual sessions are planned for 20–30 participants per session to preserve interactivity; larger cohorts are divided into multiple sessions.
+During mobilization, the Supplier shall confirm actual participant numbers and finalize the participant list and session allocations as part of the Implementation Plan (D1), ensuring that municipal and county availability is managed as a delivery dependency.
+## 5.2 Logistics, equipment and connectivity requirements
+Training sessions require practical logistics planning to ensure that hands-on exercises can be completed reliably. The Supplier shall plan sessions so that equipment and connectivity limitations do not prevent successful completion of training objectives.
+Training venue and setup (for in-person/hybrid sessions): projector, audio, stable connectivity, and seating that supports small-group exercises.
+Participant equipment: a laptop or desktop per participant (or per pair for coached sessions), with supported browsers and access to the training environment URLs.
+Connectivity expectations: sufficient bandwidth for screen-sharing and web application use; where low bandwidth is expected, the Supplier shall use lighter demonstrations and distribute offline job aids in advance.
+Training accounts: time-bound user accounts for each role, with password reset support and clear instructions for first login.
+Where required, the Supplier shall provide a simple pre-training checklist and a connectivity test procedure to be completed by pilot municipalities before in-person coaching begins, so that avoidable delays do not consume training time.
+## 5.3 Training evidence and acceptance requirements
+Training is treated as an evidence-based deliverable. The Supplier shall therefore capture and submit completion evidence as part of Deliverable D6, and shall ensure that evidence is sufficient for acceptance decisions and later audits.
+Attendance registers showing participant name, organization, role, county/municipality, and session attended.
+Training materials package (editable originals plus PDF distribution versions), including slide decks, exercises, job aids and scripts.
+Assessment results (quizzes, practical exercise checklists, or competency confirmations) for each track, with a clear pass/complete threshold.
+Session evaluation summaries capturing common issues, improvement actions, and requests for configuration or procedural clarification.
+Training completion report summarizing sessions delivered, participants trained by role and location, and any residual training needs or risks.
+Acceptance of D6 is achieved when the Client confirms that planned sessions were delivered to the agreed participant groups, that materials are usable for continued onboarding, and that training evidence demonstrates readiness for UAT and go-live without leaving critical roles untrained.
+# 6. Sustainability and Refresher Training Plan
+## 6.1 Post go-live refresher schedule (outline)
+Because staff turnover and evolving workflows are common in decentralized programs, sustainability requires planned refresher training beyond Week 12. The following outline provides a minimum post go-live refresher rhythm that can be adopted by NPCT and supported by the Supplier during any warranty/support period if included in the contract.
+Refresher 1 (4–6 weeks after go-live): targeted sessions based on hypercare issues and data quality trends, focusing on the most frequent errors and bottlenecks.
+Quarterly refreshers (every 3 months): short role-specific clinics for supervisors and handlers, including updates to categories, templates and SLA rules where changes have been approved.
+Annual onboarding package review: update job aids, scripts and training environment examples to reflect system changes and lessons learned.
+The refresher rhythm ensures that training remains aligned to the operational reality of KUSP2 and supports continuous improvement, rather than treating training as a one-time event.
+## 6.2 Onboarding package for new staff
+To support continuous onboarding, the Supplier shall deliver a reusable onboarding package that NPCT can deploy without vendor dependence. The onboarding package should enable a new staff member to become productive quickly while reinforcing confidentiality and documentation standards.
+Role-specific quick reference guides and standard operating procedures for the most common tasks.
+Short recorded demonstrations (where feasible) for key workflows such as registering a grievance, escalating an overdue case, and generating a standard report.
+A checklist for supervisors to confirm that new staff understand data protection, consent, and sensitive-case handling rules.
+A mechanism for tracking onboarding completion (template register) and for requesting account provisioning through controlled procedures.
+The onboarding package should be stored in the controlled documentation repository alongside the system operation and maintenance manuals, with version control so that staff always use current guidance.
+## 6.3 Training content maintenance and ownership
+Training content must be maintained as the system configuration evolves. To avoid training drift and inconsistent practice across counties and municipalities, the following content ownership and update rules should apply.
+NPCT owns the authoritative training content repository and version control, including approvals for updated templates and job aids.
+The Supplier provides editable source files and explains how to update them, including bilingual content management practices for English and Kiswahili materials.
+Any change that affects workflows, categories, SLAs, templates or sensitive-case rules triggers an update to relevant training materials, and a short briefing to super-users.
+Training materials updates are recorded in a change log that references the corresponding configuration release or change request.
+These practices ensure training remains consistent with the configured system behavior and support auditability by showing what guidance applied at any point in time.

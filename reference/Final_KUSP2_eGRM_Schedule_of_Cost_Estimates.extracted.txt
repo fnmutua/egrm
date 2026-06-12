@@ -1,0 +1,281 @@
+|  | Second Kenya Urban Support Program (KUSP2) “Making Kenyan Towns Work!” |  |
+
+MINISTRY OF LANDS, PUBLIC WORKS, HOUSING AND URBAN DEVELOPMENT
+State Department for Housing and Urban Development
+CONSULTANCY SERVICES FOR DESIGN, PREPARATION OF TECHNICAL SPECIFICATIONS AND BIDDING DOCUMENT FOR AN ELECTRONIC GRIEVANCE MANAGEMENT SYSTEM (e-GRM)
+Contract No. KE - MOTI – 434503 - CS - INDV
+KUSP2 E-GRM SCHEDULE OF COST ESTIMATES
+Submitted by
+Yapo Jesus Ekie (Individual Consultant)
+February, 2026
+CONFIDENTIAL – For Client Internal Planning and Reasonableness Checking Only
+(Not to be issued to bidders)
+# 1. Introduction
+This Schedule of Cost Estimates provides an Engineer’s / Client-side cost estimate for the procurement and implementation of the KUSP2 electronic Grievance Redress Mechanism (e-GRM). It is intended to support internal approvals, budgeting, and the reasonableness checking of supplier quotations received under the Request for Quotation (Goods) process.
+## 1.1 Purpose and intended use
+The estimate is designed to be used as an internal planning and control tool. It is not a binding budget and it should not be issued to bidders. It supports the following internal purposes:
+Specifically, the estimate enables the Client to:
+Confirm that the overall procurement scope is affordable and appropriately budgeted before publication of the RFQ.
+Check reasonableness of quotations received (line-by-line and as a total), including identifying abnormally high or low prices.
+Understand the cost drivers (software licensing, hosting, integrations, training, support) so that scope trade-offs can be made transparently.
+Set negotiation boundaries and approval thresholds where the procurement method and applicable rules allow.
+For these reasons, the estimate is structured into assumptions, line items, scenario variants, and a multi-year Total Cost of Ownership (TCO) view.
+## 1.2 Scope of the estimate
+The estimate covers the e-GRM solution as described in the Phase 1 design and requirements package and the Phase 2 implementation scope. The emphasis is on the procurement of a configurable e-GRM platform (software) together with the services needed to implement, test, train users, commission the system, and hand over for sustained operations within a three-month implementation period.
+In cost terms, the estimate includes the following categories:
+Software: e-GRM platform licensing/subscription (Year 1 and renewals).
+Implementation services: configuration, any necessary customization, integrations, testing, go-live and hypercare.
+Hosting and infrastructure (where applicable): production environment resources, backups and monitoring.
+Training and change support: role-based training delivery, materials, and initial refresher support.
+Support and maintenance: warranty-period support in Year 1 and indicative post-warranty annual support.
+Optional items: telecom channel enablement costs, independent security testing, data migration, and client-side hardware allowances where needed.
+The estimate is presented in USD. Taxes such as VAT are treated separately because applicability may depend on the contracting structure and the supplier’s tax status.
+## 1.3 How to read this document
+This document is organized to make review and approval straightforward. Each section is numbered and can be referenced directly in internal minutes, approval memos, and cost review notes.
+For efficient review, use the sections as follows:
+Section 2 documents the assumptions that drive all numbers; these assumptions should be validated before approving budgets.
+Section 3 provides the line-item schedule for Year 1 (implementation-heavy) and the recurring annual costs for Years 2+.
+Section 4 provides scenario variants so decision-makers can compare baseline versus enhanced multi-channel deployments.
+Section 5 outlines a training schedule and cost basis, aligned to a three-month implementation.
+Section 6 provides a 5-year TCO view for budget planning and sustainability decisions.
+Where a line item is marked as optional, it may be deferred, procured separately by the Client, or triggered only if specific channels are enabled.
+# 2. Costing Assumptions
+Cost estimates are only as reliable as the assumptions used. This section records the baseline assumptions applied so that the estimate can be updated quickly if the procurement scope, volumes, or implementation approach changes.
+## 2.1 Procurement and solution approach assumptions
+This estimate assumes the procurement of a configurable, commercially available e-GRM or case management platform (COTS) that is configured for KUSP2 needs, rather than a fully custom software build from scratch. The estimate reflects the market benchmark provided for software costs and treats customization as limited and targeted.
+Accordingly, the following solution approach assumptions are applied:
+Licensing model is subscription-based (annual), with Year 1 including setup/onboarding charges bundled into the first-year license.
+Core capabilities include web portal submission, assisted intake by staff, workflow management, role-based access control, audit logging, and reporting dashboards.
+Configuration-first delivery is prioritized; custom development is limited to integrations, workflow extensions, and reporting needs that cannot be met by standard configuration.
+Bilingual user-facing content (English and Kiswahili) is included for portal content and standard templates.
+If the procurement ultimately selects a different approach (e.g., extending an existing government platform or commissioning a custom build), the unit costs and the profile of recurring costs will change materially. In that case, this estimate should be revised using the update procedure in Annex 7.3.
+## 2.2 Implementation duration and phasing assumptions
+The implementation is assumed to be completed within a three-month period, consistent with the KUSP2 e-GRM implementation and commissioning expectations. The estimate therefore budgets for a compressed delivery cadence with parallel workstreams (configuration, integrations, testing, training, and readiness).
+For costing purposes, the three-month implementation period is assumed to include the following high-level phases:
+Month 1: Mobilization, requirements confirmation, environment setup, and baseline configuration (forms, workflows, roles, routing).
+Month 2: Build-out of reporting, integrations, template governance, and iterative demonstrations; start of test execution.
+Month 3: User acceptance testing (UAT) support, production readiness, go-live, and hypercare stabilization, plus completion of handover documentation.
+If implementation is extended, labour and support costs will increase, but risk may reduce due to more time for piloting and training. If implementation is shortened, risk increases and additional contingency is recommended.
+## 2.3 Scale, users, and usage assumptions
+KUSP2 operates across multiple counties and municipalities and requires both decentralized case handling and national oversight. Because exact user counts and grievance volumes may vary by rollout decisions, this estimate uses conservative planning assumptions that can be updated once the Client finalizes rollout and staffing plans.
+The following sizing assumptions are applied for the estimate:
+Geographic footprint: national deployment with decentralized use by counties and municipalities (planning basis: 45 counties and 79 municipalities).
+Staff users: indicative 400–800 staff users across municipal, county and national levels (handlers, supervisors, reporting users, administrators).
+External/public users: unrestricted public access for submissions and status tracking; volume is demand-driven and therefore treated through scalable hosting assumptions.
+Data growth: attachments and evidence uploads are expected; storage sizing assumes steady growth and requires monitoring and archiving practices.
+If user counts are significantly higher (for example, if every municipality operates multiple shift-based intake desks), licensing tier and hosting capacity must be validated with the selected supplier and the estimate adjusted accordingly.
+## 2.4 Environments and hosting assumptions
+The estimate assumes multiple environments to support safe delivery and governance, typically including development/configuration, testing/UAT, and production. Hosting is treated as a decision point because it materially affects both capital and operating costs.
+For costing, the hosting assumptions are:
+Baseline (government-hosted): the Client provides hosting (cloud or data center) and budgets for annual infrastructure costs (compute, storage, backups, monitoring).
+Alternative (supplier-hosted): hosting costs may be bundled into software subscription; this estimate therefore presents hosting as a separable line item and discusses the variant in Section 4.3.
+Security controls (TLS certificates, backups, log retention, role-based access) are budgeted regardless of hosting model.
+Where government hosting is used, ICT coordination is required to ensure timely environment provisioning and compliance with applicable security and data protection requirements.
+## 2.5 Channel and integration assumptions
+KUSP2 requires multi-channel accessibility. In procurement planning, it is useful to separate what must be enabled at go-live from what may be staged based on telecom readiness, funding, and operational capacity.
+This estimate applies the following channel assumptions:
+Baseline channels: web portal submission and staff-assisted intake (in-person/phone/letter) are included in the core estimate.
+Email notifications and correspondence are included in the baseline estimate; inbound email automation is treated as a configuration choice to be confirmed during implementation.
+SMS/USSD and toll-free hotline integration are treated as an enhanced scenario because telecom arrangements and ongoing fees are often client-led and may require regulatory lead time.
+WhatsApp or social media channels are not costed as core requirements and should be included only if the Client confirms scope and operating procedures.
+All channels, when enabled, are assumed to feed a single system of record with consistent reference numbering, auditability, and privacy-safe notification rules.
+## 2.6 Key exclusions and boundary conditions
+To keep the estimate usable and comparable, it is important to state what is excluded. Exclusions are not “not needed”; rather, they are items that are expected to be provided through existing government resources, procured separately, or decided later.
+Unless the Client confirms otherwise, the following items are excluded from the core estimate:
+County/municipal connectivity upgrades and general ICT modernization beyond what is required specifically for the e-GRM hosting environment.
+Large-scale procurement of end-user devices (computers, phones) for all municipalities; only a small optional allowance is included for gap filling.
+Call center staffing costs and full operations of a hotline service (treated as an optional operating cost under the enhanced scenario).
+Long-term software enhancement roadmaps beyond minor configuration changes and routine maintenance.
+If any excluded item is later brought into scope, it should be added as a new line item to the schedule and included in the contingency review.
+# 3. Schedule of Cost Estimates
+This section provides the client-side schedule of cost estimates for Year 1 (implementation and commissioning) and for recurring annual costs (Years 2+). The estimate is presented as a baseline scenario aligned to the minimum go-live scope (web + assisted intake, email notifications and reporting), with optional items shown separately and scenario variants discussed in Section 4.
+## 3.1 High-level cost summary (Baseline Scenario)
+The figures below summarize the baseline cost estimate for Year 1 and the indicative recurring annual costs for Years 2 and beyond. The Year 1 figure is implementation-heavy, while Years 2+ reflect steady-state operations (licenses, hosting, support, and routine training).
+| Cost Component | Amount (USD) | Notes |
+| Year 1 – Core baseline (excluding optional items) | $530,000 | Includes Year 1 software license, implementation services, baseline hosting, training, and Year 1 support. |
+| Year 1 – Optional allowances (if confirmed) | $81,200 | Includes optional independent pen-test, optional data migration, and optional client-side hardware gap-filling. |
+| Recommended contingency (10% of confirmed scope) | $53,000 | Applied to the confirmed scope value to cover estimation uncertainty and minor scope clarifications. |
+| Year 1 – Planning budget range (core+cont to core+options+cont) | $583,000 to $672,320 | Use the lower bound if optional items are excluded; use the upper bound if optional items are included. |
+| Recurring annual costs (Years 2+) – core | $130,000 | Includes annual license renewal, hosting, support & maintenance, and routine onboarding/refresher training. |
+
+The high-level summary is provided to support quick internal approvals. The detailed line items below should be used for price reasonableness checks during quotation evaluation.
+All amounts are indicative and should be refined once the Client confirms: (i) the hosting model, (ii) which channels must be enabled at go-live, and (iii) the expected number of staff users for licensing tier selection.
+## 3.2 Detailed Year 1 cost schedule (One-time and Year-1 items)
+### 3.2.1 Year 1 detailed line items
+The table below itemizes the cost estimate line items. Unit costs are indicative and should be validated against the selected supplier’s pricing model and the final confirmed scope. Optional line items are clearly marked and should be included only if the related scope element is confirmed.
+| Category | Line Item | Basis / Notes | Unit Cost (USD) | Qty | Subtotal (USD) |
+| Software | e-GRM platform subscription/licenses (Year 1 incl. setup) | Typical COTS e-GRM base (incl. initial setup) per market benchmark note | 200,000 | 1 | 200,000 |
+| Implementation | Mobilization, requirements confirmation & configuration design pack | PM/BA/configuration workshops (3 months, blended) | 45,000 | 1 | 45,000 |
+| Implementation | Configuration & build (core workflows, forms, RBAC, dashboards) | Configuration/development team effort (3 months) | 90,000 | 1 | 90,000 |
+| Implementation | Integration enablement (KUSP2 website embed + email notifications) | Integration specialist + configuration effort | 25,000 | 1 | 25,000 |
+| Quality/Compliance | Testing (functional, regression, performance) + defect remediation | QA lead + tester effort + remediation buffer | 30,000 | 1 | 30,000 |
+| Quality/Compliance | Security hardening + basic vulnerability scan | Security specialist effort | 12,000 | 1 | 12,000 |
+| Quality/Compliance | [Optional] Independent penetration test (optional but recommended) | Third-party testing service | 15,000 | 1 | 15,000 |
+| Quality/Compliance | Accessibility verification (WCAG/KS) and remediation support | Accessibility specialist effort | 8,000 | 1 | 8,000 |
+| Data/Migration | [Optional] Data migration / initial data seeding (if any) | Provision for importing legacy registers where applicable | 10,000 | 1 | 10,000 |
+| Go-live | Production cutover, go-live and hypercare (4 weeks) | Go-live support package | 25,000 | 1 | 25,000 |
+| Training | Training delivery (role-based) + training materials (EN/KI) | Training lead + materials + sessions | 35,000 | 1 | 35,000 |
+| Training | [Optional] Refresher training allowance (Year 1) | 2 refresher sessions (virtual) and updates | 6,000 | 1 | 6,000 |
+| Hosting | Government-hosted/cloud infrastructure (production) - Year 1 | Compute, storage, backups, monitoring (estimate) | 40,000 | 1 | 40,000 |
+| Support | Warranty support (Year 1) (L2/L3) excluding licenses | Supplier support package aligned to ToR | 20,000 | 1 | 20,000 |
+| Hardware | [Optional] Assisted intake desk computers (optional) | Provision 50 units for counties/municipalities without adequate PCs | 800 | 50 | 40,000 |
+| Hardware | [Optional] Scanners/printers for document digitization (optional) | Provision 30 multi-function units | 300 | 30 | 9,000 |
+| Hardware | [Optional] Headsets for hotline/call center desks (optional) | Provision 20 headsets | 60 | 20 | 1,200 |
+
+Subtotal for the items above (excluding contingency and taxes): $611,200.
+This subtotal is used in Section 3.4 to compute a contingency allowance. If major scope parameters change (channels, hosting model, user counts), the table should be revised before approving budgets.
+## 3.3 Detailed recurring annual cost schedule (Years 2+)
+Recurring annual costs represent the steady-state costs required to keep the e-GRM operational and compliant after commissioning. These costs should be budgeted as an annual operations line in the program budget and should be revisited before each renewal cycle based on actual usage volumes and performance needs.
+| Category | Line Item | Basis / Notes | Annual Cost (USD) |
+| Software | Annual platform renewal licenses (Year 2+) | Typical renewal benchmark note | 50,000 |
+| Hosting | Government-hosted/cloud infrastructure (production) - annual | Compute, storage, backups, monitoring | 40,000 |
+| Support | Support & maintenance (post-warranty) - annual | L2/L3 support, patches, minor enhancements | 30,000 |
+| Training | Annual onboarding/refresher training - annual | New staff onboarding and refresher | 10,000 |
+
+Core recurring annual subtotal (excluding optional channel OPEX and excluding taxes): $130,000.
+If enhanced channels (SMS/USSD/hotline) are enabled, additional recurring telecom and service provider fees should be added as shown in Section 4.
+## 3.4 Taxes, contingency, and risk allowance
+To avoid mixing statutory tax treatment with technical scope costing, this estimate separates taxes from the engineering cost basis. A contingency allowance is recommended to manage uncertainty during procurement and early implementation.
+The following treatment is recommended for approvals and budget planning:
+Taxes (e.g., VAT): apply according to statutory requirements and the contracting structure. Taxes should be computed after confirming whether quoted prices are tax-inclusive or tax-exclusive.
+Contingency: include 10% of the confirmed scope value for Year 1 to cover estimation uncertainty, minor clarifications during requirements confirmation, and limited change requests.
+Risk-driven allowances: if telecom channels are mandated at go-live, increase contingency or add explicit allowance for provider delays, regulatory lead times, and operational readiness (staffing and SOPs).
+Exchange rate: if contracts are priced in a local currency but budgeted in USD, apply an exchange-rate buffer and document the rate used for approvals.
+Contingency should not be used to cover major scope expansion. Major scope changes should trigger a formal revision of this cost estimate and the associated internal approvals.
+# 4. Scenario Costing
+Because the KUSP2 design strategy and implementation approach consider phased channel enablement, this section presents scenario variants to help the Client make scope decisions and interpret supplier quotations. Scenarios use the same cost structure as Section 3, with incremental line items added for additional channels or hosting choices.
+## 4.1 Scenario 1 (Baseline): Web + assisted intake, email notifications, reporting
+Scenario 1 reflects the minimum viable deployment required to operationalize a program-wide system of record for grievances. It includes web submission, staff-assisted intake for offline channels, workflow management, reporting, and email-based acknowledgements/notifications.
+Scenario 1 is appropriate when the Client wants to:
+Go live quickly and stabilize core workflows before enabling telecom-dependent channels.
+Reduce operational complexity during early rollout across counties and municipalities.
+Use assisted intake at offices and existing phone processes while building demand and awareness.
+Under this scenario, the baseline Year 1 and Years 2+ cost schedule in Section 3 is applicable.
+## 4.2 Scenario 2 (Enhanced channels): Adds SMS/USSD and hotline integration
+Scenario 2 builds on the baseline by enabling additional access channels that can improve accessibility for users without internet access and can strengthen assisted intake operations. Because these channels introduce external provider dependencies and recurring fees, the estimate treats them as incremental costs.
+Scenario 2 assumes the following additional scope elements are enabled and commissioned:
+SMS notifications (and optionally structured inbound SMS intake), including template governance and delivery monitoring.
+USSD short-flow intake integrated into the unified register, including a follow-on workflow for staff to complete mandatory fields.
+Hotline/call center integration at minimum for assisted intake logging and metadata capture, with safe communication protocols.
+Telecom regulatory approvals and commercial arrangements (short codes, toll-free numbers, aggregators) are often client-led. Therefore, provider setup fees and the ongoing costs of messaging and call services are treated as optional allowances to be confirmed with the selected service providers.
+### 4.2.1 Scenario comparison summary (indicative)
+The table below summarizes the incremental cost impact of moving from Scenario 1 (baseline) to Scenario 2 (enhanced channels). The enhanced scenario totals should be interpreted as planning figures and refined once the Client confirms telecom volumes and operating arrangements.
+| Scenario | Year 1 Core (USD) | Year 1 Increment (USD) | Years 2+ Core Annual (USD) | Years 2+ Increment (USD) | Notes |
+| Scenario 1 – Baseline | $530,000 | $0 | $130,000 | $0 | Web + assisted intake + email notifications + reporting. Optional items may still apply. |
+| Scenario 2 – Enhanced channels | $598,000 | $68,000 | $130,000 | Up to $100,000 (optional) | Adds SMS/USSD/hotline integration; recurring telecom/call center fees depend on volumes and provider contracts. |
+
+As a practical procurement strategy, the Client may (i) procure the platform and baseline channels now, and (ii) include telecom channels as optional priced items, activated only after provider readiness and internal operational capacity are confirmed.
+If the RFQ requires telecom channels at go-live, it is recommended to increase contingency and to require bidders to clearly separate one-time integration fees from recurring provider fees, so that the Client can plan sustainable operating budgets.
+## 4.3 Hosting model variants and cost implications
+Hosting decisions affect both cost and control. The e-GRM can be hosted in a government environment (Client-hosted) or provided as a supplier-hosted SaaS. Both models can meet requirements if security, data protection, auditability and operational controls are implemented, but the cost profiles differ.
+The main cost implications by hosting model are:
+Government-hosted: the budget includes explicit annual hosting costs (compute, storage, backups, monitoring). This model typically offers stronger direct control over data residency and infrastructure but requires ICT capacity for provisioning and operations.
+Supplier-hosted SaaS: hosting may be bundled in the annual subscription. In this model, the software license line item may be higher, while explicit hosting line items may reduce or disappear from the Client budget.
+Hybrid: some implementations host production in a government environment while using supplier-hosted non-production environments for configuration and testing; this can reduce risk but requires clear environment governance.
+For supplier-hosted offers, the Client should request that suppliers explicitly state what is included (environments, backups, DR, monitoring, log retention, data residency) so that quotes can be compared fairly against Client-hosted assumptions.
+## 4.4 Cost sensitivity considerations
+Several factors can materially increase or decrease actual costs relative to this estimate. Documenting these factors helps evaluators interpret supplier quotations and avoid hidden cost drivers.
+The most important cost sensitivities to monitor are:
+Licensing metric: per-user versus per-instance versus per-module pricing, and whether municipalities require separate instances or logical separation within one instance.
+Number of environments and the level of production-like staging required for acceptance (affects hosting and administration).
+Extent of customization: significant workflow customization or bespoke reporting often increases both implementation cost and long-term maintenance cost.
+Telecom channel volumes: SMS cost is directly proportional to message volume; hotline costs depend on call volumes and staffing.
+Data migration scope: migrating legacy manual registers across many municipalities can be time-intensive if data quality is weak.
+These sensitivities should be used as checkpoints during clarification questions and contract negotiations, ensuring that quoted prices align to realistic operating assumptions for KUSP2.
+# 5. Training Schedule and Cost Basis
+Training is a core commissioning requirement because KUSP2 will operate the e-GRM through a distributed model across national, county and municipal levels. Training costs should therefore cover not only delivery sessions, but also the production of reusable materials (user guides, quick reference guides, scripts for assisted intake, and administrator runbooks) that enable ongoing onboarding.
+## 5.1 Training approach and role-based tracks
+The training approach assumed in this estimate is role-based. Each track targets the practical tasks that users perform in the e-GRM, with emphasis on data quality, service standards, confidentiality and safe handling of sensitive grievances.
+The minimum set of role-based training tracks assumed are:
+Track A – System Administrators: user provisioning, roles/permissions, configuration governance, backups/logs, and change control.
+Track B – Supervisors / GRM Focal Persons: queue management, SLA monitoring, escalation and referral management, and quality assurance checks.
+Track C – Grievance Handlers / Case Officers: intake completion, triage, investigation notes, communications, resolution and closure discipline.
+Track D – Assisted Intake Staff (front office / hotline operators): intake scripts, consent capture, privacy-safe communications, and reference number issuance.
+Track E – Reporting Users (M&E / safeguards): dashboards, exports, privacy-safe reporting, and quarterly/annual report pack preparation.
+Track F – Sensitive Case Focal Persons: restricted access workflows, minimum information capture, referral pathways, and survivor-centred communications.
+All tracks should be supported by concise job aids and Quick Reference Guides (QRGs) so that staff in municipalities and counties can refresh key procedures without needing full retraining.
+## 5.2 Proposed training delivery schedule (aligned to a 3-month implementation)
+The schedule below is a practical training sequence that fits within a three-month implementation window while ensuring that training happens close enough to go-live for skills to be retained. It assumes iterative demonstrations occur during configuration so that training uses near-final screens and workflows.
+| Implementation Week | Training Activity | Target Audience | Delivery Mode | Outputs / Evidence |
+| Week 5–6 | Training design finalization and materials draft (EN/KI) | NPCT + Supplier training lead | Remote/Hybrid | Draft user guide, admin guide outline, QRG templates, assisted intake scripts. |
+| Week 6–7 | Train-the-Trainer (TOT) and supervisor orientation | NPCT admins, selected county/municipal super-users | Hybrid (in-person + virtual) | TOT attendance register, trainer pack, final training plan. |
+| Week 8 | Administrator training (Track A) | NPCT ICT/system admins | In-person or virtual workshop | Admin competency checklist; access provisioning practice. |
+| Week 9 | Supervisor training (Track B) + reporting training (Track E) | County/municipal focal persons; M&E/safeguards users | Regional sessions + virtual | Completed exercises; sample dashboards and exports produced. |
+| Week 10 | Handler and assisted intake training (Tracks C & D) | Municipal/county handlers and intake staff | Regional sessions | Practice cases entered; data quality checklist completed. |
+| Week 10–11 | Sensitive case handling training (Track F) (restricted group) | Designated focal persons only | Small-group session | Confidentiality briefing sign-off; referral workflow drill. |
+| Week 11–12 | Go-live coaching and hypercare support clinics | All user groups (as needed) | Virtual drop-in clinics | Issue log + resolutions; targeted refresher micro-sessions. |
+
+Training delivery should be coordinated with user acceptance testing (UAT) participation. Where possible, trainees should complete at least one UAT scenario during or immediately after training to reinforce practical skills and to generate evidence of competence.
+## 5.3 Training cost basis used in the estimate
+The Year 1 training line item in Section 3 is budgeted to cover both delivery and the creation of reusable materials. The objective is to avoid repeated paid training for routine onboarding after go-live.
+The training budget is assumed to cover, at minimum:
+Training plan finalization, agenda design, exercises and practical scenarios aligned to KUSP2 workflows.
+Preparation of bilingual materials (English and Kiswahili), including QRGs, intake scripts, and slide decks.
+Delivery of an indicative 10–15 sessions across tracks, including TOT, administrator training, and regional user training.
+Training attendance registers, completion evidence, and post-training evaluation summaries.
+A small allowance for post go-live refresher micro-sessions during hypercare.
+If the Client requires large-scale nationwide in-person training for all counties and municipalities simultaneously, additional logistics and facilitator costs should be added, or training should be phased by rollout clusters.
+# 6. Total Cost of Ownership (TCO) Summary (3–5 years)
+A Total Cost of Ownership view is necessary to avoid under-budgeting the operational phase. The e-GRM is an accountability system and therefore requires sustained licensing, hosting, support and governance. This section summarizes TCO for the baseline scenario and shows how enhanced channels affect the operating budget.
+## 6.1 Baseline TCO (Scenario 1) – 3-year and 5-year view
+The baseline TCO assumes the Year 1 implementation and commissioning cost (core) plus the recurring annual costs for Years 2 and beyond. Optional items and contingency are excluded from the base TCO and should be added according to internal budgeting rules.
+| Year | Cost (USD) | Notes |
+| Year 1 | $530,000 | Implementation + Year 1 license + training + hosting + Year 1 support. |
+| Year 2 | $130,000 | Renewal licenses + hosting + support + routine training. |
+| Year 3 | $130,000 | As Year 2; adjust based on actual usage and service needs. |
+| Year 4 | $130,000 | As Year 2; include planned minor enhancements if needed. |
+| Year 5 | $130,000 | As Year 2; review renewal terms and performance. |
+
+Baseline TCO (3 years, core): $790,000. Baseline TCO (5 years, core): $1,050,000.
+For planning purposes, decision-makers should also consider adding contingency to Year 1 and a small annual improvement allowance if the program expects periodic enhancements, additional reports, or expanded channel coverage.
+## 6.2 Enhanced channels TCO (Scenario 2) – cost impact
+The enhanced channel scenario increases Year 1 costs due to integrations and increases annual operating costs due to telecom provider fees and potentially call center operations. Because telecom fees are volume-dependent, the table provides a core TCO (excluding telecom OPEX) and an indicative upper-bound TCO including an annual telecom provision.
+For Scenario 2, budget planners should treat costs in two layers:
+Core layer: software renewal, hosting, and technical support required even if telecom volumes are low.
+Telecom layer: annual SMS/USSD fees and hotline/call center costs, which depend on volumes and operating arrangements and should be validated with providers.
+Separating these layers helps avoid hidden recurring commitments and supports clear decision-making on which channels to activate and sustain.
+| TCO Metric | Core (USD) | With Telecom Provision (USD) | Interpretation |
+| Year 1 implementation | $598,000 | $618,000 | Includes baseline plus integrations for SMS/USSD/hotline; optional telecom setup fees may apply. |
+| Annual recurring (Years 2+) | $130,000 | $230,000 | Telecom provision shown as an indicative upper bound; validate with providers and expected volumes. |
+| 5-year TCO | $1,118,000 | $1,518,000 | Use the higher bound if the program expects sustained SMS/USSD usage and a staffed hotline/call center. |
+
+## 6.3 Budget planning and sustainability guidance
+To ensure sustainability, the Client should treat the e-GRM as an operational service, not a one-off software purchase. The cost profile therefore needs to be reflected in annual budgeting and in governance arrangements for system stewardship.
+As a minimum, sustainability planning should include:
+Annual renewal planning (licenses and support) initiated at least 90 days before contract expiry to avoid service interruption.
+Explicit budget line for hosting (or SaaS fees), backups, and monitoring, including capacity growth for attachments and reporting.
+Defined roles and resourcing for system administration, configuration governance, and reporting production.
+Training refresh cycles linked to staff turnover at municipal and county levels, supported by reusable materials.
+Periodic compliance checks (audit logs, privacy controls, accessibility checks) and budget for corrective actions where required.
+These planning steps reduce operational risk, protect complainant data, and ensure the e-GRM continues to meet World Bank-funded project accountability expectations throughout KUSP2.
+# 7. Annexes
+The annexes provide supporting information that helps reviewers understand how the estimate was constructed and how it should be maintained over time. Annex content is intended to improve transparency and to reduce effort when updating the estimate after scope confirmation or after receiving supplier quotations.
+## 7.1 Indicative implementation labour and unit cost assumptions (planning basis)
+Implementation services in the main schedule are priced as bundled work packages to keep the estimate readable. For internal transparency, the table below provides an indicative labour composition and unit cost ranges that can be used to validate quotes or to re-estimate if the implementation duration changes.
+| Role / Workstream | Indicative Level of Effort | Planning Day Rate Range (USD) | Notes |
+| Project Manager / Delivery Lead | 30–45 person-days | $700–$1,000 | Coordinates workplan, demos, risks/issues, acceptance evidence. |
+| GRM/Business Analyst & Configuration Lead | 35–55 person-days | $600–$900 | Workflow mapping, forms, taxonomy, routing, reporting requirements. |
+| Solution Architect / Technical Lead | 20–35 person-days | $800–$1,200 | Architecture decisions, integrations approach, security-by-design. |
+| Configuration/Implementation Specialist(s) | 60–120 person-days | $500–$900 | Configuration, limited customization, dashboards and templates. |
+| Integration Specialist | 20–40 person-days | $700–$1,100 | Email/SMS/USSD/hotline integrations and testing support. |
+| QA/Test Lead | 20–35 person-days | $500–$900 | Test planning, execution support, defect triage, regression discipline. |
+| Security & Privacy Specialist | 10–20 person-days | $800–$1,300 | Hardening, audit log verification, privacy controls review. |
+| Accessibility Specialist | 5–15 person-days | $600–$1,000 | Accessibility verification and remediation guidance. |
+| Trainer / Change Support Lead | 15–30 person-days | $500–$900 | Role-based training delivery, materials, adoption support. |
+
+These ranges are indicative and should be adjusted to reflect the selected supplier’s staffing model, local presence, and the degree of customization required. They are included to support reasonableness checks, not to prescribe supplier staffing.
+## 7.2 Hardware requirements and costing notes (optional allowances)
+The e-GRM is primarily a software and service procurement. However, assisted intake desks and supporting operational processes may require minimal hardware for digitizing documents and supporting hotline operations. Because many offices may already have adequate ICT equipment, hardware is treated as an optional allowance rather than a core cost.
+Where the Client identifies hardware gaps that could block adoption, the following types of items may be budgeted:
+Basic desktop/laptop computers for GRM desks where no suitable device exists.
+Multi-function scanners/printers to digitize paper submissions and supporting documents for upload as attachments.
+Headsets and basic accessories for hotline operators where a call center model is used.
+Hardware specifications and quantities should be confirmed during implementation planning (e.g., through a rapid readiness check across pilot municipalities) and procured through appropriate government procurement channels as needed.
+## 7.3 Cost estimate maintenance and update procedure
+To keep this estimate usable through procurement, it should be updated at defined decision points. The procedure below provides a simple governance approach that preserves traceability and supports auditability of budget decisions.
+At minimum, the estimate should be reviewed and updated at the following points:
+Before RFQ publication: confirm hosting model, channel scope (baseline vs enhanced), and whether optional items should be included.
+After receipt of quotations: compare supplier pricing to this estimate, identify variances, and update assumptions if quotes reveal different licensing metrics or hosting inclusions.
+At contract signature: finalize Year 1 and Years 2+ budgets based on signed prices and confirmed implementation plan.
+After go-live: revise recurring cost assumptions using actual usage (user counts, message volumes, storage growth) and the operational support model adopted.
+Each update should record (i) what changed, (ii) why it changed, (iii) who approved the change, and (iv) the version/date of the revised estimate, so that later reviewers can reconstruct how budgets were established.

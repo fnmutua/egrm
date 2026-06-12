@@ -1,0 +1,413 @@
+|  | Second Kenya Urban Support Program (KUSP2) “Making Kenyan Towns Work!” |  |
+
+MINISTRY OF LANDS, PUBLIC WORKS, HOUSING AND URBAN DEVELOPMENT
+State Department for Housing and Urban Development
+ELECTRONIC GRIEVANCE REDRESS MECHANISM
+(e-GRM)
+Request for Quotations
+Goods
+ATTACHMENT 1-A
+INVITATION TO QUOTE (Advertisement)
+GOODS
+Place on implementing agency letterhead
+INVITATION TO QUOTE
+| Project Title |
+| Source of Funding |
+| Contract Reference |
+| Date |
+
+This project is financed by the World Bank through A.
+☐	Loan
+☒	Credit
+☐	Grant
+The Government of Kenya through the Ministry of Lands, Public Works, Housing and Urban Development, State Department for Housing and Urban Development (SDHUD) – Second Kenya Urban Support Program (KUSP2)invites sealed quotations from eligible bidders for:
+| Goods Description | Quantities | Location | Delivery Timing | Other Necessary Information |
+|  |
+|  |
+|  |
+
+2. 	A complete set of Request for Quotation (RFQ) documents in English will be provided to interested eligible bidders upon the submission of a written application to the address below.
+4. 	Quotations must be delivered to the address below before 11 March 2026 at 11:00 a.m. (EAT):
+|  | Provide address of eligible submission options |
+| Postal Address |
+| Physical Address |
+| Email Address |
+
+Late quotations may be rejected.
+ATTACHMENT 1-B
+REQUEST FOR QUOTATION (RFQ)
+GOODS
+[use letterhead paper of the Purchaser]
+REQUEST FOR QUOTATION (RFQ)
+| Project Title |
+| Source of Funding |
+| Contract Reference |
+| Date |
+
+Dear Supplier,
+1.	You are invited to submit your price quotation(s) for the supply of the following items:
+| Item Name | Qty | Location of Delivery | Timing of Delivery | UNSC (if known) |
+|  |
+|  |
+|  |
+|  |
+|  |  |  |  |  |
+
+Further information on technical specifications and requirements are attached (KUSP2_eGRM_TOR; KUSP2_eGRM_BRD; KUSP2_eGRM_Design_Strategy_Report; Final_KUSP2_eGRM_System_Design_Wireframe_Report).
+2.	This RFQ invites you to quote for the option below which has been ticked.
+☒ you must quote for all the items under this RFQ.  Price quotations will be evaluated for all the items together and contract awarded to the supplier offering the lowest evaluated total price of all the items, if substantially responsive to the technical specifications.
+3.	Your price quotation in the forms attached (Annexes 1, 3 and 4) may be submitted by hand delivery, post or electronically at the following address:
+| Attention of: |  |
+| Name |
+| Telephone |
+| Fax |
+| e-mail address |
+| Physical Address of RFQ box (if used) |
+
+4.	The deadline for receipt of your quotation(s) by the Purchaser at the address indicated in above Paragraph 3 is: 11 March 2026 at 11:00 a.m. (EAT)
+5.	Your quotation in (English) language, should be accompanied by adequate technical documentation and catalogue(s) and other printed material or pertinent information (in English  language if available, otherwise in English) for each item quoted.
+6.	Your quotation(s) should be submitted as per the following instructions and in accordance with the attached Contract. The attached Terms and Conditions of Supply is an integral part of the Contract.
+7.	PRICES
+For Goods supplied domestically: The prices should be quoted in (Kenya Shillings (KES)) for the total price of EX-WORKS (ex-factory, ex-warehouse, etc.) plus the price of delivery to the final destinations described in paragraph 2.
+For Goods to be imported:  The prices should be quoted in an acceptable currency for the total CIP price, to Nairobi, Kenya.
+8.	EVALUATION OF QUOTATIONS
+For Goods supplied domestically: Offers determined to be substantially responsive to the technical specifications will be evaluated by comparison of the total price at the final destination in accordance with Paragraph 2 above.
+For Goods to be imported: Offers determined to be substantially responsive to the technical specifications will be evaluated by comparison of the total CIP prices to the final destination, in accordance with Paragraph 2 above.
+In evaluating the quotations, the Purchaser will determine for each quotation the evaluated price by adjusting the price quotation by making any correction for any arithmetical errors as follows:
+where there is a discrepancy between amounts in figures and in words, the amount in words will govern;
+where there is a discrepancy between the unit rate and the line-item total resulting from multiplying the unit rate by the quantity, the unit rate as quoted will govern; and
+if a Supplier refuses to accept the correction, his quotation will be rejected.
+9.	AWARD OF CONTRACT:  The award will be made to the bidder offering the lowest evaluated price and offering goods which are compliant with the technical specifications. The successful bidder will sign a Contract as per attached form of contract and terms and conditions of supply.
+10.	VALIDITY OF THE OFFER: Your quotation(s) should be valid for a period of forty-five (45) days from the deadline for receipt of quotation(s) indicated in Paragraph 4 of this RFQ.
+11.	Further information can be obtained from:
+Ministry of Lands, Public Works, Housing and Urban Development, State Department for Housing and Urban Development (SDHUD), Second Kenya Urban Support Program (KUSP2) – National Program Coordination Team (NPCT), [insert address], Nairobi, Kenya
+| Attention of: |  |
+| Name |
+| Telephone |
+| Fax |
+| e-mail address |
+| Physical Address of RFQ box (if used) |
+
+12.	Please confirm by fax/e-mail the receipt of this RFQ and whether or not you will submit the price quotation(s).
+Sincerely,
+ATTACHMENT 1-C
+LIST OF SUPPLIERS TO ISSUE RFQ
+GOODS
+| No. | Name of Supplier | Year of Business Registration | Previous Experience | Financial Capacity (if known) | Justification for Selection |
+|  |  |  |  |  |  |
+|  |  |  |  |  |  |
+|  |  |  |  |  |  |
+|  |  |  |  |  |  |
+|  |  |  |  |  |  |
+
+ANNEX 1
+QUOTATION SUBMISSION FORM
+This form shall be completed, signed and submitted as part of the Supplier’s quotation. It confirms the Supplier’s acceptance of the RFQ requirements and provides the key administrative information required for evaluation. The Supplier shall also complete the Price Schedule (Annex 3) and the Technical Compliance Matrix (Annex 4) and submit all supporting evidence requested in the RFQ.
+| Supplier legal name |  |
+| Country of registration |  |
+| Business registration number |  |
+| Registered address |  |
+| Authorized representative / contact person |  |
+| Telephone |  |
+| E-mail |  |
+
+The Supplier shall provide the quotation identification details below and confirm the quotation validity period. The Purchaser will evaluate quotations based on the evaluated total price for the mandatory items defined in Annex 3 and on technical responsiveness as evidenced through Annex 4.
+| RFQ Reference No. |  |
+| Quotation currency (single currency) |  |
+| Quotation validity (minimum 45 days from submission deadline) |  |
+| Date of quotation submission |  |
+
+The Supplier shall summarise the financial offer below. The detailed breakdown shall be provided in Annex 3. Any optional items shall be priced separately and shall not be included in the evaluated total price unless the RFQ explicitly states otherwise.
+| Summary item | Amount (Excl. taxes) | Amount (Incl. taxes, if applicable) |
+| Total one-time costs (Annex 3 – mandatory items) |  |  |
+| Total Year 1 recurring costs (Annex 3 – mandatory items) |  |  |
+| Evaluated Total Price = one-time + Year 1 recurring (mandatory items) |  |  |
+| Total price of optional items (if any) |  |  |
+
+Declaration and confirmation
+By signing below, the Supplier confirms that:
+• The Supplier has examined the RFQ and all referenced/attached documents and offers to supply the Goods (including any related services) in full compliance with the technical specifications and delivery requirements.
+• The quotation is valid for the period stated above and the Supplier will maintain the quoted prices and conditions during this validity period.
+• The Supplier has included all mandatory forms and schedules, including Annex 1 (this form), Annex 3 (Price Schedule), and Annex 4 (Technical Compliance Matrix) and any required supporting evidence.
+• Any deviations, assumptions, or conditions are fully disclosed in the Deviations and Clarifications Form (included in Annex 4) and are reflected consistently in both the technical and financial quotation.
+• To the best of the Supplier’s knowledge, the Supplier is eligible to participate in World Bank-financed procurement and is not subject to debarment/sanctions by the World Bank; the Supplier further commits to comply with applicable fraud and corruption provisions.
+Authorized signature
+| Name of authorized signatory |  |
+| Title/position |  |
+| Signature |  |
+| Date |  |
+| Company stamp (if applicable) |  |
+
+ANNEX 3
+SCHEDULE OF REQUIREMENTS AND PRICE SCHEDULE
+This annex defines the items to be procured under this RFQ and provides the Price Schedule forms that the Supplier shall complete. The Schedule of Requirements is structured to make it clear what is included in the baseline scope (mandatory items) and what is optional. Suppliers shall price all mandatory items. Optional items, if priced, shall be clearly separated and shall not be included in the evaluated total price unless the Purchaser states otherwise in the RFQ.
+3.1 Schedule of Requirements (Items to be Procured)
+The table below lists the minimum baseline requirements for supply, configuration, commissioning and knowledge transfer. The baseline assumes the preferred deployment model defined in the ToR System Requirements Specification (Government-hosted). Where a Supplier proposes an alternative deployment model (e.g., Supplier-hosted SaaS), the Supplier shall price the alternative separately as an optional variant and clearly state any conditions or dependencies.
+| Item No. | Description | Qty | Unit | Required delivery / completion | Delivery location | Remarks / references |
+| SR-1 | e‑GRM software platform licence/subscription for Year 1 (public portal, staff console, admin console, reporting & dashboards, audit logging; covering all KUSP2 participating counties/municipalities and NPCT/CPCT users). | 1 | Lot | Go‑live within 3 months (Week 10–12 from Contract Effective Date). | Nairobi (NPCT) + rollout to 45 counties and 79 municipalities | See ToR (incl. System Requirements Specification Annex) and Technical Specifications Annex. |
+| SR-2 | Implementation, configuration and commissioning services (Phase 2) including: requirements confirmation, workflow configuration (categories, SLAs, escalation), forms and templates, role-based access control, audit trail configuration, reporting configuration, and environment setup and deployment in Government-hosted infrastructure. | 1 | Lot | Completed within implementation window (Week 1–10) with UAT and go‑live readiness evidence. | Government-hosted environment (Client-approved) + remote support | Includes configuration governance and change control; see ToR deliverables and acceptance evidence. |
+| SR-3 | Email/SMTP integration and notifications setup (acknowledgements, status updates, assignment/escalation notifications) including required domain/DNS records guidance (SPF/DKIM/DMARC as applicable). | 1 | Lot | Configured and tested by UAT start (Week 7–8). | Government-hosted environment | Telecom/third-party services are Client-provided unless otherwise stated; Supplier to configure and test. |
+| SR-4 | Testing, verification and acceptance support (functional, integration, performance sizing validation, security/vulnerability scanning support, and accessibility verification support) including delivery of test evidence pack. | 1 | Lot | Evidence pack submitted by go‑live readiness (Week 9–10). | Nairobi + remote | Acceptance evidence requirements are defined in the Technical Specifications Annex and ToR. |
+| SR-5 | Go‑live support and hypercare (minimum 4 weeks) including defect triage, stabilization, monitoring support and knowledge transfer to Client administrators; includes warranty/support obligations during hypercare. | 1 | Lot | Week 10–12 (and 4 weeks post go‑live). | Nairobi + counties/municipalities (remote/onsite as agreed) | Supplier to propose detailed support approach; see ToR and Technical Specifications Annex. |
+| SR-6 | Training delivery and training materials as per the Training Schedule (role-based tracks, Training of Trainers, UAT participant training, go‑live training, bilingual user-facing materials in English & Kiswahili). | 1 | Lot | Aligned to implementation weeks (Week 2–12). | Nairobi + selected pilot municipality + remote/virtual sessions | See Training Schedule document and ToR training requirements. |
+| SR-7 | Documentation and handover dossier including: as-built architecture & environment inventory; configuration workbook; admin guide; user manuals; operations and maintenance handover artifacts; and post-implementation support contacts. | 1 | Lot | Submitted before final acceptance (Week 12). | Nairobi (NPCT) + electronic copies | See ToR deliverables, Technical Specifications Annex acceptance checklist. |
+| SR-8 (Optional) | SMS integration (technical integration only): configure integration to an SMS gateway/aggregator for outbound notifications and/or inbound assisted intake codes as applicable. | 1 | Lot | If included, ready for testing by Week 8–10 (subject to gateway readiness). | Government-hosted environment | Gateway account and recurring SMS fees are typically Client-provided; Supplier to state assumptions and any required APIs. |
+| SR-9 (Optional) | USSD integration (technical integration only): integration to a USSD aggregator/short code service for grievance intake and status checking. | 1 | Lot | If included, ready for testing by Week 8–10 (subject to USSD provisioning). | Government-hosted environment | Short code provisioning and recurring USSD fees are typically Client-provided; Supplier to state assumptions and any required APIs. |
+| SR-10 (Optional) | Hotline/IVR integration (technical integration only): integration interface to an IVR/call centre or assisted intake workflow where hotline infrastructure is provided by Client/third party. | 1 | Lot | If included, ready for testing by Week 8–10 (subject to hotline readiness). | Government-hosted environment | Call centre operations and toll-free numbers are typically Client-led; Supplier to specify integration approach and prerequisites. |
+| SR-11 (Optional) | Supplier-hosted SaaS managed service (alternative deployment model) including hosting, monitoring, backups and DR commitments that meet the ToR System Requirements Specification. | 1 | Lot | If proposed, go‑live within 3 months and meet uptime/DR commitments. | Supplier environment (subject to Client approval) | Must meet data residency and evidence requirements; Supplier to price annually and specify service levels. |
+
+3.2 Price Schedule (Bidder to complete)
+Suppliers shall complete the Price Schedule tables below. Prices shall be quoted in the currency stated in the RFQ. For each line item, the Supplier shall provide a clear unit price and line total. Where a Supplier’s proposed licensing model is per-user or tier-based, the Supplier shall still provide an all-inclusive total price for the required scope and clearly disclose the assumptions (number of users, tiers, modules) in the comments column, without changing the structure of the tables.
+Table 3‑1: Price Schedule – One‑time costs (mandatory and optional items)
+| Item No. | Description | Qty | Unit | Unit Price | Line Total | Taxes (if applicable) | Comments/assumptions |
+| SR-2 | Implementation, configuration and commissioning services (Phase 2) – mandatory | 1 | Lot |  |  |  |  |
+| SR-3 | Email/SMTP integration and notifications setup – mandatory | 1 | Lot |  |  |  |  |
+| SR-4 | Testing, verification and acceptance evidence pack – mandatory | 1 | Lot |  |  |  |  |
+| SR-5 | Go‑live support and hypercare (minimum 4 weeks) – mandatory | 1 | Lot |  |  |  |  |
+| SR-6 | Training delivery and training materials (as per Training Schedule) – mandatory | 1 | Lot |  |  |  |  |
+| SR-7 | Documentation and handover dossier – mandatory | 1 | Lot |  |  |  |  |
+| SR-8 (Optional) | SMS integration (technical integration only) – optional | 1 | Lot |  |  |  |  |
+| SR-9 (Optional) | USSD integration (technical integration only) – optional | 1 | Lot |  |  |  |  |
+| SR-10 (Optional) | Hotline/IVR integration (technical integration only) – optional | 1 | Lot |  |  |  |  |
+
+Suppliers shall ensure that all activities required to achieve go‑live and acceptance within the three‑month implementation window are included in the one‑time costs above. If any line item is proposed as “included” in another line item, the Supplier shall indicate this clearly in the comments column, but shall not remove the line item.
+Table 3‑2: Price Schedule – Recurring annual costs (Year 1 and renewals)
+| Item No. | Description | Year | Qty | Unit | Annual Unit Price | Annual Total | Taxes (if applicable) | Comments/assumptions |
+| SR-1 | e‑GRM software licence/subscription – mandatory | Year 1 | 1 | Lot |  |  |  |  |
+| SR-1 (Optional) | Software renewal / licence subscription | Year 2 | 1 | Lot |  |  |  |  |
+| SR-1 (Optional) | Software renewal / licence subscription | Year 3 | 1 | Lot |  |  |  |  |
+| SR-11 (Optional) | Supplier-hosted SaaS managed service (hosting + ops) | Year 1 | 1 | Lot |  |  |  |  |
+| SR-11 (Optional) | Supplier-hosted SaaS managed service (hosting + ops) | Year 2 | 1 | Lot |  |  |  |  |
+| SR-11 (Optional) | Supplier-hosted SaaS managed service (hosting + ops) | Year 3 | 1 | Lot |  |  |  |  |
+
+Suppliers shall price the Year 1 software licence/subscription as a mandatory item. Prices for Years 2 and 3 are requested for budgeting and potential renewal planning and may be treated as optional unless the RFQ specifies multi‑year evaluation. Where the Supplier’s business model does not use annual renewals (e.g., perpetual licence), the Supplier shall explain the equivalent commercial approach and provide the closest equivalent recurring support/maintenance costs, if applicable.
+Table 3‑3: Price Summary
+| Summary | Amount (Excl. taxes) | Amount (Incl. taxes) |
+| A. Total one‑time costs – mandatory items (from Table 3‑1) |  |  |
+| B. Total Year 1 recurring costs – mandatory items (from Table 3‑2) |  |  |
+| Evaluated Total Price = A + B (mandatory items) |  |  |
+| C. Total optional items (all optional line items) |  |  |
+
+3.3 Delivery / Implementation Schedule Reference
+The e‑GRM Phase 2 implementation is required to be completed within three (3) months from the Contract Effective Date. The milestone schedule below is provided as the baseline delivery sequence to which Suppliers shall commit. Suppliers shall submit a brief implementation workplan (as part of their quotation) confirming their ability to meet this schedule and identifying any improvements or risks, without extending the overall three‑month delivery window.
+| Week (from T0) | Baseline milestone / deliverable | Minimum expected outputs / evidence |
+| Week 1 | Mobilization & inception; implementation plan; environment readiness confirmation | Kick-off meeting minutes; approved implementation plan; environment access confirmed; risk log opened. |
+| Week 2–3 | Configuration baseline; forms/categories/SLAs; user roles; initial prototype | Configured workflows and forms; draft configuration workbook; demo of core case lifecycle. |
+| Week 4 | Pilot-ready build; admin setup; training environment ready | Training/UAT environment available; administrator coaching session 1 completed. |
+| Week 5–6 | Integrations (email) and notifications; reporting baseline; security/accessibility preparations | Email notifications tested; standard reports/dashboards configured; initial security configuration summary. |
+| Week 7–8 | UAT preparation and execution; UAT participant training; defect fixing | UAT test scripts; UAT attendance and training evidence; defect log and fixes. |
+| Week 9–10 | Go‑live readiness; cutover rehearsal; go‑live | Go‑live readiness checklist; cutover plan; production deployment; go‑live sign-off. |
+| Week 11–12 | Hypercare & stabilization; final training sessions; handover dossier; acceptance | Hypercare reports; final training report; handover dossier; acceptance certificate/closure report. |
+
+This milestone schedule is complemented by the detailed Training Schedule (implementation-aligned calendar) and the ToR deliverables and acceptance requirements. If optional channels (SMS/USSD/hotline) are included, Suppliers shall align channel-specific activities to the readiness of the relevant third-party services while protecting the baseline go-live date for the web and assisted intake solution.
+ANNEX 4
+TECHNICAL COMPLIANCE MATRIX AND TECHNICAL RESPONSE FORMS
+This annex provides the bidder response forms used to assess technical responsiveness. Suppliers shall complete the Technical Compliance Matrix and submit it together with their quotation. The matrix is designed to make responses comparable and to support measurable acceptance. Suppliers shall not delete rows. Where a requirement is met through an equivalent approach, the Supplier shall explain the equivalence and provide evidence.
+4.1 Instructions for completion
+Suppliers shall complete the Technical Compliance Matrix using the response rules below. The Purchaser may deem a quotation non-responsive if any mandatory (“Must”) requirement is marked as Not Compliant without an acceptable equivalent alternative.
+• For each requirement, select one response: Compliant / Partially Compliant / Not Compliant.
+• Where Partially Compliant is selected, provide a clear explanation, mitigation, and whether the gap can be closed within the implementation window.
+• For each requirement, state whether compliance is achieved through Configuration, Customization/Development, or a Third‑Party Component/Service.
+• Provide an evidence reference for each Must requirement (e.g., product documentation section, screenshot, prior implementation reference, or test report).
+• Any assumptions, dependencies, or pre‑requisites shall be disclosed in the comments column and be consistent with the Price Schedule (Annex 3).
+If the Supplier proposes any deviation to the technical requirements, the Supplier shall also complete the Deviations and Clarifications Form (Section 4.3) and identify any impact on price, schedule, security, privacy, or accessibility.
+4.2 Technical Compliance Matrix (Bidder to complete)
+The table below contains the baseline technical requirements. The requirement identifiers (Req ID) are used for traceability and shall be referenced in any deviation or clarification. Suppliers shall complete all response columns and may attach additional evidence sheets if needed, while keeping this matrix intact.
+| Req ID | Priority | Requirement (Title + Specification) | Bidder Response (Compliant / Partially / Not) | Bidder Comments / Approach (incl. assumptions) | Evidence Reference (document, screenshot, URL) | Implementation Type (Config / Custom / 3rd‑party) |
+| FR-PUB-01 | Must | Public Portal Navigation: The system shall provide a public-facing portal with navigation to: (a) knowledge resources, (b) submit a new grievance, (c) check grievance status, and (d) sign in for registered users. The landing page shall clearly present these options with concise descriptions to guide users. |  |  |  |  |
+| FR-PUB-02 | Must | Grievance Resolution Process Overview: The system shall display a grievance resolution process overview on the public portal in a configurable, human-readable format, including the main lifecycle stages and indicative timelines (where approved by the Client). The overview shall be consistent with the program GRM workflow and shall be editable by administrators. |  |  |  |  |
+| FR-PUB-03 | Must | Grievance Submission Web Form: The system shall provide a web form to submit a new grievance with contact information, category (help topic), project context, issue summary, and issue details. The form shall support structured data capture aligned to the standardized dataset (Section 7) while keeping the user experience simple. |  |  |  |  |
+| FR-PUB-04 | Must | File Attachments Support: The system shall support file attachments submitted with a grievance via the public portal, subject to configurable file size and type limits. The portal shall provide clear guidance to users on acceptable file types and size limits, and shall protect the system against unsafe uploads. |  |  |  |  |
+| FR-PUB-05 | Must | Submission Confirmation & Reference Number: Upon successful submission, the system shall create a unique grievance identifier and present a confirmation page to the complainant. The confirmation page shall provide the reference number and clear next steps for tracking and follow-up. |  |  |  |  |
+| FR-PUB-06 | Must | Grievance Status Check Function: The system shall provide a status-check function that allows a complainant to retrieve grievance status and history using the grievance number and email address (or equivalent credentials). The design shall prevent unauthorized access and shall be privacy-preserving by default. |  |  |  |  |
+| FR-PUB-07 | Should | Registered Complainant Accounts: The system should support registered complainant accounts that can sign in to view and manage their grievance history. This feature should reduce repeated data entry and improve continuity for complainants with multiple interactions. |  |  |  |  |
+| FR-PUB-08 | Must | Knowledge Resources & Search: The system shall provide knowledge resources on the public portal, including search capability and featured articles. Knowledge resources shall be structured and maintainable by authorized staff. |  |  |  |  |
+| FR-PUB-09 | Must | Human Verification Controls (CAPTCHA): The system shall support human verification controls (e.g., CAPTCHA or equivalent) for web-based grievance submissions, configurable by administrators. Controls shall be implemented in a manner that balances abuse prevention with accessibility. |  |  |  |  |
+| FR-PUB-10 | Should | Multilingual Portal Support: The system should provide multilingual public portal capability aligned with configured system languages, supporting consistent user experience across languages for all public-facing pages, forms, and key notices. |  |  |  |  |
+| FR-PUB-11 | Must | Privacy Notice & Consent Capture: The public portal shall display a Privacy and Data Protection Notice and require an explicit consent action before submission of a grievance that includes personally identifiable information. The system shall record consent in an auditable manner. |  |  |  |  |
+| FR-PUB-12 | Must | Free-of-Charge Statement: The public portal shall clearly state that the GRM is free of charge and that complainants will not pay to lodge a grievance. The statement shall be prominent to reduce fraud risk and cost concerns. |  |  |  |  |
+| FR-PUB-13 | Must | Anonymous Submission Option: The public portal shall provide an option for anonymous submission where the complainant chooses not to provide contact details, while still capturing the grievance details required for processing. The system shall mark such cases appropriately and apply suitable follow-up expectations. |  |  |  |  |
+| FR-PUB-14 | Must | GRM Assurances Communication: The public portal shall communicate key GRM assurances including confidentiality expectations, protection against retaliation, and the right to seek other remedies. Content shall be configurable to align with approved program communications. |  |  |  |  |
+| FR-PUB-15 | Must | No Automated Chatbots for Intake: Automated chatbots shall not be used for grievance intake. The public portal may provide FAQs/knowledge resources and guided forms to assist users, but submission must be through forms or assisted channels. |  |  |  |  |
+| FR-KB-01 | Must | Knowledge Base FAQ Module: The system shall provide a knowledge base module with FAQ articles organized into categories and optionally mapped to help topics. |  |  |  |  |
+| FR-KB-02 | Must | Featured Knowledge Articles: The system shall support featured knowledge articles for prominence on the public portal. |  |  |  |  |
+| FR-KB-03 | Must | Canned Responses Library: The system shall provide a managed library of canned responses for staff use, including enable/disable and department scoping where applicable. Canned responses shall support consistency and speed while allowing agents to customize where needed. |  |  |  |  |
+| FR-EMAIL-01 | Must | Outbound Email Notifications: The system shall support outbound email notifications and correspondence to complainants and staff using managed sender identities and configurable templates. Email communications shall be logged against the relevant grievance record. |  |  |  |  |
+| FR-EMAIL-02 | Should | Inbound Email Processing: The system should support inbound email processing to create grievances and/or append messages to existing grievances, using configurable routing rules, safe defaults, and controls to prevent abuse. |  |  |  |  |
+| FR-USSD-01 | Must | USSD Channel Integration: The system shall support creation of grievances originating from a USSD channel through integration with an approved USSD gateway/aggregator, with consistent reference numbering and source tagging. |  |  |  |  |
+| FR-USSD-02 | Must | USSD Data Capture & Validation: The USSD flow shall capture, at minimum, the mandatory grievance data fields defined for USSD intake (Section 7), including location and issue summary, while minimizing session length. Validation must be applied to prevent unusable submissions. |  |  |  |  |
+| FR-USSD-03 | Must | USSD Submission Confirmation: Upon successful submission via USSD, the complainant shall receive the grievance reference number and a confirmation message via USSD (and SMS where configured). Confirmation content shall be concise and privacy-safe. |  |  |  |  |
+| FR-USSD-04 | Should | USSD Status Enquiry Function: The USSD channel should support a status enquiry function where a complainant enters a grievance reference number (and an additional identifier if required) to view current status. |  |  |  |  |
+| FR-USSD-05 | Must | Multilingual USSD Support: USSD interactions shall support English and Kiswahili prompts to support equitable access. |  |  |  |  |
+| FR-USSD-06 | Must | USSD Data Protection & Privacy: USSD channel design and implementation shall not require collection of sensitive personal data; where a phone number is captured implicitly, it shall be protected as personal data, handled under access controls and consent basis as applicable. |  |  |  |  |
+| FR-HOT-01 | Must | Staff-Assisted Phone Intake: The system shall support staff-assisted intake of grievances received by phone, including capture of caller contact details (optional) and grievance details using the standardized intake dataset. |  |  |  |  |
+| FR-HOT-02 | Should | Call Center Integration: Where technically feasible and approved, the system should integrate with call center tools to capture call metadata (e.g., call time, line, agent ID) linked to the grievance, to strengthen auditability and operational analytics. |  |  |  |  |
+| FR-HOT-03 | Must | Reference Number Communication: A grievance reference number shall be communicated to the caller during the call and/or via follow-up SMS where a phone number is provided and SMS is enabled, consistent with privacy-safe messaging. |  |  |  |  |
+| FR-HOT-04 | Must | Anonymous Hotline Submissions: The hotline-assisted intake process shall support handling of anonymous grievances, including caller choice not to provide identifying details, while still capturing sufficient grievance detail for processing. |  |  |  |  |
+| FR-HOT-05 | Must | Sensitive Grievance Handling: Procedures and system access controls shall support confidential handling of sensitive grievances received via hotline (e.g., SEA/SH), including restricted visibility, controlled routing, and appropriate suppression/redaction of notifications. |  |  |  |  |
+| FR-STAFF-01 | Must | Secure Staff Console Access: The system shall provide a secure staff console for authorized agents and administrators to manage grievances. The staff console shall clearly separate staff functions from administrative configuration functions. |  |  |  |  |
+| FR-STAFF-02 | Must | Grievance List View & Queues: The system shall provide a grievance list view with queues and filters for Open, Answered, Overdue, My Grievances (assigned to me/teams), and Closed time windows. Queue definitions shall be configurable to support operational models. |  |  |  |  |
+| FR-STAFF-03 | Must | Grievance Search Capability: The system shall provide search capability for grievances, including both basic search and advanced search with configurable criteria and result columns. Search shall respect access controls. |  |  |  |  |
+| FR-STAFF-04 | Must | Staff-Assisted Grievance Creation: The system shall support creation of grievances by staff on behalf of complainants, including the ability to search and select an existing complainant or create a new complainant record. The intake screen shall support assisted intake workflows. |  |  |  |  |
+| FR-STAFF-05 | Must | Grievance Attributes Capture: The system shall capture key grievance attributes at creation: source, help topic, department, SLA plan, due date, assignment (agent or team), project context, issue summary, issue details, and priority level. Internal-only fields shall be controllable via permissions and field visibility settings. |  |  |  |  |
+| FR-STAFF-06 | Must | Collaborators/Participants Management: The system shall allow adding collaborators/participants to a grievance (e.g., CC recipients) and managing collaborator visibility where configured. Collaborator behavior shall respect privacy and role-based access. |  |  |  |  |
+| FR-STAFF-07 | Must | Grievance Detail View: The system shall provide a grievance detail view displaying status, priority, department, assigned agent/team, SLA plan, due date, complainant information, help topic, source, last message/response timestamps, and project context. The screen shall support quick comprehension for triage and follow-up. |  |  |  |  |
+| FR-STAFF-08 | Must | External Replies & Internal Notes: The system shall support posting external replies to complainants and internal notes for staff-only collaboration on each grievance, with clear visual distinction and strict controls to prevent internal notes from being exposed externally. |  |  |  |  |
+| FR-STAFF-09 | Must | Rich-Text Composition & Drafts: The system shall support rich-text message composition (where enabled) including drafts with auto-save and attachments for replies and notes. Draft behavior shall reduce lost work and improve response quality. |  |  |  |  |
+| FR-STAFF-10 | Must | Canned Response Templates: The system shall support reusable response templates (canned responses) that can be selected when composing a reply. Templates shall be governed to ensure approved messaging. |  |  |  |  |
+| FR-STAFF-11 | Should | Response Drafting Assistance: The system should provide response drafting assistance (e.g., response suggestions) to help agents prepare replies, configurable and governed by security and privacy controls. If enabled, it must not introduce confidentiality risks or store sensitive content outside approved environments. |  |  |  |  |
+| FR-STAFF-12 | Must | Grievance Status Lifecycle: The system shall support changing grievance status through defined lifecycle states, including resolving and closing a grievance. Status transitions shall be auditable and may enforce required fields based on workflow rules. |  |  |  |  |
+| FR-STAFF-13 | Must | Archive & Deletion Workflows: The system shall support administrative lifecycle states beyond closure, including archiving and deletion workflows governed by administrative permissions, retention policies, and audit logging. |  |  |  |  |
+| FR-STAFF-14 | Must | Assignment & Transfer Actions: The system shall support assignment actions for grievances, including assigning to an individual agent, assigning to a team, and transferring between departments. Assignment shall support accountability and proper routing. |  |  |  |  |
+| FR-STAFF-15 | Should | Claim Ownership on Response: The system should support claiming ownership of a grievance on agent response, as a configurable behavior, to reduce unowned cases and clarify responsibility. |  |  |  |  |
+| FR-STAFF-16 | Must | SLA Due Date Tracking: The system shall track SLA due dates and identify grievances that become overdue, including visual indicators and activity events. SLA computation shall respect configured schedules (business hours/holidays) where applicable. |  |  |  |  |
+| FR-STAFF-17 | Must | Grievance Thread View: The system shall provide a grievance thread view that shows chronological messages, replies, notes, and key activities with timestamps and authors. The thread shall support audit and case review. |  |  |  |  |
+| FR-STAFF-18 | Must | Linking Related Grievances: The system shall support linking related grievances and identifying related grievances in the grievance detail view, supporting duplicate management and pattern analysis. |  |  |  |  |
+| FR-STAFF-19 | Should | Merging Grievances: The system should support merging grievances where operationally required (e.g., duplicates), with auditability, preserving the original identifiers for traceability. |  |  |  |  |
+| FR-STAFF-20 | Must | Print/Export Grievance Record: The system shall support printing/exporting a grievance record for offline review or case files, subject to access control and sensitive-data restrictions. |  |  |  |  |
+| FR-STAFF-21 | Must | Bulk Actions: The system shall support bulk actions from the grievance list, including status changes, assignment, transfer, and deletion (subject to permissions). Bulk actions shall be controlled to prevent misuse. |  |  |  |  |
+| FR-STAFF-22 | Must | Sorting, Pagination & Export: The system shall provide configurable sorting, pagination, and export for grievance list views. Export shall respect access controls and privacy constraints. |  |  |  |  |
+| FR-STAFF-23 | Should | User Interface Preferences: The system should support user interface preferences for staff, such as theme/dark mode and personal profile settings, supporting usability for frequent users. |  |  |  |  |
+| FR-WF-01 | Must | Grievance Escalation: The system shall support escalation of grievances based on configurable escalation rules (e.g., elapsed time, severity, unresolved status) to higher authority levels (e.g., municipal to county to national) with full audit trail. Escalation shall update ownership/visibility appropriately. |  |  |  |  |
+| FR-WF-02 | Must | Satisfaction & Reopening: The system shall support recording complainant satisfaction upon closure and support reopening/escalation pathways for grievances where the complainant is not satisfied with the resolution. Satisfaction capture shall be channel-appropriate and optional for anonymous/unreachable complainants. |  |  |  |  |
+| FR-WF-03 | Should | Appeal/Review Process: The system should support an appeal or review step, allowing confidentiality-preserving transfer to a designated review authority with documented decision outcome. |  |  |  |  |
+| FR-TASK-01 | Must | Task Creation & Linking: The system shall support creation of tasks that can be linked to a grievance to track actionable work items, supporting structured investigation, referrals, and remedial actions. |  |  |  |  |
+| FR-TASK-02 | Must | Task Metadata Capture: The system shall capture task metadata including department, assignee, due date (with timezone context), and attachments. Task ownership shall support accountability and escalation. |  |  |  |  |
+| FR-TASK-03 | Must | Task List Views & Filtering: The system shall provide task list views with search, sorting, and filtering for open and completed tasks, supporting workload management. |  |  |  |  |
+| FR-TASK-04 | Must | Task Activity Tracking: The system shall record task activity (creation, updates, assignment, and completion) with timestamps and actors. Task activity shall be auditable and support alerts where configured. |  |  |  |  |
+| FR-NOTIF-01 | Must | Configurable Notification Templates: Notification templates shall be configurable for each event type and channel, including English and Kiswahili versions where applicable. Templates shall support safe variables and be maintainable without development. |  |  |  |  |
+| FR-NOTIF-02 | Must | Privacy-Safe Notifications: Notifications sent via SMS/USSD or email shall avoid inclusion of sensitive personal data by default, and shall include only the minimum information needed (e.g., reference number, status, next steps). Templates must support redaction/masking rules for sensitive cases. |  |  |  |  |
+| FR-NOTIF-03 | Should | Reminder & Overdue Alerts: The system should support reminder and overdue alerts for staff based on SLA due dates and escalation rules, to reduce missed timelines. |  |  |  |  |
+| FR-SENS-01 | Must | Sensitive Classification & Confidentiality: The system shall support classification of a grievance as sensitive (e.g., SEA/SH) and apply enhanced confidentiality controls (restricted visibility, masked fields, restricted attachments). |  |  |  |  |
+| FR-SENS-02 | Must | Sensitive Workflow & Routing: The system shall support a separate workflow path or routing rules for sensitive grievances, including referral to designated focal persons and prevention of inappropriate notifications. |  |  |  |  |
+| FR-SENS-03 | Must | Survivor-Centered Actions & Referrals: The system shall allow recording of survivor-centered actions and referrals without storing unnecessary sensitive details in free text fields. The system should encourage structured capture and minimize narrative storage. |  |  |  |  |
+| FR-SENS-04 | Must | Aggregate Reporting for Sensitive Cases: The system shall provide reporting for sensitive grievances in aggregate form only, with controls preventing export of personally identifiable information unless explicitly authorized. |  |  |  |  |
+| FR-USER-01 | Must | Complainant Directory & Search: The system shall maintain a directory of complainants (users) including contact details and grievance counts, with search capability. The directory shall support accurate identification for follow-up while respecting privacy. |  |  |  |  |
+| FR-USER-02 | Must | User Record Management: The system shall allow authorized staff to create and edit user records, including internal notes, supporting assisted intake and case context. |  |  |  |  |
+| FR-USER-03 | Should | Bulk Import/Export of Users: The system should support bulk import and export of user data using open formats, to support onboarding, migration, and periodic updates. |  |  |  |  |
+| FR-ORG-01 | Could | Organization Records: The system could support organization records to group users and support organization-level management where relevant (e.g., CSOs, contractors, community groups), subject to governance rules. |  |  |  |  |
+| FR-ATT-01 | Must | Configurable Attachment Limits: File attachment limits (types and maximum size) shall be configurable and enforceable for public submissions and staff uploads. |  |  |  |  |
+| FR-ATT-02 | Must | Attachment Access Controls: Attachments shall inherit grievance access controls; unauthorized users shall not be able to access attachments. |  |  |  |  |
+| FR-ATT-03 | Should | Malware/Virus Scanning: The system should support malware/virus scanning for uploaded attachments where feasible within the hosting environment. |  |  |  |  |
+| REP-01 | Must | Grievance Activity Dashboard: The system shall provide a dashboard summarizing grievance activity over time with configurable timeframe filters. |  |  |  |  |
+| REP-02 | Must | Statistical Summaries: The system shall provide statistical summaries of grievances grouped by department, help topic, and agent over a selected period, supporting oversight and workload management. |  |  |  |  |
+| REP-03 | Must | Queue-Based Operational Reporting: The system shall provide queue-based operational reporting including open, answered, overdue, and closed views with sorting and export. |  |  |  |  |
+| REP-04 | Must | Audit & System Log Export: The system shall support export of audit logs and provide filtering of both audit and system logs. |  |  |  |  |
+| REP-05 | Should | Configurable External Reports: The system should provide configurable report outputs for external stakeholders, ensuring sensitive data is excluded or anonymized as required. |  |  |  |  |
+| REP-06 | Must | Geographic & Dimensional Disaggregation: Reports shall support disaggregation by geography (county, municipality, sub-county/ward where captured), channel of intake, grievance category/type, and status. |  |  |  |  |
+| REP-07 | Must | SLA Monitoring Metrics: Reports shall support SLA monitoring metrics including acknowledgement time, response time, resolution time, and overdue counts. |  |  |  |  |
+| REP-08 | Should | Satisfaction & Escalation Reporting: The system should support reporting on complainant satisfaction and reopened/escalated grievances. |  |  |  |  |
+| AC-01 | Must | Role & Permission Management: The system shall allow administrators to define and manage staff roles and permissions across functional areas (grievances, tasks, users, knowledge, administration, and reporting). |  |  |  |  |
+| AC-02 | Must | Record-Level Access Control: The system shall enforce record-level access control so that grievance visibility and actions can be limited by department, team, assignment, and collaborator rules. |  |  |  |  |
+| AC-03 | Must | Attachment Access Restrictions: The system shall provide administrative controls to restrict access to attachments, including an option requiring authentication to view any attachment. |  |  |  |  |
+| AC-04 | Must | Secure Authentication Controls: The system shall support secure authentication controls for staff users, including password management and optional multi-factor authentication. |  |  |  |  |
+| FR-ADM-01 | Must | Administrative Console Access: The system shall provide an administrative console separated from day-to-day case handling functions, accessible only to authorized administrators. |  |  |  |  |
+| FR-ADM-02 | Must | Organizational Structure Management: The system shall support management of organizational structure elements including departments, teams, agents, and roles. |  |  |  |  |
+| FR-ADM-03 | Must | Role & Permission Configuration: The system shall support role definition and permission configuration to control access to grievance, task, user, knowledge, and administrative functions. |  |  |  |  |
+| FR-ADM-04 | Must | Grievance Numbering Configuration: The system shall support configurable grievance numbering, including format and sequence strategy, and enforce uniqueness. |  |  |  |  |
+| FR-ADM-05 | Must | Default Grievance Settings: The system shall support configuration of default grievance settings including default status, default priority, default SLA plan, default help topic, and default queue. |  |  |  |  |
+| FR-ADM-06 | Must | SLA Plans & Schedules: The system shall support service-level configuration including SLA plans with grace periods and schedules for business hours and holidays. |  |  |  |  |
+| FR-ADM-07 | Must | Queue Structure Configuration: The system shall support configurable queue structures for grievances, including creation of sub-queues and personal queues/searches where permitted. |  |  |  |  |
+| FR-ADM-08 | Must | Notification & Alert Settings: The system shall provide configurable notification and alert settings for grievance and task events, including recipient rules (e.g., assigned agent/team, managers, and administrators). |  |  |  |  |
+| FR-ADM-09 | Must | Autoresponder Configuration: The system shall support configurable autoresponder behaviors for new grievances and new messages, with the ability to disable globally and at department or email address levels. |  |  |  |  |
+| FR-ADM-10 | Must | Email Address Management: The system shall support management of email addresses used for notifications and correspondence, including departmental association and priority. |  |  |  |  |
+| FR-ADM-11 | Must | Email Template Management: The system shall provide configurable email templates for key grievance and task events, grouped into template sets and supporting at least the primary configured language. |  |  |  |  |
+| FR-ADM-12 | Must | Email Banlist/Blocklist: The system shall support a banlist (blocklist) for email addresses or domains to prevent abuse and enforce policy. |  |  |  |  |
+| FR-ADM-13 | Must | Form Definition Configuration: The system shall support configurable form definitions for grievance and task data capture, including field types, required/optional/internal visibility, and system variable mapping for search and filtering. |  |  |  |  |
+| FR-ADM-14 | Must | Reference Data Lists: The system shall support configurable lists (reference data) such as project contexts and grievance statuses, including list items and properties. |  |  |  |  |
+| FR-ADM-15 | Must | Routing Rules Configuration: The system shall support configurable routing rules (filters) to automate actions based on criteria (e.g., help topic, source, keywords), including ordered evaluation. |  |  |  |  |
+| FR-ADM-16 | Must | Audit Logs: The system shall provide audit logs that capture administrative and operational actions (who did what, when, and from which IP), with filtering and export. |  |  |  |  |
+| FR-ADM-17 | Must | System Logs: The system shall provide system logs for operational and security events (e.g., failed login attempts, invalid session tokens), with filtering and controlled deletion. |  |  |  |  |
+| FR-ADM-18 | Must | System Governance Controls: The system shall allow administrators to set system-level governance controls including forced HTTPS, access control lists (IP restrictions), log retention periods, and content embedding restrictions. |  |  |  |  |
+| FR-ADM-19 | Must | API Integration & Key Management: The system shall provide an API integration capability controlled by API keys with IP-based restrictions and enable/disable controls. |  |  |  |  |
+| FR-ADM-20 | Must | Public Page Management: The system shall support management of public-facing pages (e.g., landing page, offline page, confirmation/thank-you page) with enable/disable controls. |  |  |  |  |
+| FR-ADM-21 | Should | Plugin/Extension Support: The system should support configurable plugins or extension mechanisms to add or modify capabilities without changing core functionality. |  |  |  |  |
+| CFG-01 | Must | Help Topics Configuration: The system shall support configuration of help topics (categories) including status, type (public/internal), default priority, and default department routing. |  |  |  |  |
+| CFG-02 | Must | Department Configuration: The system shall support configuration of departments including public/private visibility, associated email address, and manager role. |  |  |  |  |
+| CFG-03 | Must | Team Structure Configuration: The system shall support configuration of team structures, including team membership and team lead designation. |  |  |  |  |
+| CFG-04 | Must | Form Configuration: The system shall support configuration of grievance and task forms, including adding/removing fields, setting visibility (required/optional/internal), and linking to lists. |  |  |  |  |
+| CFG-05 | Must | List Configuration: The system shall support configuration of lists used by forms and workflows (e.g., project contexts and grievance statuses). |  |  |  |  |
+| CFG-06 | Must | Notification Configuration: The system shall support configuration of autoresponder, alerts, and notices across key events, including recipient group selection. |  |  |  |  |
+| CFG-07 | Must | Attachment Configuration: The system shall support configuration of attachment storage, maximum file size, and whether authentication is required to view attachments. |  |  |  |  |
+| CFG-08 | Must | Locale & Timezone Configuration: The system shall support configuration of system locale, timezone, date/time formats, and default schedule used for SLA calculations. |  |  |  |  |
+| CFG-09 | Should | Theme & UI Customization: The system should support theme and UI customization for public portal and staff console consistent with institutional branding needs. |  |  |  |  |
+| INT-01 | Must | Email Outbound: The system shall send notifications and correspondence via email using managed sender identities and configurable templates. |  |  |  |  |
+| INT-02 | Should | Email Inbound: The system should support receiving and appending messages to existing grievances via email using standard protocols (e.g., IMAP/POP3) and routing rules. |  |  |  |  |
+| INT-03 | Must | API Integration: The system shall expose an API for external integrations to create, query, and update grievances and related entities, protected by API keys and access controls. |  |  |  |  |
+| INT-04 | Must | Data Import/Export: The system shall support import and export of key datasets (grievances, users, logs) in open formats suitable for analysis and migration. |  |  |  |  |
+| INT-05 | Should | Embedding Controls: The system should support safe embedding/iframe and external media controls governed by allowlists. |  |  |  |  |
+| INT-06 | Must | SMS Gateway Integration: The system shall support integration with an SMS gateway/provider for outbound SMS notifications (acknowledgement, status updates, closure) where enabled by the Client. |  |  |  |  |
+| INT-07 | Must | USSD Gateway Integration: The system shall support secure integration with a USSD gateway/aggregator for USSD sessions where enabled by the Client. |  |  |  |  |
+| INT-08 | Should | Delivery Status Tracking: The system should support delivery status tracking for outbound SMS and email (sent, failed, queued) and provide an administrator view for troubleshooting. |  |  |  |  |
+| INT-09 | Must | Notification Failure Handling: Where notifications fail (e.g., SMS not delivered), the system shall allow staff to view failure status and take alternative actions (e.g., phone call) without losing the audit trail. Failure states must be recorded against the grievance communications log, including timestamp and channel, to support follow-up and compliance evidence. |  |  |  |  |
+| INT-10 | Must | Data Export Mechanisms: The system shall provide mechanisms to export grievance data, audit logs and reports in non-proprietary formats (e.g., CSV) for analysis and statutory reporting. Exports shall support filters (date range, geography, category, channel, status) and apply role-based field inclusion (e.g., excluding PII by default for non-privileged users). |  |  |  |  |
+| INT-11 | Should | Documented API for External Systems: The system should provide a documented API for authorized systems to query or push grievance-related data, subject to privacy controls and authentication. The API should support standard integration capabilities such as pagination, filtering, and consistent error messages, and should prevent accidental creation of duplicates through appropriate safeguards. |  |  |  |  |
+| INT-12 | Must | Secure Integration Practices: All integrations shall use secure transport (e.g., HTTPS/TLS) and authenticated access mechanisms; credentials and secrets shall be managed securely. The Implementing Firm shall provide procedures for credential rotation, incident response for key compromise, and separation of duties between administrators who manage keys and users who consume integration outputs. |  |  |  |  |
+| NFR-01 | Must | Performance: The system shall support responsive user interaction for typical operations (list views, opening a grievance, posting a reply) under expected load. |  |  |  |  |
+| NFR-02 | Must | Scalability: The system shall scale to accommodate growth in number of grievances, users, attachments, and concurrent users without functional degradation. |  |  |  |  |
+| NFR-03 | Must | Availability: The system shall provide high availability appropriate for a public service channel, with planned maintenance controls including an offline mode page. |  |  |  |  |
+| NFR-04 | Must | Security - Transport: All network communications shall be protected with strong transport security and administrators shall be able to enforce HTTPS for all requests. |  |  |  |  |
+| NFR-05 | Must | Security - Access Control: The system shall implement role-based access control with least-privilege, including separate administrative permissions. |  |  |  |  |
+| NFR-06 | Must | Security - Multi-Factor Authentication: The system shall support multi-factor authentication (MFA/2FA) for staff users as a configurable option. |  |  |  |  |
+| NFR-07 | Must | Security - IP Access Control: The system shall support IP-based access control lists (ACLs) that can be applied to the public portal, staff console, and/or all system access. |  |  |  |  |
+| NFR-08 | Must | Privacy: The system shall protect personally identifiable information (PII) and apply access controls to grievance content and attachments, including an option to require login to view attachments. |  |  |  |  |
+| NFR-09 | Must | Auditability: The system shall maintain immutable audit records of key administrative and operational actions, including timestamps and source IP addresses. |  |  |  |  |
+| NFR-10 | Must | Logging & Retention: The system shall support configurable log levels and configurable log retention/purge policies. |  |  |  |  |
+| NFR-11 | Must | Accessibility: The public portal and staff console shall meet accessibility requirements aligned to WCAG 2.1 AA (or applicable national standards), including keyboard navigation and readable contrast. |  |  |  |  |
+| NFR-12 | Should | Localization: The system should support multiple languages and locale-aware date/time formats, including configurable default timezone and schedule. |  |  |  |  |
+| NFR-13 | Must | Interoperability - Data Export: Data export and reporting outputs shall be provided in open, commonly used formats suitable for analysis. |  |  |  |  |
+| NFR-14 | Must | Maintainability: The system shall provide configuration-driven customization (forms, lists, templates, routing rules) that does not require source code modification for common changes. |  |  |  |  |
+| NFR-15 | Must | Data Residency: The e-GRM production data shall be hosted in a location approved by the Client and compliant with applicable Kenya data protection requirements, including any restrictions on cross-border transfers. |  |  |  |  |
+| NFR-16 | Must | Interoperability - APIs: The e-GRM shall provide documented interfaces for data export and integration using open, widely adopted standards. |  |  |  |  |
+| NFR-17 | Must | Ownership & Vendor Lock-in: The Client shall retain ownership of all grievance data. The Implementing Firm shall provide mechanisms to export all data and configuration necessary for continuity, without dependence on proprietary tools. |  |  |  |  |
+| NFR-18 | Must | Licensing/IP: Any solution components requiring licenses shall be disclosed. The Implementing Firm shall ensure the Client has the rights necessary to operate, maintain and modify the system as required by contract, without undue restrictions. |  |  |  |  |
+| NFR-19 | Should | Auditability for Compliance: The system should support generation of audit and compliance reports (e.g., access logs, configuration change logs) for regulatory and internal review. |  |  |  |  |
+| SYS-01 | Must | Compliance with System Requirements Specification (Software + Hardware): The Supplier shall ensure the proposed solution and deployment comply with the System Requirements Specification (Software + Hardware) issued with the procurement (including acceptable deployment model(s), environment separation rules, endpoint requirements, and acceptance evidence). |  |  |  |  |
+| DEL-01 | Must | As‑Built Technical Architecture Pack: The Supplier shall provide an as‑built technical architecture pack covering the logical architecture, deployment architecture, environment inventory (Dev/Test/Staging/Production as applicable), component list, and key security boundaries. |  |  |  |  |
+| DEL-02 | Must | Configuration Workbook and System Settings Register: The Supplier shall provide a configuration workbook / system settings register that documents all implemented configuration items (forms/fields, workflows and status model, routing rules, SLAs and escalation rules, roles/permissions, notification templates, and reference data lists) and the process to safely modify them. |  |  |  |  |
+| DEL-03 | Must | Data Dictionary and Standard Intake Dataset Mapping: The Supplier shall provide a data dictionary and a field‑mapping showing how the system implements the KUSP2 Standard Grievance Intake Dataset and related processing fields (including mandatory/optional/conditional rules and controlled vocabularies). |  |  |  |  |
+| DEL-04 | Must | Integration Interface Specifications and Test Evidence: The Supplier shall provide interface specifications for each enabled integration (e.g., email/SMTP, SMS gateway, USSD aggregator, hotline/IVR where applicable, APIs/webhooks) including authentication approach, data payloads, error handling, retry logic, and logging. |  |  |  |  |
+| DEL-05 | Must | User Documentation Set: The Supplier shall provide a complete user documentation set, including (at minimum) public portal guidance content, a staff user guide for case management, and an administrator guide for configuration and operations. |  |  |  |  |
+| DEL-06 | Must | Training Materials Package: The Supplier shall provide training materials suitable for reuse, including slide decks, practical exercises, quick reference guides (QRGs), and facilitator notes for role‑based training tracks (administrators, supervisors, handlers, reporting users, and sensitive case focal persons). |  |  |  |  |
+| DEL-07 | Must | Training Delivery and Completion Evidence: The Supplier shall deliver the agreed training sessions and provide completion evidence, including training agenda, attendance lists, and (where feasible) assessment/knowledge checks to confirm readiness. |  |  |  |  |
+| DEL-08 | Must | UAT Support Pack and Sign‑Off Record: The Supplier shall provide UAT scripts mapped to agreed acceptance scenarios and support Client-led UAT execution, including defect triage, fixes, and a UAT summary/sign‑off pack. |  |  |  |  |
+| DEL-09 | Must | Comprehensive Test Evidence Pack: The Supplier shall provide a test evidence pack covering functional testing, integration testing for each enabled channel, regression testing across releases, and evidence of defect resolution. |  |  |  |  |
+| DEL-10 | Must | Security Verification Evidence: The Supplier shall provide security verification evidence appropriate to a public‑facing GRM, including configuration summary (RBAC, audit logging, encryption), vulnerability scan or penetration test results (as agreed), and remediation summary for identified high/critical issues. |  |  |  |  |
+| DEL-11 | Must | Accessibility Verification Evidence: The Supplier shall provide accessibility verification evidence demonstrating conformance to the required accessibility target for key public and staff journeys (e.g., WCAG-aligned as specified), including issues found and remediation actions. |  |  |  |  |
+| DEL-12 | Should | Performance and Capacity Test Summary: The Supplier should provide a performance and capacity test summary proportionate to expected usage, focusing on response time for key user journeys, search performance, and dashboard/report refresh. |  |  |  |  |
+| DEL-13 | Must | Backup and Restore Evidence: The Supplier shall provide backup configuration documentation and at least one documented restore test for the production environment (or staging, if agreed), including confirmation that restored data is usable and access controls remain intact. |  |  |  |  |
+| DEL-14 | Should | Disaster Recovery Procedure and Validation: Where disaster recovery (DR) is required by the deployment model, the Supplier should provide a DR procedure (RTO/RPO targets, failover steps) and evidence of a proportionate DR validation activity (e.g., tabletop exercise or technical rehearsal, as agreed). |  |  |  |  |
+| DEL-15 | Must | Go‑Live Readiness and Cutover Plan: The Supplier shall provide a go‑live readiness checklist and cutover plan covering configuration freeze, user provisioning, monitoring readiness, backup/restore readiness, and fallback/rollback procedures. |  |  |  |  |
+| DEL-16 | Must | Hypercare Plan and Exit Report: The Supplier shall provide a hypercare plan for post go‑live stabilization (channels for issue reporting, severity definitions, response targets, reporting cadence) and an exit report summarizing issues encountered and resolution status. |  |  |  |  |
+| DEL-17 | Must | Support, Maintenance and SLA Commitments: The Supplier shall provide a support and maintenance model covering incident intake, severity levels, escalation, response and resolution targets, patching/vulnerability management approach, and service reporting. |  |  |  |  |
+| DEL-18 | Must | Intellectual Property, Licensing and Right‑to‑Use Documentation: The Supplier shall provide documentation confirming licensing terms and rights-to-use for all software components supplied (including third‑party components), and clearly identify any license renewals, constraints, or dependencies required for continued operation. |  |  |  |  |
+| DEL-19 | Must | Handover Package and Credential Transfer: The Supplier shall provide a complete handover package including administrator access handover procedure, credential transfer protocol, configuration exports (where supported), and an asset register of delivered components and integrations. |  |  |  |  |
+| DEL-20 | Must | Data Portability at Handover: The Supplier shall ensure the Client can export all grievance data (including metadata, actions, communications history, and attachments where feasible) in open, commonly used formats, and shall provide a final data export at handover if requested by the Client. |  |  |  |  |
+
+End of Technical Compliance Matrix.
+4.3 Deviations and Clarifications Form (if applicable)
+If the Supplier proposes any deviation, assumption, or clarification that changes or qualifies a requirement, the Supplier shall record it in the table below. The Purchaser will use this information to determine responsiveness and to manage contract negotiations. Unstated deviations discovered later may be treated as non‑compliance.
+| Ref (Req ID / clause) | Description of deviation/clarification | Proposed alternative / mitigation | Impact on price (if any) | Impact on schedule (if any) | Evidence / remarks |
+|  |  |  |  |  |  |
+|  |  |  |  |  |  |
+|  |  |  |  |  |  |
+|  |  |  |  |  |  |
+|  |  |  |  |  |  |
+
+Where no deviations apply, the Supplier shall state “No deviations” in the first row of the table above.
+4.4 Evidence Submission Checklist (Supplier to submit)
+Suppliers shall submit the minimum evidence listed below to support evaluation of Must requirements. Evidence may include product documentation extracts, screenshots, architecture diagrams, sample reports, security certifications, and other credible materials. Suppliers shall tick “Provided” and reference where the evidence can be found in the submission package.
+| Evidence item | Provided (Yes/No) | Reference / filename / section |
+| Completed Annex 1 – Quotation Submission Form (signed). |  |  |
+| Completed Annex 3 – Price Schedule (all mandatory items priced). |  |  |
+| Completed Annex 4.2 – Technical Compliance Matrix (all rows responded). |  |  |
+| Architecture diagram (logical + deployment) including environments (Dev/Test/UAT/Prod) and integration points. |  |  |
+| Description of proposed deployment model (Government-hosted baseline; SaaS alternative if proposed) and responsibility split / RACI confirmation. |  |  |
+| Evidence of RBAC/user role support and audit logging (screenshots or documentation reference). |  |  |
+| Evidence of data protection controls (encryption, retention configuration capability, privacy notice support). |  |  |
+| Accessibility approach statement and any available accessibility conformance evidence (e.g., WCAG-aligned testing summary). |  |  |
+| Security posture statement including vulnerability management approach and any available security certifications (if applicable). |  |  |
+| Sample reports/dashboards and export formats supported (screenshots or sample outputs). |  |  |
+| Implementation approach summary confirming ability to meet 3‑month delivery window and go‑live milestones. |  |  |
+
+The Purchaser may request additional clarifications or demonstrations where evidence is insufficient or where claims require validation. Suppliers are advised to keep evidence concise and to reference the exact location of supporting materials to facilitate efficient evaluation.
