@@ -3,6 +3,15 @@ import { z } from 'zod';
 /** CD-01 Tenant identity & branding (spec 02). */
 export const localizedText = z.record(z.string().min(2).max(8), z.string());
 
+/** Chromatic palette colors supported by the Nuxt UI design system. */
+export const PALETTE_COLORS = [
+  'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan',
+  'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose',
+] as const;
+
+/** Neutral (gray-scale) palette colors supported by the Nuxt UI design system. */
+export const NEUTRAL_COLORS = ['slate', 'gray', 'zinc', 'neutral', 'stone'] as const;
+
 export const cd01Identity = z.object({
   name: z.string().min(1),
   legal_name: z.string().optional(),
@@ -15,7 +24,12 @@ export const cd01Identity = z.object({
   branding: z.object({
     logo_url: z.string().optional(),
     favicon_url: z.string().optional(),
-    primary_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#0f3a5e'),
+    /** Semantic palette colors (Nuxt UI design system) — themed across all components. */
+    primary: z.enum(PALETTE_COLORS).default('blue'),
+    secondary: z.enum(PALETTE_COLORS).default('amber'),
+    neutral: z.enum(NEUTRAL_COLORS).default('slate'),
+    /** @deprecated legacy free hex values, superseded by the palette fields above. */
+    primary_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
     accent_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
     /** Co-branding (implementing agency, donor) shown in about/footer. */
     partner_logos: z

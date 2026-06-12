@@ -32,7 +32,7 @@ async function doTrack() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-elevated/50 py-10 px-4">
+  <div class="min-h-screen bg-elevated/50 py-6 sm:py-10 px-4">
     <div class="max-w-xl mx-auto">
       <NuxtLink to="/" class="text-sm text-muted hover:underline">&larr; Back to home</NuxtLink>
       <h1 class="text-2xl font-bold mt-2 mb-6">Track your case</h1>

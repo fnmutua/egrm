@@ -51,8 +51,8 @@ watch([q, status, page], () => load());
 </script>
 
 <template>
-  <div v-if="user" class="p-8 max-w-6xl mx-auto">
-    <div class="flex items-center justify-between mb-6">
+  <div v-if="user" class="p-4 sm:p-8 max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-6 gap-3">
       <div>
         <h1 class="text-2xl font-semibold">Cases</h1>
         <p class="text-muted text-sm">{{ total }} case(s)</p>
@@ -60,21 +60,24 @@ watch([q, status, page], () => load());
       <UButton to="/" variant="ghost" icon="i-lucide-arrow-left">Dashboard</UButton>
     </div>
 
-    <div class="flex gap-3 mb-4">
-      <UInput v-model="q" placeholder="Search reference or summary…" icon="i-lucide-search" class="w-72" />
-      <USelectMenu
-        v-model="status"
-        :items="['Sorting', 'Investigation', 'Escalated', 'Returned', 'Resolved', 'Closed', 'Rejected', 'In Court']"
-        placeholder="All statuses"
-        class="w-48"
-      />
-      <UButton v-if="status" variant="ghost" size="sm" @click="status = undefined">Clear</UButton>
+    <div class="flex flex-col sm:flex-row gap-3 mb-4">
+      <UInput v-model="q" placeholder="Search reference or summary…" icon="i-lucide-search" class="w-full sm:w-72" />
+      <div class="flex gap-3">
+        <USelectMenu
+          v-model="status"
+          :items="['Sorting', 'Investigation', 'Escalated', 'Returned', 'Resolved', 'Closed', 'Rejected', 'In Court']"
+          placeholder="All statuses"
+          class="flex-1 sm:w-48"
+        />
+        <UButton v-if="status" variant="ghost" size="sm" @click="status = undefined">Clear</UButton>
+      </div>
     </div>
 
-    <UCard>
+    <UCard :ui="{ body: 'p-0 sm:p-0' }">
       <div v-if="loading" class="p-8 text-center text-muted">Loading…</div>
       <div v-else-if="rows.length === 0" class="p-8 text-center text-muted">No cases found.</div>
-      <table v-else class="w-full text-sm">
+      <div v-else class="overflow-x-auto p-4">
+      <table class="w-full min-w-[680px] text-sm">
         <thead>
           <tr class="text-left text-muted border-b border-default">
             <th class="py-2 pr-4">Reference</th>
@@ -106,6 +109,7 @@ watch([q, status, page], () => load());
           </tr>
         </tbody>
       </table>
+      </div>
     </UCard>
   </div>
 </template>

@@ -41,7 +41,7 @@ export const kisipIdentity = {
   programme: 'Kenya Informal Settlements Improvement Project (KISIP)',
   locales: { default: 'en', enabled: ['en', 'sw'] },
   timezone: 'Africa/Nairobi',
-  branding: { primary_color: '#0f3a5e', accent_color: '#d97706' },
+  branding: { primary: 'blue', secondary: 'amber', neutral: 'slate' },
   statements: {
     free_of_charge: {
       en: 'Submitting a grievance is completely free of charge.',

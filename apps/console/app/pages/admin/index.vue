@@ -29,7 +29,7 @@ const configuredCount = computed(() => rows.value.filter((r) => r.active_version
 </script>
 
 <template>
-  <div v-if="user" class="p-8 max-w-4xl">
+  <div v-if="user" class="p-4 sm:p-8 max-w-4xl">
     <h1 class="text-2xl font-semibold mb-1">Configuration overview</h1>
     <p class="text-muted mb-6">
       Every domain is versioned: draft → validate → activate, with full history and rollback.

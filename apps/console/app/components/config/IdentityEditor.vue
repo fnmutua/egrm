@@ -15,6 +15,20 @@ const STATEMENTS = [
   { key: 'confidentiality', label: 'Confidentiality', hint: 'How complainant information is protected.' },
 ] as const;
 
+/** Nuxt UI design-system palette (500 shades for swatches). */
+const PALETTE: Record<string, string> = {
+  red: '#ef4444', orange: '#f97316', amber: '#f59e0b', yellow: '#eab308', lime: '#84cc16',
+  green: '#22c55e', emerald: '#10b981', teal: '#14b8a6', cyan: '#06b6d4', sky: '#0ea5e9',
+  blue: '#3b82f6', indigo: '#6366f1', violet: '#8b5cf6', purple: '#a855f7', fuchsia: '#d946ef',
+  pink: '#ec4899', rose: '#f43f5e',
+};
+const NEUTRALS: Record<string, string> = {
+  slate: '#64748b', gray: '#6b7280', zinc: '#71717a', neutral: '#737373', stone: '#78716c',
+};
+const chromaticItems = Object.keys(PALETTE);
+const neutralItems = Object.keys(NEUTRALS);
+const swatch = (name?: string) => PALETTE[name ?? ''] ?? NEUTRALS[name ?? ''] ?? '#94a3b8';
+
 function localized(): Record<string, string> {
   const o: Record<string, string> = {};
   for (const loc of props.payload.locales?.enabled ?? ['en']) o[loc] = '';
@@ -30,7 +44,9 @@ function ensure() {
   p.locales.enabled ??= ['en'];
   p.timezone ??= 'Africa/Nairobi';
   p.branding ??= {};
-  p.branding.primary_color ??= '#0f3a5e';
+  p.branding.primary ??= 'blue';
+  p.branding.secondary ??= 'amber';
+  p.branding.neutral ??= 'slate';
   p.branding.partner_logos ??= [];
   p.statements ??= {};
   for (const s of STATEMENTS) p.statements[s.key] ??= {};
@@ -80,6 +96,10 @@ const enabledLocalesText = computed({
 });
 
 const enabledLocales = computed<string[]>(() => props.payload.locales?.enabled ?? []);
+
+// Logo preview status: warn the admin when the URL doesn't return a usable image.
+const logoError = ref(false);
+watch(() => props.payload.branding?.logo_url, () => (logoError.value = false));
 
 function addStep() {
   props.payload.how_it_works.push({ title: localized(), description: localized() });
@@ -135,36 +155,71 @@ function removeAt(arr: unknown[], i: number) {
     <!-- Branding -->
     <section v-show="show('sec-branding')" id="sec-branding">
       <h3 class="text-sm font-semibold text-muted uppercase tracking-wide mb-3">Colors & logos</h3>
+      <p class="text-xs text-muted mb-3">
+        Colors come from the Nuxt UI design-system palette and theme every component on the portal consistently.
+      </p>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-        <UFormField label="Primary color" required>
-          <div class="flex items-center gap-2">
-            <input type="color" v-model="payload.branding.primary_color" class="h-9 w-12 rounded border border-default cursor-pointer bg-transparent" />
-            <UInput v-model="payload.branding.primary_color" class="w-28 font-mono" />
-          </div>
+        <UFormField label="Primary" required help="Buttons, links, header, active states.">
+          <USelectMenu v-model="payload.branding.primary" :items="chromaticItems" class="w-full">
+            <template #leading>
+              <span class="inline-block w-3.5 h-3.5 rounded-full" :style="{ backgroundColor: swatch(payload.branding.primary) }" />
+            </template>
+            <template #item-leading="{ item }">
+              <span class="inline-block w-3.5 h-3.5 rounded-full" :style="{ backgroundColor: swatch(item as string) }" />
+            </template>
+          </USelectMenu>
         </UFormField>
-        <UFormField label="Accent color" help="Used for step numbers, icons, highlights.">
-          <div class="flex items-center gap-2">
-            <input
-              type="color"
-              :value="payload.branding.accent_color ?? '#888888'"
-              class="h-9 w-12 rounded border border-default cursor-pointer bg-transparent"
-              @input="payload.branding.accent_color = ($event.target as HTMLInputElement).value"
-            />
-            <UInput v-model="payload.branding.accent_color" class="w-28 font-mono" placeholder="#rrggbb" />
-          </div>
+        <UFormField label="Secondary (accent)" help="Step numbers, icons, highlights.">
+          <USelectMenu v-model="payload.branding.secondary" :items="chromaticItems" class="w-full">
+            <template #leading>
+              <span class="inline-block w-3.5 h-3.5 rounded-full" :style="{ backgroundColor: swatch(payload.branding.secondary) }" />
+            </template>
+            <template #item-leading="{ item }">
+              <span class="inline-block w-3.5 h-3.5 rounded-full" :style="{ backgroundColor: swatch(item as string) }" />
+            </template>
+          </USelectMenu>
         </UFormField>
-        <UFormField label="Logo URL">
+        <UFormField label="Neutral" help="Text, borders, backgrounds.">
+          <USelectMenu v-model="payload.branding.neutral" :items="neutralItems" class="w-full">
+            <template #leading>
+              <span class="inline-block w-3.5 h-3.5 rounded-full" :style="{ backgroundColor: swatch(payload.branding.neutral) }" />
+            </template>
+            <template #item-leading="{ item }">
+              <span class="inline-block w-3.5 h-3.5 rounded-full" :style="{ backgroundColor: swatch(item as string) }" />
+            </template>
+          </USelectMenu>
+        </UFormField>
+        <UFormField label="Logo URL" help="Must be a direct image link (.png/.svg/.jpg). Shown in the portal header.">
           <UInput v-model="payload.branding.logo_url" class="w-full" placeholder="https://…/logo.png" />
-          <img v-if="payload.branding.logo_url" :src="payload.branding.logo_url" alt="Logo preview" class="mt-2 h-12 object-contain rounded border border-default p-1" />
+          <img
+            v-if="payload.branding.logo_url && !logoError"
+            :src="payload.branding.logo_url"
+            alt="Logo preview"
+            class="mt-2 h-12 object-contain rounded border border-default p-1"
+            @error="logoError = true"
+          />
+          <UAlert
+            v-if="logoError"
+            color="warning"
+            class="mt-2"
+            title="This URL does not load as an image"
+            description="Open the link in a browser: it should show only the image, not a web page. Right-click the logo on the source site and copy the image address."
+          />
+        </UFormField>
+        <UFormField label="Favicon URL" help="Browser tab icon, ideally a square .svg or .png.">
+          <UInput v-model="payload.branding.favicon_url" class="w-full" placeholder="https://…/favicon.svg" />
         </UFormField>
       </div>
       <div class="mt-3 flex items-center gap-3">
         <span class="text-xs text-muted">Preview:</span>
-        <div class="rounded-lg px-4 py-2 text-white text-sm font-medium" :style="{ backgroundColor: payload.branding.primary_color }">
+        <div class="rounded-lg px-4 py-2 text-white text-sm font-medium" :style="{ backgroundColor: swatch(payload.branding.primary) }">
           {{ payload.name || 'Portal header' }}
         </div>
-        <div v-if="payload.branding.accent_color" class="rounded-lg px-3 py-2 text-white text-xs" :style="{ backgroundColor: payload.branding.accent_color }">
+        <div class="rounded-lg px-3 py-2 text-white text-xs" :style="{ backgroundColor: swatch(payload.branding.secondary) }">
           Accent
+        </div>
+        <div class="rounded-lg px-3 py-2 text-white text-xs" :style="{ backgroundColor: swatch(payload.branding.neutral) }">
+          Neutral
         </div>
       </div>
 

@@ -140,8 +140,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="user" class="p-8 max-w-6xl">
-    <div class="flex items-center gap-3 mb-1">
+  <div v-if="user" class="p-4 sm:p-8 max-w-6xl">
+    <div class="flex items-center gap-3 mb-1 flex-wrap">
       <UIcon :name="meta?.icon ?? 'i-lucide-settings'" class="text-2xl text-primary" />
       <h1 class="text-2xl font-semibold">{{ meta?.title ?? domain }}</h1>
       <UBadge variant="subtle" color="neutral">{{ meta?.cd }}</UBadge>
@@ -154,8 +154,8 @@ onMounted(async () => {
       <div class="lg:col-span-2 space-y-4">
         <UCard>
           <template #header>
-            <div class="flex items-center justify-between gap-3">
-              <div class="flex items-center gap-3 min-w-0">
+            <div class="flex items-center justify-between gap-x-3 gap-y-1 flex-wrap">
+              <div class="flex items-center gap-3 min-w-0 flex-wrap">
                 <UTabs v-model="mode" :items="modeItems" :content="false" size="xs" />
                 <UBadge v-if="mode === 'form' && activeSectionLabel" variant="subtle" color="primary" class="shrink-0">
                   {{ activeSectionLabel }}

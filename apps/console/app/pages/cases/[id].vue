@@ -31,12 +31,12 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="user && detail" class="p-8 max-w-5xl mx-auto">
+  <div v-if="user && detail" class="p-4 sm:p-8 max-w-5xl mx-auto">
     <UButton to="/cases" variant="ghost" icon="i-lucide-arrow-left" class="mb-4">All cases</UButton>
 
     <div class="flex items-start justify-between mb-6">
       <div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 flex-wrap">
           <h1 class="text-2xl font-semibold font-mono">{{ detail.case.reference }}</h1>
           <UBadge :color="(tagColor[detail.case.status_tag] as any) ?? 'neutral'">{{ detail.case.status }}</UBadge>
           <UBadge v-if="detail.case.anonymous" color="neutral" variant="subtle">anonymous</UBadge>

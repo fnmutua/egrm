@@ -6,8 +6,9 @@ interface IdentityPayload {
   legal_name?: string;
   branding: {
     logo_url?: string;
-    primary_color: string;
-    accent_color?: string;
+    primary?: string;
+    secondary?: string;
+    neutral?: string;
     partner_logos?: { name: string; image_url: string; link?: string }[];
   };
   locales: { default: string; enabled: string[] };
@@ -41,8 +42,8 @@ function t(text: L10n | undefined): string {
   return text[locale.value] || text[p.value?.locales.default ?? 'en'] || Object.values(text)[0] || '';
 }
 
-const primary = computed(() => p.value?.branding.primary_color ?? '#0f3a5e');
-const accent = computed(() => p.value?.branding.accent_color ?? primary.value);
+// Hide the logo slot entirely if the configured URL doesn't load (broken link, not an image).
+const logoFailed = ref(false);
 
 const statementCards = computed(() => [
   { icon: 'i-lucide-badge-check', text: t(p.value?.statements.free_of_charge) },
@@ -71,7 +72,9 @@ const faqItems = computed(() =>
 
 const ui = computed(() => ({
   submit: locale.value === 'sw' ? 'Wasilisha malalamiko' : 'Submit a grievance',
+  submitShort: locale.value === 'sw' ? 'Wasilisha' : 'Submit',
   track: locale.value === 'sw' ? 'Fuatilia hali' : 'Track status',
+  trackShort: locale.value === 'sw' ? 'Fuatilia' : 'Track',
   trackLong: locale.value === 'sw' ? 'Fuatilia kesi iliyopo' : 'Track an existing case',
   howItWorks: locale.value === 'sw' ? 'Jinsi inavyofanya kazi' : 'How it works',
   otherChannels: locale.value === 'sw' ? 'Njia nyingine za kuwasilisha' : 'Other ways to reach us',
@@ -90,28 +93,39 @@ const heroSubtitle = computed(
   <div class="min-h-screen flex flex-col">
     <!-- Header -->
     <header class="border-b border-default sticky top-0 bg-default/95 backdrop-blur z-10">
-      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-        <div class="flex items-center gap-3 min-w-0">
-          <img v-if="p?.branding.logo_url" :src="p.branding.logo_url" alt="" class="h-9 w-auto object-contain" />
-          <div class="font-semibold text-lg truncate" :style="{ color: primary }">
+      <div class="max-w-5xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-3">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+          <img
+            v-if="p?.branding.logo_url && !logoFailed"
+            :src="p.branding.logo_url"
+            alt=""
+            class="h-7 sm:h-9 w-auto object-contain shrink-0"
+            @error="logoFailed = true"
+          />
+          <div class="font-semibold text-base sm:text-lg truncate text-primary">
             {{ p?.name ?? 'Grievance Portal' }}
           </div>
         </div>
-        <nav class="flex items-center gap-2 shrink-0">
-          <div v-if="locales.length > 1" class="flex rounded-md border border-default overflow-hidden mr-1">
+        <nav class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div v-if="locales.length > 1" class="flex rounded-md border border-default overflow-hidden sm:mr-1">
             <button
               v-for="loc in locales"
               :key="loc"
-              class="px-2.5 py-1 text-xs font-medium uppercase transition"
-              :class="loc === locale ? 'text-white' : 'text-muted hover:text-highlighted'"
-              :style="loc === locale ? { backgroundColor: primary } : {}"
+              class="px-2 sm:px-2.5 py-1 text-xs font-medium uppercase transition"
+              :class="loc === locale ? 'bg-primary text-inverted' : 'text-muted hover:text-highlighted'"
               @click="locale = loc"
             >
               {{ loc }}
             </button>
           </div>
-          <UButton to="/submit" size="sm">{{ ui.submit }}</UButton>
-          <UButton to="/track" size="sm" variant="outline">{{ ui.track }}</UButton>
+          <UButton to="/submit" size="sm">
+            <span class="sm:hidden">{{ ui.submitShort }}</span>
+            <span class="hidden sm:inline">{{ ui.submit }}</span>
+          </UButton>
+          <UButton to="/track" size="sm" variant="outline">
+            <span class="sm:hidden">{{ ui.trackShort }}</span>
+            <span class="hidden sm:inline">{{ ui.track }}</span>
+          </UButton>
         </nav>
       </div>
     </header>
@@ -123,19 +137,19 @@ const heroSubtitle = computed(
         :style="{
           background: p?.hero?.image_url
             ? `linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)), url(${p.hero.image_url}) center/cover`
-            : `linear-gradient(135deg, ${primary}14, ${primary}05)`,
+            : `linear-gradient(135deg, color-mix(in srgb, var(--ui-primary) 8%, transparent), color-mix(in srgb, var(--ui-primary) 2%, transparent))`,
         }"
       >
-        <div class="max-w-5xl mx-auto px-4 py-16">
-          <h1 class="text-3xl md:text-4xl font-bold mb-4 max-w-3xl" :class="p?.hero?.image_url ? 'text-white' : ''">
+        <div class="max-w-5xl mx-auto px-4 py-10 sm:py-16">
+          <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 max-w-3xl" :class="p?.hero?.image_url ? 'text-white' : ''">
             {{ heroTitle }}
           </h1>
-          <p class="max-w-2xl mb-8 text-lg" :class="p?.hero?.image_url ? 'text-white/85' : 'text-muted'">
+          <p class="max-w-2xl mb-8 text-base sm:text-lg" :class="p?.hero?.image_url ? 'text-white/85' : 'text-muted'">
             {{ heroSubtitle }}
           </p>
-          <div class="flex flex-wrap gap-3">
-            <UButton to="/submit" size="lg">{{ ui.submit }}</UButton>
-            <UButton to="/track" size="lg" variant="outline">{{ ui.trackLong }}</UButton>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <UButton to="/submit" size="lg" class="justify-center">{{ ui.submit }}</UButton>
+            <UButton to="/track" size="lg" variant="outline" class="justify-center">{{ ui.trackLong }}</UButton>
           </div>
         </div>
       </section>
@@ -145,7 +159,7 @@ const heroSubtitle = computed(
         <div class="grid sm:grid-cols-3 gap-4">
           <UCard v-for="(s, i) in statementCards" :key="i" :ui="{ body: 'p-4 sm:p-4' }">
             <div class="flex items-start gap-3">
-              <UIcon :name="s.icon" class="text-xl shrink-0 mt-0.5" :style="{ color: accent }" />
+              <UIcon :name="s.icon" class="text-xl shrink-0 mt-0.5 text-secondary" />
               <div class="text-sm">{{ s.text }}</div>
             </div>
           </UCard>
@@ -157,10 +171,7 @@ const heroSubtitle = computed(
         <h2 class="text-2xl font-semibold mb-8">{{ ui.howItWorks }}</h2>
         <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <div v-for="(step, i) in p.how_it_works" :key="i">
-            <div
-              class="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold mb-3"
-              :style="{ backgroundColor: accent }"
-            >
+            <div class="w-9 h-9 rounded-full flex items-center justify-center text-inverted font-semibold mb-3 bg-secondary">
               {{ i + 1 }}
             </div>
             <div class="font-medium mb-1">{{ t(step.title) }}</div>
@@ -175,7 +186,7 @@ const heroSubtitle = computed(
           <h2 class="text-xl font-semibold mb-6">{{ ui.otherChannels }}</h2>
           <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div v-for="(c, i) in channels" :key="i" class="flex items-start gap-3">
-              <UIcon :name="c.icon" class="text-xl shrink-0 mt-0.5" :style="{ color: primary }" />
+              <UIcon :name="c.icon" class="text-xl shrink-0 mt-0.5 text-primary" />
               <div>
                 <div class="text-xs text-muted">{{ c.label }}</div>
                 <div class="text-sm font-medium">{{ c.value }}</div>

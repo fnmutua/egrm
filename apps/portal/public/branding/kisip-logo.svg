@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="48" viewBox="0 0 160 48">
+  <!-- Simple placeholder mark: settlement rooftops over the KISIP navy, amber accent -->
+  <g>
+    <rect x="2" y="6" width="44" height="36" rx="8" fill="#0f3a5e"/>
+    <path d="M10 28 L18 20 L26 28 Z" fill="#ffffff"/>
+    <path d="M22 30 L31 21 L40 30 Z" fill="#d97706"/>
+    <rect x="14" y="28" width="8" height="8" fill="#ffffff"/>
+    <rect x="27" y="30" width="9" height="6" fill="#d97706"/>
+  </g>
+  <text x="54" y="26" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f3a5e">KISIP</text>
+  <text x="54" y="40" font-family="Segoe UI, Arial, sans-serif" font-size="9.5" font-weight="500" fill="#64748b">eGRM Portal</text>
+</svg>

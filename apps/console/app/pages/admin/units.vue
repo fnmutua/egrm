@@ -101,7 +101,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="user" class="p-8 max-w-5xl">
+  <div v-if="user" class="p-4 sm:p-8 max-w-5xl">
     <h1 class="text-2xl font-semibold mb-1">Jurisdiction units</h1>
     <p class="text-muted mb-6">
       Instances of the configured hierarchy levels

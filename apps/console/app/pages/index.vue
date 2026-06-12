@@ -20,8 +20,18 @@ const nav = computed(() => {
 </script>
 
 <template>
-  <div v-if="user" class="min-h-screen flex">
-    <aside class="w-60 border-r border-default p-4 flex flex-col gap-4">
+  <div v-if="user" class="min-h-screen flex flex-col md:flex-row">
+    <!-- Mobile top bar -->
+    <div class="md:hidden border-b border-default px-4 py-2.5">
+      <div class="flex items-center justify-between">
+        <span class="font-semibold">eGRM Console</span>
+        <UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-log-out" aria-label="Sign out" @click="logout" />
+      </div>
+      <UNavigationMenu orientation="horizontal" :items="nav" class="mt-1 -mx-2 overflow-x-auto" />
+    </div>
+
+    <!-- Desktop sidebar -->
+    <aside class="hidden md:flex w-60 border-r border-default p-4 flex-col gap-4">
       <div class="font-semibold text-lg px-2">eGRM Console</div>
       <UNavigationMenu orientation="vertical" :items="nav" class="flex-1" />
       <div class="border-t border-default pt-3 px-2">
@@ -33,7 +43,7 @@ const nav = computed(() => {
       </div>
     </aside>
 
-    <main class="flex-1 p-8">
+    <main class="flex-1 p-4 sm:p-8">
       <h1 class="text-2xl font-semibold mb-1">Welcome, {{ user.name }}</h1>
       <p class="text-muted mb-6">Phase 0 foundation shell — case management arrives in Phase 1.</p>
 

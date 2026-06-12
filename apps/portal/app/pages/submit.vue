@@ -61,7 +61,7 @@ async function doSubmit() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-elevated/50 py-10 px-4">
+  <div class="min-h-screen bg-elevated/50 py-6 sm:py-10 px-4">
     <div class="max-w-2xl mx-auto">
       <NuxtLink to="/" class="text-sm text-muted hover:underline">&larr; Back to home</NuxtLink>
       <h1 class="text-2xl font-bold mt-2 mb-6">Submit a grievance</h1>
@@ -89,8 +89,8 @@ async function doSubmit() {
       <!-- Wizard -->
       <UCard v-else>
         <template #header>
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <template v-for="(s, i) in sections" :key="s.key">
                 <UBadge :color="i === step ? 'primary' : i < step ? 'success' : 'neutral'" variant="subtle">
                   {{ i + 1 }}. {{ s.title }}
