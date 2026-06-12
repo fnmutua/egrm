@@ -3,6 +3,7 @@ definePageMeta({ layout: 'admin' });
 
 const { api } = useApi();
 const { user, fetchMe } = useAuth();
+const { canAdmin, canConfig, canPage } = usePermissions();
 
 interface DomainRow {
   domain: string;
@@ -18,11 +19,21 @@ const loading = ref(true);
 onMounted(async () => {
   const me = await fetchMe();
   if (!me) return navigateTo('/login');
-  if (!me.permissions.some((p) => p === 'admin:*' || p.startsWith('admin:'))) return navigateTo('/');
+  if (!canAdmin()) return navigateTo('/');
   const res = await api<{ domains: DomainRow[] }>('/api/v1/config');
   rows.value = res.domains;
   loading.value = false;
 });
+
+const visibleSections = computed(() =>
+  ADMIN_SECTIONS.map((section) => ({
+    ...section,
+    entries: section.entries.filter((entry) => {
+      if (entry.type === 'page') return canPage(entry.to);
+      return canConfig(entry.domain);
+    }),
+  })).filter((section) => section.entries.length > 0),
+);
 
 const byDomain = computed(() => new Map(rows.value.map((r) => [r.domain, r])));
 const configuredCount = computed(() => rows.value.filter((r) => r.active_version).length);
@@ -38,7 +49,7 @@ const configuredCount = computed(() => rows.value.filter((r) => r.active_version
 
     <div v-if="loading" class="text-muted p-8 text-center">Loading…</div>
     <div v-else class="space-y-6">
-      <div v-for="section in ADMIN_SECTIONS" :key="section.label">
+      <div v-for="section in visibleSections" :key="section.label">
         <h2 class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">{{ section.label }}</h2>
         <UCard :ui="{ body: 'p-0 sm:p-0' }">
           <ul class="divide-y divide-default">

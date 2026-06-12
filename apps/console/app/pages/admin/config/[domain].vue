@@ -4,6 +4,7 @@ definePageMeta({ layout: 'admin' });
 const route = useRoute();
 const { api } = useApi();
 const { user, fetchMe } = useAuth();
+const { canConfig } = usePermissions();
 const toast = useToast();
 
 const domain = String(route.params.domain);
@@ -134,6 +135,7 @@ watch(activeSection, () => {
 onMounted(async () => {
   const me = await fetchMe();
   if (!me) return navigateTo('/login');
+  if (!canConfig(domain)) return navigateTo('/admin');
   await loadVersions();
   await loadPayload();
 });

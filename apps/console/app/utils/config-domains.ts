@@ -154,7 +154,7 @@ export const DOMAIN_CATALOGUE: DomainMeta[] = [
     description: 'Public contact routes (portal landing page) and intake channel module enablement.',
     subsections: CD08_SUBSECTIONS },
   { domain: 'cd09_notifications', cd: 'CD-09', title: 'Notifications', icon: 'i-lucide-bell', strict: true,
-    description: 'Event subscriptions, recipient selectors, templates per locale and channel, kill switches, sender identities.',
+    description: 'Event subscriptions, recipient selectors, templates per locale and channel, kill switches, sender identities. Requires admin:notifications (or admin:tenant_config / admin:*).',
     subsections: CD09_SUBSECTIONS },
   { domain: 'cd10_org_access', cd: 'CD-10', title: 'Org & access', icon: 'i-lucide-shield', strict: true,
     description: 'Role definitions (permission sets), departments/teams, and authentication policy. Roles sync to the database on activation.',

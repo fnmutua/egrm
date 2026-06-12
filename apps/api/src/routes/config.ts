@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { and, desc, eq, sql } from 'drizzle-orm';
-import { CONFIG_DOMAINS, type ConfigDomain } from '@egrm/core';
+import { and, desc, eq } from 'drizzle-orm';
+import { CONFIG_DOMAINS, canAccessConfigDomain, configDomainPermission, type ConfigDomain } from '@egrm/core';
 import { validateConfig, type Cd10OrgAccess } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
 import { writeAudit } from '../services/audit.js';
@@ -14,46 +14,44 @@ function parseDomain(value: string): ConfigDomain | undefined {
 /**
  * Config registry v1 (GEN-CFG-01/02/03): versioned domains, validate-before-activate,
  * atomic activation, full history. Public read of the *active* identity config is allowed
- * (the portal needs branding before login); everything else requires permissions.
+ * (the portal needs branding before login); everything else requires domain permissions.
  */
 export default async function configRoutes(app: FastifyInstance) {
   // Registry overview: one row per domain with active version + draft count (admin console grid).
-  app.get(
-    '/api/v1/config',
-    { onRequest: [app.requirePermission('admin:tenant_config')] },
-    async (req) => {
-      const rows = await db
-        .select({
-          domain: schema.configVersion.domain,
-          status: schema.configVersion.status,
-          version: schema.configVersion.version,
-          createdAt: schema.configVersion.createdAt,
-          activatedAt: schema.configVersion.activatedAt,
-        })
-        .from(schema.configVersion)
-        .where(eq(schema.configVersion.tenantId, req.tenant.id));
+  app.get('/api/v1/config', { onRequest: [app.requireAdminConsole] }, async (req) => {
+    const rows = await db
+      .select({
+        domain: schema.configVersion.domain,
+        status: schema.configVersion.status,
+        version: schema.configVersion.version,
+        createdAt: schema.configVersion.createdAt,
+        activatedAt: schema.configVersion.activatedAt,
+      })
+      .from(schema.configVersion)
+      .where(eq(schema.configVersion.tenantId, req.tenant.id));
 
-      const domains = CONFIG_DOMAINS.map((domain) => {
-        const mine = rows.filter((r) => r.domain === domain);
-        const active = mine.find((r) => r.status === 'active');
-        const drafts = mine.filter((r) => r.status === 'draft');
-        const latest = mine.reduce<number>((m, r) => Math.max(m, r.version), 0);
-        return {
-          domain,
-          active_version: active?.version ?? null,
-          activated_at: active?.activatedAt ?? null,
-          draft_count: drafts.length,
-          latest_version: latest || null,
-        };
-      });
-      return { domains };
-    },
-  );
+    const domains = CONFIG_DOMAINS.filter((domain) =>
+      canAccessConfigDomain(req.user.permissions, domain),
+    ).map((domain) => {
+      const mine = rows.filter((r) => r.domain === domain);
+      const active = mine.find((r) => r.status === 'active');
+      const drafts = mine.filter((r) => r.status === 'draft');
+      const latest = mine.reduce<number>((m, r) => Math.max(m, r.version), 0);
+      return {
+        domain,
+        active_version: active?.version ?? null,
+        activated_at: active?.activatedAt ?? null,
+        draft_count: drafts.length,
+        latest_version: latest || null,
+      };
+    });
+    return { domains };
+  });
 
   // A specific version's full payload (history viewing / edit-from-version).
   app.get(
     '/api/v1/config/:domain/versions/:version',
-    { onRequest: [app.requirePermission('admin:tenant_config')] },
+    { onRequest: [app.requireConfigDomain] },
     async (req, reply) => {
       const params = req.params as { domain: string; version: string };
       const domain = parseDomain(params.domain);
@@ -91,6 +89,9 @@ export default async function configRoutes(app: FastifyInstance) {
     if (domain !== 'cd01_identity' && domain !== 'cd08_channels') {
       await app.authenticate(req, reply);
       if (reply.sent) return;
+      if (!canAccessConfigDomain(req.user.permissions, domain)) {
+        return reply.code(403).send({ error: 'forbidden', required: configDomainPermission(domain) });
+      }
     }
 
     const [row] = await db
@@ -111,7 +112,7 @@ export default async function configRoutes(app: FastifyInstance) {
   // Version history.
   app.get(
     '/api/v1/config/:domain/versions',
-    { onRequest: [app.requirePermission('admin:tenant_config')] },
+    { onRequest: [app.requireConfigDomain] },
     async (req, reply) => {
       const domain = parseDomain((req.params as { domain: string }).domain);
       if (!domain) return reply.code(404).send({ error: 'unknown_domain' });
@@ -134,7 +135,7 @@ export default async function configRoutes(app: FastifyInstance) {
   // Create a draft version (validated against the domain schema before it is even stored).
   app.post(
     '/api/v1/config/:domain',
-    { onRequest: [app.requirePermission('admin:tenant_config')] },
+    { onRequest: [app.requireConfigDomain] },
     async (req, reply) => {
       const domain = parseDomain((req.params as { domain: string }).domain);
       if (!domain) return reply.code(404).send({ error: 'unknown_domain' });
@@ -181,7 +182,7 @@ export default async function configRoutes(app: FastifyInstance) {
   // Activate a draft atomically: re-validate, retire the current active version in the same tx.
   app.post(
     '/api/v1/config/:domain/:version/activate',
-    { onRequest: [app.requirePermission('admin:tenant_config')] },
+    { onRequest: [app.requireConfigDomain] },
     async (req, reply) => {
       const params = req.params as { domain: string; version: string };
       const domain = parseDomain(params.domain);

@@ -4,8 +4,22 @@
  * section headers ≥ parent links > subsection links (indented).
  */
 import type { AdminEntry } from '~/utils/config-domains';
+import type { ConfigDomain } from '@egrm/core';
+import { canAccessAdminPage, canAccessConfigDomain } from '@egrm/core';
 
 const route = useRoute();
+const { user } = useAuth();
+
+const visibleSections = computed(() => {
+  const perms = user.value?.permissions ?? [];
+  return ADMIN_SECTIONS.map((section) => ({
+    ...section,
+    entries: section.entries.filter((entry) => {
+      if (entry.type === 'page') return canAccessAdminPage(perms, entry.to);
+      return canAccessConfigDomain(perms, entry.domain as ConfigDomain);
+    }),
+  })).filter((section) => section.entries.length > 0);
+});
 
 const overviewActive = computed(() => route.path === '/admin' && !route.hash);
 
@@ -80,7 +94,7 @@ const linkClass = (active: boolean, size: 'md' | 'sm' = 'md') =>
       Overview
     </NuxtLink>
 
-    <div v-for="section in ADMIN_SECTIONS" :key="section.label" class="space-y-1">
+    <div v-for="section in visibleSections" :key="section.label" class="space-y-1">
       <!-- Single config domain with subsections: section name is the group header. -->
       <template v-if="isSingleDomainSection(section.entries)">
         <template v-if="domainMeta(singleDomain(section.entries)!)?.subsections?.length">
