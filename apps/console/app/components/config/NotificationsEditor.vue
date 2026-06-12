@@ -7,6 +7,7 @@ import {
   NOTIFICATION_CHANNELS,
   TEMPLATE_VARIABLES,
   defaultNotificationPack,
+  stripEmptyTemplateVariants,
 } from '@egrm/config-schemas';
 
 const EVENT_ITEMS = NOTIFICATION_EVENTS.map((e) => ({
@@ -122,9 +123,11 @@ function ensure() {
   for (const tpl of p.templates) {
     tpl.privacy_mode ??= 'standard';
     tpl.variants ??= {};
-    for (const loc of locales.value) {
-      tpl.variants[loc] ??= {};
-    }
+  }
+  if (Array.isArray(p.templates) && p.templates.length > 0) {
+    const pruned = stripEmptyTemplateVariants(p.templates as { variants: Record<string, unknown> }[]);
+    p.templates.splice(0, p.templates.length, ...pruned);
+    for (const tpl of p.templates) stripEmptyLocales(tpl as Record<string, unknown>);
   }
 }
 ensure();
@@ -195,13 +198,18 @@ function setChannelMode(rule: Record<string, unknown>, mode: 'flat' | 'split') {
 
 function addTemplate() {
   const id = `template-${Date.now()}`;
-  const variants: Record<string, Record<string, { body: string }>> = {};
-  for (const loc of locales.value) variants[loc] = { email: { body: 'Hello {{case.reference}}' } };
   props.payload.templates.push({
     id,
     label: 'New template',
     privacy_mode: 'standard',
-    variants,
+    variants: {
+      en: {
+        email: {
+          subject: 'Notification — {{case.reference}}',
+          body: 'Your grievance {{case.reference}} has been updated.\nTrack: {{tracking.url}}',
+        },
+      },
+    },
   });
   expandedTemplate.value = props.payload.templates.length - 1;
 }
@@ -225,11 +233,58 @@ function loadDefaultPack() {
   ensure();
 }
 
-function templateVariant(tpl: Record<string, unknown>, locale: string, channel: string) {
-  const variants = tpl.variants as Record<string, Record<string, { subject?: string; body?: string }>>;
+const CHANNEL_LABELS: Record<string, string> = {
+  sms: 'SMS',
+  email: 'Email',
+  in_app: 'In-app',
+};
+
+const CHANNEL_STARTERS: Record<string, { subject?: string; body: string }> = {
+  sms: { body: '{{tenant.name}}: update on {{case.reference}} — {{tracking.url}}' },
+  email: {
+    subject: 'Update — {{case.reference}}',
+    body: 'Your grievance {{case.reference}} has been updated.\nTrack: {{tracking.url}}',
+  },
+  in_app: { body: 'Update on {{case.reference}} ({{case.status_label}})' },
+};
+
+function hasChannel(tpl: Record<string, unknown>, locale: string, channel: string): boolean {
+  const entry = (tpl.variants as Record<string, Record<string, { body?: string }>>)?.[locale]?.[channel];
+  return !!entry?.body?.trim();
+}
+
+function configuredChannels(tpl: Record<string, unknown>, locale: string): string[] {
+  return NOTIFICATION_CHANNELS.filter((c) => hasChannel(tpl, locale, c));
+}
+
+function stripEmptyLocales(tpl: Record<string, unknown>) {
+  const variants = tpl.variants as Record<string, Record<string, unknown>> | undefined;
+  if (!variants) return;
+  for (const loc of Object.keys(variants)) {
+    if (configuredChannels(tpl, loc).length === 0) delete variants[loc];
+  }
+}
+
+function templateLocales(tpl: Record<string, unknown>): string[] {
+  stripEmptyLocales(tpl);
+  const keys = Object.keys((tpl.variants as Record<string, unknown>) ?? {});
+  if (keys.length > 0) return keys;
+  return [locales.value[0] ?? 'en'];
+}
+
+function getVariant(tpl: Record<string, unknown>, locale: string, channel: string) {
+  return (tpl.variants as Record<string, Record<string, { subject?: string; body: string }>>)[locale][channel]!;
+}
+
+function addChannel(tpl: Record<string, unknown>, locale: string, channel: string) {
+  const variants = (tpl.variants ??= {}) as Record<string, Record<string, { subject?: string; body: string }>>;
   variants[locale] ??= {};
-  variants[locale][channel] ??= { body: '' };
-  return variants[locale][channel]!;
+  variants[locale][channel] = { ...CHANNEL_STARTERS[channel] };
+}
+
+function removeChannel(tpl: Record<string, unknown>, locale: string, channel: string) {
+  delete (tpl.variants as Record<string, Record<string, unknown>>)?.[locale]?.[channel];
+  stripEmptyLocales(tpl);
 }
 
 function varToken(name: string) {
@@ -256,7 +311,7 @@ function varToken(name: string) {
         <UCard
           v-for="(rule, ri) in rules"
           :key="String(rule.id)"
-          :ui="{ body: expandedRule === ri ? 'p-3 sm:p-4' : 'p-0' }"
+          :ui="{ body: expandedRule === ri ? 'p-3 sm:p-4' : 'hidden' }"
         >
           <template #header>
             <button
@@ -427,7 +482,8 @@ function varToken(name: string) {
       <div>
         <h2 class="text-sm font-semibold">Message templates</h2>
         <p class="text-xs text-muted mt-0.5">
-          Per locale and channel. Variables:
+          Per locale and channel — only configured variants are saved. Add SMS, email, or in-app per language.
+          Variables:
           <code v-for="v in TEMPLATE_VARIABLES.slice(0, 5)" :key="v" class="mx-0.5">{{ varToken(v) }}</code>
           …
         </p>
@@ -437,7 +493,7 @@ function varToken(name: string) {
         <UCard
           v-for="(tpl, ti) in templates"
           :key="String(tpl.id)"
-          :ui="{ body: expandedTemplate === ti ? 'p-3 sm:p-4' : 'p-0' }"
+          :ui="{ body: expandedTemplate === ti ? 'p-3 sm:p-4' : 'hidden' }"
         >
           <template #header>
             <button
@@ -486,20 +542,46 @@ function varToken(name: string) {
                 />
               </UFormField>
             </div>
-            <div v-for="loc in locales" :key="loc" class="space-y-2">
-              <div class="text-xs font-semibold uppercase text-muted">{{ loc }}</div>
-              <div class="grid gap-3">
-                <div v-for="ch in NOTIFICATION_CHANNELS" :key="ch" class="p-2 rounded border border-default/60">
-                  <div class="text-xs font-medium mb-1">{{ ch === 'in_app' ? 'In-app' : ch.toUpperCase() }}</div>
+            <div v-for="loc in templateLocales(tpl)" :key="loc" class="space-y-2">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-xs font-semibold uppercase text-muted">{{ loc }}</span>
+                <template v-for="ch in NOTIFICATION_CHANNELS" :key="ch">
+                  <UButton
+                    v-if="!hasChannel(tpl, loc, ch)"
+                    size="xs"
+                    variant="soft"
+                    icon="i-lucide-plus"
+                    @click="addChannel(tpl, loc, ch)"
+                  >
+                    {{ CHANNEL_LABELS[ch] }}
+                  </UButton>
+                </template>
+              </div>
+              <div v-if="configuredChannels(tpl, loc).length" class="grid gap-3">
+                <div
+                  v-for="ch in configuredChannels(tpl, loc)"
+                  :key="ch"
+                  class="p-2 rounded border border-default/60"
+                >
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs font-medium">{{ CHANNEL_LABELS[ch] }}</span>
+                    <UButton
+                      size="xs"
+                      variant="ghost"
+                      color="error"
+                      icon="i-lucide-x"
+                      @click="removeChannel(tpl, loc, ch)"
+                    />
+                  </div>
                   <UInput
                     v-if="ch === 'email'"
-                    v-model="templateVariant(tpl, loc, ch).subject"
+                    v-model="getVariant(tpl, loc, ch).subject"
                     placeholder="Subject"
                     class="w-full mb-1 font-mono text-xs"
                   />
                   <textarea
-                    v-model="templateVariant(tpl, loc, ch).body"
-                    rows="2"
+                    v-model="getVariant(tpl, loc, ch).body"
+                    rows="3"
                     class="w-full font-mono text-xs p-2 rounded border border-default bg-elevated/40"
                     :placeholder="`${ch} body — use {{case.reference}} etc.`"
                   />

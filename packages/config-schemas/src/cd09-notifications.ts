@@ -118,6 +118,27 @@ const templateChannelBody = z.object({
   body: z.string().min(1),
 });
 
+type TemplateVariants = Record<string, { sms?: { body: string; subject?: string }; email?: { body: string; subject?: string }; in_app?: { body: string } }>;
+
+/** Drop channel entries with blank bodies so the editor can show optional fields safely. */
+export function stripEmptyTemplateVariants(
+  templates: { variants: TemplateVariants }[],
+): { variants: TemplateVariants }[] {
+  return templates.map((tpl) => ({
+    ...tpl,
+    variants: Object.fromEntries(
+      Object.entries(tpl.variants ?? {})
+        .map(([locale, channels]) => [
+          locale,
+          Object.fromEntries(
+            Object.entries(channels).filter(([, v]) => typeof v?.body === 'string' && v.body.trim().length > 0),
+          ),
+        ])
+        .filter(([, channels]) => Object.keys(channels as object).length > 0),
+    ),
+  }));
+}
+
 export const notificationTemplate = z.object({
   id: z.string().min(1),
   label: z.string().optional(),
@@ -160,7 +181,12 @@ export const whatsappSenderIdentity = providerConnection.extend({
 });
 
 export const cd09Notifications = z
-  .object({
+  .preprocess((raw) => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const data = raw as { templates?: { variants: TemplateVariants }[] };
+    if (!Array.isArray(data.templates)) return raw;
+    return { ...data, templates: stripEmptyTemplateVariants(data.templates) };
+  }, z.object({
     rules: z.array(notificationRule).default([]),
     templates: z.array(notificationTemplate).min(1),
     senders: z
@@ -197,7 +223,7 @@ export const cd09Notifications = z
         daily_cap_per_recipient: z.number().int().min(0).optional(),
       })
       .default({}),
-  })
+  }))
   .superRefine((cfg, ctx) => {
     const templateIds = new Set(cfg.templates.map((t) => t.id));
     const allowedVars = new Set<string>(TEMPLATE_VARIABLES);
@@ -268,10 +294,20 @@ export function defaultNotificationPack(): Cd09Notifications {
             subject: 'Grievance registered — {{case.reference}}',
             body: 'Dear complainant,\n\nYour grievance {{case.reference}} has been registered with {{tenant.name}}.\n\nStatus: {{case.status_label}}\nTrack your case: {{tracking.url}}\n\nThank you.',
           },
+          in_app: {
+            body: 'New case {{case.reference}} registered at {{case.unit_name}} ({{case.status_label}}).',
+          },
         },
         sw: {
           sms: {
             body: '{{tenant.name}}: malalamiko {{case.reference}} yamepokelewa. Fuatilia: {{tracking.url}}',
+          },
+          email: {
+            subject: 'Malalamiko yamepokelewa — {{case.reference}}',
+            body: 'Mpendwa mlalamikaji,\n\nMalalamiko yako {{case.reference}} yamepokelewa na {{tenant.name}}.\n\nHali: {{case.status_label}}\nFuatilia kesi yako: {{tracking.url}}\n\nAsante.',
+          },
+          in_app: {
+            body: 'Kesi mpya {{case.reference}} imepokelewa — {{case.unit_name}} ({{case.status_label}}).',
           },
         },
       },
@@ -286,6 +322,13 @@ export function defaultNotificationPack(): Cd09Notifications {
           email: {
             subject: 'Reference {{case.reference}}',
             body: 'Your submission {{case.reference}} has been registered.\nTrack: {{tracking.url}}',
+          },
+        },
+        sw: {
+          sms: { body: '{{tenant.name}}: rejeleo {{case.reference}} limepokelewa. Fuatilia: {{tracking.url}}' },
+          email: {
+            subject: 'Rejeleo {{case.reference}}',
+            body: 'Wasilisho lako {{case.reference}} limepokelewa.\nFuatilia: {{tracking.url}}',
           },
         },
       },
@@ -304,6 +347,10 @@ export function defaultNotificationPack(): Cd09Notifications {
         },
         sw: {
           sms: { body: '{{case.reference}}: hali ni {{case.status_label}}. {{tracking.url}}' },
+          email: {
+            subject: 'Taarifa kuhusu {{case.reference}}',
+            body: 'Malalamiko yako {{case.reference}} sasa ni: {{case.status_label}}.\n\nFuatilia: {{tracking.url}}',
+          },
         },
       },
     },
@@ -313,6 +360,7 @@ export function defaultNotificationPack(): Cd09Notifications {
       privacy_mode: 'privacy_safe',
       variants: {
         en: { sms: { body: '{{case.reference}}: status updated. {{tracking.url}}' } },
+        sw: { sms: { body: '{{case.reference}}: hali imesasishwa. {{tracking.url}}' } },
       },
     },
     {
@@ -326,6 +374,13 @@ export function defaultNotificationPack(): Cd09Notifications {
             body: 'Case {{case.reference}} ({{case.status_label}}) has been assigned to you.\nUnit: {{case.unit_name}}',
           },
           in_app: { body: 'Case {{case.reference}} assigned to you' },
+        },
+        sw: {
+          email: {
+            subject: 'Imekabidhiwa: {{case.reference}}',
+            body: 'Kesi {{case.reference}} ({{case.status_label}}) imekabidhiwa kwako.\nEneo: {{case.unit_name}}',
+          },
+          in_app: { body: 'Kesi {{case.reference}} imekabidhiwa kwako' },
         },
       },
     },
@@ -341,6 +396,13 @@ export function defaultNotificationPack(): Cd09Notifications {
           },
           in_app: { body: 'SLA at risk: {{case.reference}}' },
         },
+        sw: {
+          email: {
+            subject: 'SLA ina hatari — {{case.reference}}',
+            body: 'Kesi {{case.reference}} inaweza kukosa muda wake ({{date.deadline}}).',
+          },
+          in_app: { body: 'SLA ina hatari: {{case.reference}}' },
+        },
       },
     },
     {
@@ -355,6 +417,13 @@ export function defaultNotificationPack(): Cd09Notifications {
           },
           in_app: { body: 'SLA breached: {{case.reference}}' },
         },
+        sw: {
+          email: {
+            subject: 'SLA imevunjwa — {{case.reference}}',
+            body: 'Kesi {{case.reference}} imevunja muda wa SLA.',
+          },
+          in_app: { body: 'SLA imevunjwa: {{case.reference}}' },
+        },
       },
     },
     {
@@ -364,6 +433,9 @@ export function defaultNotificationPack(): Cd09Notifications {
       variants: {
         en: {
           sms: { body: '{{tenant.name}}: please rate handling of {{case.reference}}: {{tracking.url}}' },
+        },
+        sw: {
+          sms: { body: '{{tenant.name}}: tafadhali kadiria utendaji wa {{case.reference}}: {{tracking.url}}' },
         },
       },
     },
@@ -377,6 +449,13 @@ export function defaultNotificationPack(): Cd09Notifications {
           email: {
             subject: 'Case closed — {{case.reference}}',
             body: 'Your grievance {{case.reference}} has been closed.\n\nThank you,\n{{tenant.name}}',
+          },
+        },
+        sw: {
+          sms: { body: '{{case.reference}} imefungwa. Asante kwa kutumia {{tenant.short_name}}.' },
+          email: {
+            subject: 'Kesi imefungwa — {{case.reference}}',
+            body: 'Malalamiko yako {{case.reference}} yamefungwa.\n\nAsante,\n{{tenant.name}}',
           },
         },
       },
@@ -393,6 +472,13 @@ export function defaultNotificationPack(): Cd09Notifications {
           },
           in_app: { body: 'Appeal opened: {{case.reference}}' },
         },
+        sw: {
+          email: {
+            subject: 'Rufaa imefunguliwa — {{case.reference}}',
+            body: 'Rufaa imefunguliwa kwa kesi {{case.reference}}.',
+          },
+          in_app: { body: 'Rufaa imefunguliwa: {{case.reference}}' },
+        },
       },
     },
     {
@@ -406,6 +492,34 @@ export function defaultNotificationPack(): Cd09Notifications {
             body: 'Case {{case.reference}} moved to level {{case.level}} ({{case.status_label}}).',
           },
           in_app: { body: 'Escalated: {{case.reference}} → {{case.level}}' },
+        },
+        sw: {
+          email: {
+            subject: 'Imepandishwa: {{case.reference}}',
+            body: 'Kesi {{case.reference}} imehamishwa hadi kiwango {{case.level}} ({{case.status_label}}).',
+          },
+          in_app: { body: 'Imepandishwa: {{case.reference}} → {{case.level}}' },
+        },
+      },
+    },
+    {
+      id: 'more-info-request',
+      label: 'Request more information',
+      privacy_mode: 'standard',
+      variants: {
+        en: {
+          sms: { body: '{{tenant.name}}: we need more information for {{case.reference}}. Reply or visit {{tracking.url}}' },
+          email: {
+            subject: 'More information needed — {{case.reference}}',
+            body: 'We need additional information to progress your grievance {{case.reference}}.\n\nPlease sign in or visit: {{tracking.url}}',
+          },
+        },
+        sw: {
+          sms: { body: '{{tenant.name}}: tunahitaji taarifa zaidi kwa {{case.reference}}. Tembelea {{tracking.url}}' },
+          email: {
+            subject: 'Taarifa zaidi zinahitajika — {{case.reference}}',
+            body: 'Tunahitaji taarifa zaidi ili kuendelea na malalamiko yako {{case.reference}}.\n\nTafadhali tembelea: {{tracking.url}}',
+          },
         },
       },
     },
