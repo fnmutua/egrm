@@ -227,15 +227,15 @@ async function main() {
   await upsertActiveConfig(kisip!.id, 'cd04_workflow', {
     case_type: 'grievance',
     statuses: [
-      { name: 'Received', tag: 'open' },
-      { name: 'Sorting', tag: 'open' },
-      { name: 'Investigation', tag: 'in_progress' },
-      { name: 'Escalated', tag: 'in_progress' },
-      { name: 'Returned', tag: 'in_progress' },
-      { name: 'Resolved', tag: 'resolved' },
-      { name: 'Closed', tag: 'closed' },
-      { name: 'Rejected', tag: 'rejected' },
-      { name: 'In Court', tag: 'on_hold' },
+      { name: 'Received', tag: 'open', label: { en: 'Received', sw: 'Imepokelewa' } },
+      { name: 'Sorting', tag: 'open', label: { en: 'Sorting', sw: 'Inachambuliwa' } },
+      { name: 'Investigation', tag: 'in_progress', label: { en: 'Investigation', sw: 'Uchunguzi' } },
+      { name: 'Escalated', tag: 'in_progress', label: { en: 'Escalated', sw: 'Imepandishwa' } },
+      { name: 'Returned', tag: 'in_progress', label: { en: 'Returned', sw: 'Imerudishwa' } },
+      { name: 'Resolved', tag: 'resolved', label: { en: 'Resolved', sw: 'Imetatuliwa' } },
+      { name: 'Closed', tag: 'closed', label: { en: 'Closed', sw: 'Imefungwa' } },
+      { name: 'Rejected', tag: 'rejected', label: { en: 'Rejected', sw: 'Imekataliwa' } },
+      { name: 'In Court', tag: 'on_hold', label: { en: 'In Court', sw: 'Mahakamani' } },
     ],
     initial: {
       default: 'Sorting',
@@ -255,6 +255,67 @@ async function main() {
       satisfaction: { enabled: true, channels: ['sms'] },
     },
     appeal: { enabled: true, window_days: 30, routes_to: 'next_level' },
+  }, admin!.id);
+
+  await upsertActiveConfig(kisip!.id, 'cd05_sla', {
+    default_plan: 'standard',
+    default_calendar: 'kenya',
+    plans: [
+      {
+        code: 'standard',
+        label: 'Standard GRM plan',
+        time_mode: 'working',
+        calendar_code: 'kenya',
+        acknowledge_within: 'immediate',
+        first_response_within: '14d',
+        resolve_within: '30d',
+        stage_durations: {
+          Sorting: '7d',
+          Investigation: '14d',
+          Escalated: '14d',
+          Resolved: '21d',
+        },
+        is_default: true,
+      },
+      {
+        code: 'emergency',
+        label: 'Emergency priority',
+        time_mode: 'calendar',
+        resolve_within: '3d',
+        is_default: false,
+      },
+    ],
+    calendars: [
+      {
+        code: 'kenya',
+        label: 'Kenya working calendar',
+        timezone: 'Africa/Nairobi',
+        working_days: [1, 2, 3, 4, 5],
+        start_hour: 8,
+        end_hour: 17,
+        holidays: ['2026-01-01', '2026-12-25', '2026-12-26'],
+      },
+    ],
+    reminders: [
+      { at: 'T-2d', notify: 'assignee' },
+      { at: 'T-0d', notify: 'supervisor', role: 'grm_officer_national' },
+    ],
+    escalation_rules: [
+      {
+        name: 'overdue-auto-escalate',
+        enabled: true,
+        trigger: { clock: 'stage', state: 'breached' },
+        condition: { status_tag: 'in_progress' },
+        actions: [{ move_level: 'up' }, { set_status: 'Escalated' }],
+      },
+      {
+        name: 'emergency-priority',
+        enabled: true,
+        trigger: { on: 'case_created' },
+        condition: { priority: 'emergency' },
+        actions: [{ set_sla_plan: 'emergency' }, { notify: { role: 'grm_officer_national' } }],
+      },
+    ],
   }, admin!.id);
 
   await upsertActiveConfig(kisip!.id, 'cd03_taxonomy', {

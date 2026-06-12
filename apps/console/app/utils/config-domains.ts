@@ -30,6 +30,23 @@ export const CD03_SUBSECTIONS = [
   { id: 'sec-priorities', label: 'Priorities' },
 ];
 
+export const CD04_SUBSECTIONS = [
+  { id: 'sec-overview', label: 'Overview' },
+  { id: 'sec-statuses', label: 'Statuses' },
+  { id: 'sec-initial', label: 'Initial status' },
+  { id: 'sec-transitions', label: 'Transitions' },
+  { id: 'sec-closure', label: 'Closure policy' },
+  { id: 'sec-appeal', label: 'Appeals' },
+];
+
+export const CD05_SUBSECTIONS = [
+  { id: 'sec-overview', label: 'Overview' },
+  { id: 'sec-plans', label: 'SLA plans' },
+  { id: 'sec-calendars', label: 'Calendars' },
+  { id: 'sec-reminders', label: 'Reminders' },
+  { id: 'sec-escalation', label: 'Escalation rules' },
+];
+
 /** An entry in an admin section: either a config domain editor or a standalone admin page. */
 export type AdminEntry =
   | { type: 'domain'; domain: string }
@@ -97,9 +114,11 @@ export const DOMAIN_CATALOGUE: DomainMeta[] = [
     description: 'Grievance categories shown at intake, sensitivity classes for protected handling, and the priority ladder.',
     subsections: CD03_SUBSECTIONS },
   { domain: 'cd04_workflow', cd: 'CD-04', title: 'Workflow', icon: 'i-lucide-git-branch', strict: true,
-    description: 'Statuses with semantic tags, transitions with role guards and effects, closure/appeal policy. Validated for reachability.' },
-  { domain: 'cd05_sla', cd: 'CD-05', title: 'SLA plans & calendars', icon: 'i-lucide-timer', strict: false,
-    description: 'Acknowledgement/response/resolution targets, stage durations, working calendars, reminder ladder, escalation rules.' },
+    description: 'Case lifecycle: statuses with semantic tags, transitions (roles, effects, guards), closure confirmation, and appeals.',
+    subsections: CD04_SUBSECTIONS },
+  { domain: 'cd05_sla', cd: 'CD-05', title: 'SLA plans & calendars', icon: 'i-lucide-timer', strict: true,
+    description: 'Acknowledgement/response/resolution targets, per-status durations, working calendars, reminder ladder, and auto-escalation rules.',
+    subsections: CD05_SUBSECTIONS },
   { domain: 'cd06_intake_forms', cd: 'CD-06', title: 'Intake forms', icon: 'i-lucide-clipboard-list', strict: true,
     description: 'The standardized intake dataset: field-by-field enablement, requiredness, labels per locale, options, anonymity policy, consent text.' },
   { domain: 'cd07_numbering', cd: 'CD-07', title: 'Reference numbering', icon: 'i-lucide-hash', strict: true,

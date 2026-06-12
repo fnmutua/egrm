@@ -4,6 +4,7 @@ import { cd01Identity } from './cd01-identity.js';
 import { cd02Hierarchy } from './cd02-hierarchy.js';
 import { cd03Taxonomy } from './cd03-taxonomy.js';
 import { cd04Workflow } from './cd04-workflow.js';
+import { cd05Sla } from './cd05-sla.js';
 import { cd06IntakeForms } from './cd06-intake-forms.js';
 import { cd07Numbering } from './cd07-numbering.js';
 import { cd14Features } from './cd14-features.js';
@@ -12,6 +13,7 @@ export * from './cd01-identity.js';
 export * from './cd02-hierarchy.js';
 export * from './cd03-taxonomy.js';
 export * from './cd04-workflow.js';
+export * from './cd05-sla.js';
 export * from './cd06-intake-forms.js';
 export * from './cd07-numbering.js';
 export * from './cd14-features.js';
@@ -24,7 +26,7 @@ export const CONFIG_SCHEMAS: Record<ConfigDomain, z.ZodTypeAny> = {
   cd02_hierarchy: cd02Hierarchy,
   cd03_taxonomy: cd03Taxonomy,
   cd04_workflow: cd04Workflow,
-  cd05_sla: permissive,
+  cd05_sla: cd05Sla,
   cd06_intake_forms: cd06IntakeForms,
   cd07_numbering: cd07Numbering,
   cd08_channels: permissive,
