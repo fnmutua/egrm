@@ -81,7 +81,7 @@ export interface IntakeAttachmentInput {
   data: Buffer;
 }
 
-function validateAttachmentFile(
+export function validateAttachmentFile(
   cfg: Cd06IntakeForms,
   input: {
     channel: AttachmentChannel;
@@ -456,6 +456,22 @@ export async function promoteAttachments(
     .where(inArray(schema.caseAttachment.id, attachmentIds));
 
   return rows.map((r) => ({ id: r.id, kind: r.kind, filename: r.filename }));
+}
+
+export async function linkPromotedAttachments(
+  tx: DbTx,
+  attachmentIds: string[],
+  links: { threadEntryId?: string; caseEventId?: string },
+): Promise<void> {
+  if (!attachmentIds.length) return;
+  const patch: { threadEntryId?: string; caseEventId?: string } = {};
+  if (links.threadEntryId) patch.threadEntryId = links.threadEntryId;
+  if (links.caseEventId) patch.caseEventId = links.caseEventId;
+  if (Object.keys(patch).length === 0) return;
+  await tx
+    .update(schema.caseAttachment)
+    .set(patch)
+    .where(inArray(schema.caseAttachment.id, attachmentIds));
 }
 
 export function validateTransitionAttachments(

@@ -178,7 +178,7 @@ export const caseEvent = pgTable('case_event', {
   tenantId: uuid('tenant_id').notNull().references(() => tenant.id),
   caseId: uuid('case_id').notNull().references(() => grmCase.id),
   kind: text('kind', {
-    enum: ['created', 'status_changed', 'message_external', 'note_internal', 'field_edited', 'assigned', 'attachment_added'],
+    enum: ['created', 'status_changed', 'message_external', 'message_inbound', 'note_internal', 'field_edited', 'assigned', 'attachment_added'],
   }).notNull(),
   actorType: text('actor_type', { enum: ['complainant', 'staff', 'system'] }).notNull(),
   actorId: uuid('actor_id'),
@@ -252,6 +252,7 @@ export const caseAttachment = pgTable('case_attachment', {
   tenantId: uuid('tenant_id').notNull().references(() => tenant.id),
   caseId: uuid('case_id').notNull().references(() => grmCase.id),
   caseEventId: uuid('case_event_id').references(() => caseEvent.id),
+  threadEntryId: uuid('thread_entry_id'),
   kind: text('kind').notNull(),
   title: text('title'),
   filename: text('filename').notNull(),
@@ -272,4 +273,22 @@ export const caseAttachment = pgTable('case_attachment', {
     .default('console'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
+});
+
+/** Case correspondence thread (spec 15). */
+export const threadEntry = pgTable('thread_entry', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenant.id),
+  caseId: uuid('case_id').notNull().references(() => grmCase.id),
+  caseEventId: uuid('case_event_id').references(() => caseEvent.id),
+  direction: text('direction', { enum: ['inbound', 'outbound', 'internal_note'] }).notNull(),
+  messageKind: text('message_kind').notNull().default('free_text'),
+  channel: text('channel').notNull().default('console'),
+  body: text('body').notNull(),
+  bodyRedacted: text('body_redacted'),
+  visibility: text('visibility', { enum: ['public', 'staff'] }).notNull().default('public'),
+  authorUserId: uuid('author_user_id').references(() => appUser.id),
+  authorPartyId: uuid('author_party_id').references(() => party.id),
+  inReplyToId: uuid('in_reply_to_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

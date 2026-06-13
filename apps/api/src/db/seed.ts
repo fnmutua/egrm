@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import bcrypt from 'bcryptjs';
 import { and, eq } from 'drizzle-orm';
 import type { ConfigDomain } from '@egrm/core';
-import { validateConfig, defaultNotificationPack, defaultStaffProfileFields, DEFAULT_ATTACHMENT_KINDS, DEFAULT_ATTACHMENT_POLICY } from '@egrm/config-schemas';
+import { validateConfig, defaultNotificationPack, defaultStaffProfileFields, DEFAULT_ATTACHMENT_KINDS, DEFAULT_ATTACHMENT_POLICY, DEFAULT_CORRESPONDENCE_POLICY } from '@egrm/config-schemas';
 import { db, pool, schema } from './client.js';
 import { syncRolesFromOrgAccess } from '../services/org-access.js';
 
@@ -526,6 +526,10 @@ export async function runSeed() {
   kisipNotifications.senders.whatsapp.mode = 'test';
 
   await upsertActiveConfig(kisip!.id, 'cd09_notifications', kisipNotifications, admin!.id);
+
+  await upsertActiveConfig(kisip!.id, 'cd17_correspondence', {
+    correspondence_policy: DEFAULT_CORRESPONDENCE_POLICY,
+  }, admin!.id);
 
   // Sample unit tree: national → 2 counties → 3 settlements
   const existingUnits = await db.select({ id: schema.unit.id }).from(schema.unit).where(eq(schema.unit.tenantId, kisip!.id)).limit(1);

@@ -23,11 +23,23 @@ import {
   validateStaffEmail,
 } from '../services/user-model.js';
 import { writeAudit } from '../services/audit.js';
+import {
+  createComplainantReply,
+  listPublicThread,
+  loadCorrespondenceConfig,
+  verifyCaseByReference,
+} from '../services/correspondence.js';
 
 const submitBody = z.object({
   anonymous: z.boolean().default(false),
   consent: z.boolean().default(false),
   values: z.record(z.string(), z.unknown()),
+});
+
+const replyBody = z.object({
+  reference: z.string().min(3).max(64),
+  verifier: z.string().min(3).max(128),
+  body: z.string().min(1),
 });
 
 const trackBody = z.object({
@@ -55,12 +67,13 @@ export default async function publicRoutes(app: FastifyInstance) {
 
   // Everything the portal needs to render the configured intake form.
   app.get('/api/v1/public/intake-meta', { config: rateLimit }, async (req, reply) => {
-    const [identity, form, hierarchy, taxonomy, notifications] = await Promise.all([
+    const [identity, form, hierarchy, taxonomy, notifications, correspondence] = await Promise.all([
       getActiveConfig<Cd01Identity>(req.tenant.id, 'cd01_identity'),
       getActiveConfig<Cd06IntakeForms>(req.tenant.id, 'cd06_intake_forms'),
       getActiveConfig<Cd02Hierarchy>(req.tenant.id, 'cd02_hierarchy'),
       getActiveConfig<Cd03Taxonomy>(req.tenant.id, 'cd03_taxonomy'),
       getActiveConfig<Cd09Notifications>(req.tenant.id, 'cd09_notifications'),
+      loadCorrespondenceConfig(req.tenant.id),
     ]);
     if (!form || !hierarchy) return reply.code(503).send({ error: 'tenant_not_configured' });
 
@@ -91,6 +104,19 @@ export default async function publicRoutes(app: FastifyInstance) {
           code: k.code,
           label: k.label,
         })),
+      },
+      correspondence: {
+        enabled: correspondence.correspondence_policy.enabled && correspondence.correspondence_policy.portal.enabled,
+        allow_reply: correspondence.correspondence_policy.portal.allow_reply,
+        max_body_length: correspondence.correspondence_policy.portal.max_body_length,
+        reply_attachments_enabled: correspondence.correspondence_policy.attachments.complainant_reply_enabled,
+        max_reply_files: correspondence.correspondence_policy.attachments.max_files_per_message,
+        reply_kinds: kindsForChannel(form, 'intake')
+          .filter((k) => {
+            const codes = correspondence.correspondence_policy.attachments.reply_kind_codes;
+            return !codes?.length || codes.includes(k.code);
+          })
+          .map((k) => ({ code: k.code, label: k.label })),
       },
     };
   });
@@ -162,29 +188,17 @@ export default async function publicRoutes(app: FastifyInstance) {
     });
   });
 
-  // Status tracking: reference + verifier. Generic error in all failure modes (enumeration-resistant, GEN-INT-09).
   app.post('/api/v1/public/cases/track', { config: rateLimit }, async (req, reply) => {
     const parsed = trackBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_body' });
 
-    const notFound = () => reply.code(404).send({ error: 'case_not_found' });
+    const verified = await verifyCaseByReference(req.tenant.id, parsed.data.reference, parsed.data.verifier);
+    if (!verified) return reply.code(404).send({ error: 'case_not_found' });
 
-    const [c] = await db
-      .select()
-      .from(schema.grmCase)
-      .where(and(eq(schema.grmCase.tenantId, req.tenant.id), eq(schema.grmCase.reference, parsed.data.reference.trim())))
-      .limit(1);
-    if (!c) return notFound();
+    const c = verified.case;
+    const correspondence = await loadCorrespondenceConfig(req.tenant.id);
+    const policy = correspondence.correspondence_policy;
 
-    const verifierHash = piiLookupHash(parsed.data.verifier);
-    let verified = Boolean(verifierHash && c.verifierHash === verifierHash);
-    if (!verified && c.partyId && verifierHash) {
-      const [p] = await db.select().from(schema.party).where(eq(schema.party.id, c.partyId)).limit(1);
-      verified = Boolean(p && (p.phoneHash === verifierHash || p.emailHash === verifierHash));
-    }
-    if (!verified) return notFound();
-
-    // Public timeline: public-visibility events only, PII-minimized payloads.
     const events = await db
       .select({
         kind: schema.caseEvent.kind,
@@ -195,6 +209,18 @@ export default async function publicRoutes(app: FastifyInstance) {
       .where(and(eq(schema.caseEvent.caseId, c.id), eq(schema.caseEvent.visibility, 'public')))
       .orderBy(asc(schema.caseEvent.createdAt));
 
+    const messages =
+      policy.enabled && policy.portal.show_messages_on_track
+        ? await listPublicThread(req.tenant.id, c.id, c.sensitivity)
+        : [];
+
+    const replyAllowed =
+      policy.enabled
+      && policy.portal.enabled
+      && policy.portal.allow_reply
+      && c.statusTag !== 'closed'
+      && c.statusTag !== 'rejected';
+
     return {
       reference: c.reference,
       status: c.status,
@@ -202,7 +228,68 @@ export default async function publicRoutes(app: FastifyInstance) {
       level: c.levelCode,
       submitted_at: c.createdAt,
       timeline: events,
+      messages,
+      reply_allowed: replyAllowed,
     };
+  });
+
+  app.post('/api/v1/public/cases/:ref/reply', { config: rateLimit }, async (req, reply) => {
+    const { ref } = req.params as { ref: string };
+    let reference = ref;
+    let verifier = '';
+    let body = '';
+    const files: { kind: string; filename: string; mime: string; data: Buffer }[] = [];
+    const kindsQueue: string[] = [];
+
+    if (req.isMultipart()) {
+      const parts = req.parts();
+      for await (const part of parts) {
+        if (part.type === 'file') {
+          const data = await part.toBuffer();
+          files.push({
+            kind: 'evidence',
+            filename: part.filename || 'upload',
+            mime: part.mimetype || 'application/octet-stream',
+            data,
+          });
+        } else if (part.fieldname === 'payload') {
+          try {
+            const parsed = replyBody.safeParse(JSON.parse(String(part.value)));
+            if (!parsed.success) return reply.code(400).send({ error: 'invalid_body' });
+            reference = parsed.data.reference;
+            verifier = parsed.data.verifier;
+            body = parsed.data.body;
+          } catch {
+            return reply.code(400).send({ error: 'invalid_body' });
+          }
+        } else if (part.fieldname === 'kinds') {
+          kindsQueue.push(String(part.value));
+        }
+      }
+      for (let i = 0; i < files.length; i++) {
+        if (kindsQueue[i]) files[i]!.kind = kindsQueue[i]!;
+      }
+    } else {
+      const parsed = replyBody.safeParse(req.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+      reference = parsed.data.reference;
+      verifier = parsed.data.verifier;
+      body = parsed.data.body;
+    }
+
+    const verified = await verifyCaseByReference(req.tenant.id, reference, verifier);
+    if (!verified) return reply.code(404).send({ error: 'case_not_found' });
+
+    const result = await createComplainantReply({
+      tenantId: req.tenant.id,
+      caseId: verified.case.id,
+      partyId: verified.case.partyId,
+      body,
+      attachments: files.length ? files : undefined,
+    });
+    if ('error' in result) return reply.code(result.code).send({ error: result.error, message: result.message });
+
+    return reply.code(201).send({ ok: true, id: result.id });
   });
 
   app.get('/api/v1/public/staff-register-meta', { config: rateLimit }, async (req) => {

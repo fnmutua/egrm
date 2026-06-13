@@ -28,6 +28,15 @@ export interface IntakeAttachmentsMeta {
   kinds: IntakeAttachmentKind[];
 }
 
+export interface IntakeCorrespondenceMeta {
+  enabled: boolean;
+  allow_reply: boolean;
+  max_body_length: number;
+  reply_attachments_enabled: boolean;
+  max_reply_files: number;
+  reply_kinds: IntakeAttachmentKind[];
+}
+
 export interface IntakeMeta {
   locales: { default: string; enabled: string[] };
   anonymous_allowed: boolean;
@@ -39,6 +48,7 @@ export interface IntakeMeta {
   /** CD-09 configured outbound channels the complainant may opt into. */
   notification_channels: IntakeNotificationChannel[];
   attachments: IntakeAttachmentsMeta;
+  correspondence: IntakeCorrespondenceMeta;
 }
 
 export interface IntakeUnit {
@@ -226,6 +236,16 @@ export function useIntake() {
       level: string;
       submitted_at: string;
       timeline: { kind: string; data: Record<string, unknown>; createdAt: string }[];
+      messages: {
+        id: string;
+        direction: string;
+        message_kind: string;
+        body: string;
+        author_name: string | null;
+        attachments: { id: string; filename: string; kind: string; kind_label: string }[];
+        created_at: string;
+      }[];
+      reply_allowed: boolean;
     }>('/api/v1/public/cases/track', {
       baseURL: config.public.apiBase,
       method: 'POST',
@@ -234,5 +254,40 @@ export function useIntake() {
     });
   }
 
-  return { meta, loadMeta, fieldOptions, submit, track };
+  async function reply(payload: {
+    reference: string;
+    verifier: string;
+    body: string;
+    files?: { file: File; kind: string }[];
+  }) {
+    const body = {
+      reference: payload.reference,
+      verifier: payload.verifier,
+      body: payload.body,
+    };
+
+    if (payload.files?.length) {
+      const form = new FormData();
+      form.append('payload', JSON.stringify(body));
+      for (const item of payload.files) {
+        form.append('files', item.file);
+        form.append('kinds', item.kind);
+      }
+      return await $fetch<{ ok: boolean; id: string }>(`/api/v1/public/cases/${payload.reference}/reply`, {
+        baseURL: config.public.apiBase,
+        method: 'POST',
+        headers,
+        body: form,
+      });
+    }
+
+    return await $fetch<{ ok: boolean; id: string }>(`/api/v1/public/cases/${payload.reference}/reply`, {
+      baseURL: config.public.apiBase,
+      method: 'POST',
+      headers,
+      body,
+    });
+  }
+
+  return { meta, loadMeta, fieldOptions, submit, track, reply };
 }

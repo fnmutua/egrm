@@ -824,6 +824,50 @@ export function defaultNotificationPack(): Cd09Notifications {
         },
       },
     },
+    {
+      id: 'thread-message-outbound',
+      label: 'New thread message (complainant pointer)',
+      privacy_mode: 'standard',
+      variants: {
+        en: {
+          sms: { body: '{{tenant.name}}: new message on {{case.reference}}. Read: {{tracking.url}}' },
+          whatsapp: { body: '{{tenant.name}}: new message on {{case.reference}}. Read: {{tracking.url}}' },
+          email: {
+            subject: 'New message — {{case.reference}}',
+            body: 'You have a new message about your grievance {{case.reference}}.\n\nRead and reply: {{tracking.url}}',
+          },
+        },
+        sw: {
+          sms: { body: '{{tenant.name}}: ujumbe mpya kuhusu {{case.reference}}. Soma: {{tracking.url}}' },
+          whatsapp: { body: '{{tenant.name}}: ujumbe mpya kuhusu {{case.reference}}. Soma: {{tracking.url}}' },
+          email: {
+            subject: 'Ujumbe mpya — {{case.reference}}',
+            body: 'Una ujumbe mpya kuhusu malalamiko yako {{case.reference}}.\n\nSoma na jibu: {{tracking.url}}',
+          },
+        },
+      },
+    },
+    {
+      id: 'thread-message-inbound',
+      label: 'Complainant thread reply (staff alert)',
+      privacy_mode: 'standard',
+      variants: {
+        en: {
+          email: {
+            subject: 'Complainant replied — {{case.reference}}',
+            body: 'The complainant sent a new message on case {{case.reference}}.\n\nOpen the case in the console to read and respond.',
+          },
+          in_app: { body: 'New reply on {{case.reference}}' },
+        },
+        sw: {
+          email: {
+            subject: 'Mlalamikaji amejibu — {{case.reference}}',
+            body: 'Mlalamikaji ametuma ujumbe mpya kwa kesi {{case.reference}}.\n\nFungua kesi kwenye console ili kusoma na kujibu.',
+          },
+          in_app: { body: 'Jibu jipya kwa {{case.reference}}' },
+        },
+      },
+    },
   ];
 
   const rules: NotificationRule[] = [
@@ -909,6 +953,24 @@ export function defaultNotificationPack(): Cd09Notifications {
       to: [{ role: 'grm_officer', scope: 'unit_and_above' }],
       channels: ['email', 'in_app'],
       template: 'appeal-opened',
+      enabled: true,
+    },
+    {
+      id: 'thread-outbound-complainant',
+      name: 'Thread message — notify complainant',
+      on: 'thread.reply_external',
+      to: [{ party: 'complainant' }],
+      channels: ['sms', 'email', 'whatsapp'],
+      template: 'thread-message-outbound',
+      enabled: true,
+    },
+    {
+      id: 'thread-inbound-staff',
+      name: 'Thread reply — alert staff',
+      on: 'thread.reply_inbound',
+      to: [{ user: 'assignee' }, { role: 'grm_officer', scope: 'unit_and_above' }],
+      channels: ['email', 'in_app'],
+      template: 'thread-message-inbound',
       enabled: true,
     },
   ];

@@ -11,6 +11,7 @@ import { cd09Notifications } from './cd09-notifications.js';
 import { cd07Numbering } from './cd07-numbering.js';
 import { cd14Features } from './cd14-features.js';
 import { cd10OrgAccess } from './cd10-org-access.js';
+import { cd17Correspondence } from './cd17-correspondence.js';
 
 export * from './cd01-identity.js';
 export * from './cd02-hierarchy.js';
@@ -26,6 +27,7 @@ export * from './provider-api.js';
 export * from './cd07-numbering.js';
 export * from './cd14-features.js';
 export * from './cd10-org-access.js';
+export * from './cd17-correspondence.js';
 
 /** Domains not yet strictly modeled accept any object during Phase 0/1; tightened per phase. */
 const permissive = z.record(z.string(), z.unknown());
@@ -47,6 +49,7 @@ export const CONFIG_SCHEMAS: Record<ConfigDomain, z.ZodTypeAny> = {
   cd15_dashboards: permissive,
   cd14_features: cd14Features,
   cd16_ai: permissive,
+  cd17_correspondence: cd17Correspondence,
 };
 
 export function validateConfig(domain: ConfigDomain, payload: unknown) {

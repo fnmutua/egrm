@@ -71,6 +71,13 @@
       "when": 1781268000000,
       "tag": "0010_case_attachments",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781269000000,
+      "tag": "0011_thread_correspondence",
+      "breakpoints": true
     }
   ]
 }

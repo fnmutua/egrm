@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { kindsForChannel } from '@egrm/config-schemas';
+import { hasPermission } from '@egrm/core';
 
 const route = useRoute();
 const { api } = useApi();
@@ -34,6 +35,19 @@ interface CaseAssignee {
   id: string;
   name: string;
   email: string;
+}
+
+interface ThreadEntry {
+  id: string;
+  direction: string;
+  message_kind: string;
+  channel: string;
+  body: string;
+  body_display: string;
+  visibility: string;
+  author_name: string | null;
+  attachments: { id: string; filename: string; kind: string; kind_label: string }[];
+  created_at: string;
 }
 
 interface CaseDetail {
@@ -112,14 +126,64 @@ const docUploadKind = ref('evidence');
 const docUploadNote = ref('');
 const docFileInput = ref<HTMLInputElement | null>(null);
 
-const tabItems = [
-  { label: 'Overview', value: 'overview', icon: 'i-lucide-layout-dashboard' },
-  { label: 'Actions', value: 'actions', icon: 'i-lucide-play' },
-  { label: 'Documents', value: 'documents', icon: 'i-lucide-paperclip' },
-  { label: 'Assignment', value: 'assignment', icon: 'i-lucide-user-check' },
-  { label: 'Notifications', value: 'notifications', icon: 'i-lucide-bell' },
-  { label: 'Timeline', value: 'timeline', icon: 'i-lucide-history' },
+const threadEntries = ref<ThreadEntry[]>([]);
+const threadLoading = ref(false);
+const threadLoaded = ref(false);
+const composeMode = ref<'outbound' | 'logged_contact' | 'internal'>('outbound');
+const composeBody = ref('');
+const composeKind = ref('free_text');
+const composeChannel = ref('phone');
+const composeSending = ref(false);
+const composeError = ref('');
+const composeStaged = ref<StagedAttachment[]>([]);
+const composeFileInput = ref<HTMLInputElement | null>(null);
+
+const canReadThread = computed(() => hasPermission(user.value?.permissions ?? [], 'thread:read'));
+const canReplyExternal = computed(() => hasPermission(user.value?.permissions ?? [], 'thread:reply_external'));
+const canNoteInternal = computed(() => hasPermission(user.value?.permissions ?? [], 'thread:note_internal'));
+const canComposeThread = computed(() => canReplyExternal.value || canNoteInternal.value);
+
+const composeModeItems = computed(() => {
+  const items: { value: typeof composeMode.value; label: string }[] = [];
+  if (canReplyExternal.value) {
+    items.push({ value: 'outbound', label: 'Message to complainant' });
+    items.push({ value: 'logged_contact', label: 'Log offline contact' });
+  }
+  if (canNoteInternal.value) items.push({ value: 'internal', label: 'Internal note' });
+  return items;
+});
+
+const outboundKindItems = [
+  { value: 'free_text', label: 'Free text' },
+  { value: 'request_info', label: 'Request information' },
+  { value: 'acknowledgement', label: 'Acknowledgement' },
+  { value: 'resolution_notice', label: 'Resolution notice' },
 ];
+
+const contactChannelItems = [
+  { value: 'phone', label: 'Phone' },
+  { value: 'visit', label: 'Visit' },
+  { value: 'letter', label: 'Letter' },
+  { value: 'sms', label: 'SMS' },
+  { value: 'email', label: 'Email' },
+];
+
+const tabItems = computed(() => {
+  const items = [
+    { label: 'Overview', value: 'overview', icon: 'i-lucide-layout-dashboard' },
+    { label: 'Actions', value: 'actions', icon: 'i-lucide-play' },
+    { label: 'Documents', value: 'documents', icon: 'i-lucide-paperclip' },
+  ];
+  if (canReadThread.value) {
+    items.push({ label: 'Correspondence', value: 'correspondence', icon: 'i-lucide-messages-square' });
+  }
+  items.push(
+    { label: 'Assignment', value: 'assignment', icon: 'i-lucide-user-check' },
+    { label: 'Notifications', value: 'notifications', icon: 'i-lucide-bell' },
+    { label: 'Timeline', value: 'timeline', icon: 'i-lucide-history' },
+  );
+  return items;
+});
 
 const tagColor: Record<string, string> = {
   open: 'info', in_progress: 'warning', resolved: 'success',
@@ -345,6 +409,9 @@ function eventSummary(ev: CaseDetail['events'][number]): string | null {
     const names = (d.attachment_summary as { filename?: string }[]).map((a) => a.filename).filter(Boolean);
     return names.length ? `Documents added: ${names.join(', ')}` : 'Documents added';
   }
+  if ((ev.kind === 'message_external' || ev.kind === 'message_inbound') && typeof d.preview === 'string') {
+    return d.preview as string;
+  }
   return null;
 }
 
@@ -425,6 +492,82 @@ async function runAssign() {
   }
 }
 
+async function loadThread() {
+  if (!canReadThread.value) return;
+  threadLoading.value = true;
+  try {
+    const res = await api<{ entries: ThreadEntry[] }>(`/api/v1/cases/${route.params.id}/thread`);
+    threadEntries.value = res.entries;
+    threadLoaded.value = true;
+  } finally {
+    threadLoading.value = false;
+  }
+}
+
+function threadDirectionLabel(entry: ThreadEntry): string {
+  if (entry.direction === 'inbound') return 'Complainant';
+  if (entry.direction === 'internal_note') return 'Internal note';
+  if (entry.message_kind === 'logged_contact') return `Logged (${entry.channel})`;
+  return 'Staff';
+}
+
+function threadDirectionColor(entry: ThreadEntry): string {
+  if (entry.direction === 'inbound') return 'info';
+  if (entry.direction === 'internal_note') return 'warning';
+  if (entry.message_kind === 'logged_contact') return 'neutral';
+  return 'primary';
+}
+
+function resetCompose() {
+  composeBody.value = '';
+  composeStaged.value = [];
+  composeError.value = '';
+  if (composeModeItems.value.length) composeMode.value = composeModeItems.value[0]!.value;
+}
+
+async function onComposeFileChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  stagingUpload.value = true;
+  try {
+    const res = await stageFile(file, docUploadKind.value);
+    composeStaged.value.push({ id: res.attachment_id, kind: docUploadKind.value, filename: file.name });
+  } finally {
+    stagingUpload.value = false;
+    input.value = '';
+  }
+}
+
+async function sendThreadMessage() {
+  if (!composeBody.value.trim()) return;
+  composeSending.value = true;
+  composeError.value = '';
+  try {
+    const internal = composeMode.value === 'internal';
+    await api(`/api/v1/cases/${route.params.id}/thread`, {
+      method: 'POST',
+      body: {
+        body: composeBody.value.trim(),
+        internal,
+        message_kind: composeMode.value === 'logged_contact' ? 'logged_contact' : internal ? 'free_text' : composeKind.value,
+        channel: composeMode.value === 'logged_contact' ? composeChannel.value : 'console',
+        visibility: internal ? 'staff' : 'public',
+        attachment_ids: composeStaged.value.length ? composeStaged.value.map((a) => a.id) : undefined,
+      },
+    });
+    resetCompose();
+    threadLoaded.value = false;
+    notificationsLoaded.value = false;
+    await Promise.all([loadThread(), loadCase()]);
+  } catch (e: unknown) {
+    const err = e as { data?: { error?: string; message?: string } };
+    composeError.value = workflowErrorMessage(err.data?.error ?? '', err.data?.message);
+  } finally {
+    composeSending.value = false;
+  }
+}
+
 async function loadNotifications() {
   if (!detail.value || notificationsLoaded.value) return;
   notificationsLoading.value = true;
@@ -442,8 +585,15 @@ async function loadNotifications() {
 watch(activeTab, (tab) => {
   if (tab === 'notifications') loadNotifications();
   if (tab === 'documents' && !attachmentsLoaded.value) loadAttachments();
+  if (tab === 'correspondence' && !threadLoaded.value) loadThread();
   if (tab === 'assignment' && canAssign.value && assignees.value.length === 0) loadAssignees();
 });
+
+watch(composeModeItems, (items) => {
+  if (items.length && !items.some((i) => i.value === composeMode.value)) {
+    composeMode.value = items[0]!.value;
+  }
+}, { immediate: true });
 
 onMounted(async () => {
   if (!(await fetchMe())) return navigateTo('/login');
@@ -731,6 +881,97 @@ onMounted(async () => {
             </table>
           </div>
         </div>
+      </UCard>
+    </div>
+
+    <div v-else-if="activeTab === 'correspondence'" class="space-y-6">
+      <UCard v-if="canComposeThread">
+        <template #header><span class="font-medium">Compose</span></template>
+        <div class="space-y-4">
+          <UFormField v-if="composeModeItems.length > 1" label="Type">
+            <USelectMenu
+              v-model="composeMode"
+              :items="composeModeItems"
+              value-key="value"
+              label-key="label"
+              class="w-full"
+            />
+          </UFormField>
+          <div v-if="composeMode === 'outbound'" class="grid sm:grid-cols-2 gap-4">
+            <UFormField label="Message kind">
+              <USelectMenu
+                v-model="composeKind"
+                :items="outboundKindItems"
+                value-key="value"
+                label-key="label"
+                class="w-full"
+              />
+            </UFormField>
+          </div>
+          <UFormField v-if="composeMode === 'logged_contact'" label="Contact channel">
+            <USelectMenu
+              v-model="composeChannel"
+              :items="contactChannelItems"
+              value-key="value"
+              label-key="label"
+              class="w-full"
+            />
+          </UFormField>
+          <UFormField label="Message">
+            <UTextarea v-model="composeBody" :rows="5" class="w-full" placeholder="Write your message…" />
+          </UFormField>
+          <div v-if="composeMode !== 'internal'" class="flex flex-wrap items-center gap-3">
+            <input
+              ref="composeFileInput"
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+              class="hidden"
+              @change="onComposeFileChange"
+            />
+            <UButton size="sm" variant="outline" icon="i-lucide-paperclip" :loading="stagingUpload" @click="composeFileInput?.click()">
+              Attach file
+            </UButton>
+            <ul v-if="composeStaged.length" class="text-sm text-muted space-y-1">
+              <li v-for="f in composeStaged" :key="f.id">{{ f.filename }}</li>
+            </ul>
+          </div>
+          <UAlert v-if="composeError" color="error" :title="composeError" />
+          <UButton :loading="composeSending" :disabled="!composeBody.trim()" icon="i-lucide-send" @click="sendThreadMessage">
+            Send
+          </UButton>
+        </div>
+      </UCard>
+
+      <UCard>
+        <template #header><span class="font-medium">Thread</span></template>
+        <div v-if="threadLoading" class="text-sm text-muted py-4">Loading…</div>
+        <div v-else-if="threadEntries.length === 0" class="text-sm text-muted py-4">No messages yet.</div>
+        <ol v-else class="space-y-4">
+          <li
+            v-for="entry in threadEntries"
+            :key="entry.id"
+            class="rounded-lg border border-default p-4"
+            :class="entry.direction === 'internal_note' ? 'bg-warning/5' : ''"
+          >
+            <div class="flex items-center justify-between gap-2 mb-2 flex-wrap">
+              <div class="flex items-center gap-2">
+                <UBadge :color="(threadDirectionColor(entry) as any)" variant="subtle" size="sm">
+                  {{ threadDirectionLabel(entry) }}
+                </UBadge>
+                <span class="text-sm font-medium">{{ entry.author_name ?? '—' }}</span>
+              </div>
+              <time class="text-xs text-muted">{{ new Date(entry.created_at).toLocaleString() }}</time>
+            </div>
+            <p class="text-sm whitespace-pre-wrap">{{ entry.body_display }}</p>
+            <ul v-if="entry.attachments.length" class="mt-2 text-xs text-muted space-y-1">
+              <li v-for="att in entry.attachments" :key="att.id">
+                <button type="button" class="text-primary hover:underline" @click="downloadFile(att.id, att.filename)">
+                  {{ att.kind_label }}: {{ att.filename }}
+                </button>
+              </li>
+            </ul>
+          </li>
+        </ol>
       </UCard>
     </div>
 

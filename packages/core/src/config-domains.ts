@@ -16,6 +16,7 @@ export const CONFIG_DOMAINS = [
   'cd14_features',
   'cd15_dashboards',
   'cd16_ai',
+  'cd17_correspondence',
 ] as const;
 
 export type ConfigDomain = (typeof CONFIG_DOMAINS)[number];

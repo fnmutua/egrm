@@ -185,6 +185,7 @@ onMounted(async () => {
               :section="activeSection"
             />
             <ConfigChannelsEditor v-else-if="domain === 'cd08_channels'" :payload="payload" :section="activeSection" />
+            <ConfigCorrespondenceEditor v-else-if="domain === 'cd17_correspondence'" :payload="payload" :section="activeSection" />
             <ConfigNotificationsEditor v-else-if="domain === 'cd09_notifications'" :payload="payload" :section="activeSection" />
             <ConfigOrgAccessEditor v-else-if="domain === 'cd10_org_access'" :payload="payload" :section="activeSection" />
             <ConfigValueEditor v-else :model-value="payload" @update:model-value="payload = ($event as Record<string, any>)" />

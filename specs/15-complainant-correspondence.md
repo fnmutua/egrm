@@ -2,7 +2,7 @@
 
 How staff and complainants exchange substantive messages about a case — distinct from one-way **notifications** (spec 06) and from **document files** (spec 14). Covers the case thread, logged offline contact, portal reply, configuration, and notification hooks.
 
-**Status:** Specification draft v0.1 — design before implementation. Extends [03-domain-model.md](03-domain-model.md) §2.6, [05-intake-and-channels.md](05-intake-and-channels.md) §4, [06-notifications.md](06-notifications.md), [07-security-access-control.md](07-security-access-control.md), [09-api-integrations.md](09-api-integrations.md), [13-staff-console-case-handling.md](13-staff-console-case-handling.md), and [14-case-attachments-and-documents.md](14-case-attachments-and-documents.md).
+**Status:** Partially implemented — API, DB, console correspondence tab, portal track/reply, CD-17 config editor, seed, and thread notification rules. Workflow auto-unpause on inbound reply pending.
 
 ---
 

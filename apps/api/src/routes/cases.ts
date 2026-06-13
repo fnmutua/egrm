@@ -24,6 +24,7 @@ import {
   listCaseAttachments,
   stageCaseAttachment,
 } from '../services/attachments.js';
+import { createStaffThreadMessage, listCaseThread } from '../services/correspondence.js';
 import multipart from '@fastify/multipart';
 
 const listQuery = z.object({
@@ -55,6 +56,15 @@ const caseActionBody = z.object({
 const commitAttachmentsBody = z.object({
   attachment_ids: z.array(z.string().uuid()).min(1),
   note: z.string().optional(),
+});
+
+const threadBody = z.object({
+  body: z.string().min(1),
+  internal: z.boolean().optional(),
+  message_kind: z.string().optional(),
+  channel: z.string().optional(),
+  visibility: z.enum(['public', 'staff']).optional(),
+  attachment_ids: z.array(z.string().uuid()).optional(),
 });
 
 /** Staff case endpoints with jurisdiction-subtree scoping (spec 07 §2.2). */
@@ -553,5 +563,50 @@ export default async function caseRoutes(app: FastifyInstance) {
       tracking_pin: result.trackingPin,
       possible_duplicates: result.possibleDuplicates,
     });
+  });
+
+  app.get('/api/v1/cases/:id/thread', { onRequest: [app.requirePermission('thread:read')] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const result = await listCaseThread(req.tenant.id, id, access, req.user.sub);
+    if ('error' in result) return reply.code(result.code).send({ error: result.error });
+    return { entries: result };
+  });
+
+  app.post('/api/v1/cases/:id/thread', { onRequest: [app.authenticate] }, async (req, reply) => {
+    const parsed = threadBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+
+    const perm = parsed.data.internal ? 'thread:note_internal' : 'thread:reply_external';
+    if (!hasPermission(req.user.permissions, perm)) {
+      return reply.code(403).send({ error: 'forbidden', required: perm });
+    }
+
+    const { id } = req.params as { id: string };
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const result = await createStaffThreadMessage({
+      tenantId: req.tenant.id,
+      caseId: id,
+      actorId: req.user.sub,
+      access,
+      body: parsed.data.body,
+      internal: parsed.data.internal,
+      messageKind: parsed.data.message_kind,
+      channel: parsed.data.channel,
+      visibility: parsed.data.visibility,
+      attachmentIds: parsed.data.attachment_ids,
+    });
+    if ('error' in result) return reply.code(result.code).send({ error: result.error, message: result.message });
+
+    await writeAudit({
+      tenantId: req.tenant.id,
+      actorId: req.user.sub,
+      action: parsed.data.internal ? 'thread.note_added' : 'thread.message_sent',
+      entity: 'thread_entry',
+      entityId: result.id,
+      data: { case_id: id },
+    });
+
+    return reply.code(201).send({ id: result.id });
   });
 }

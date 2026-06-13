@@ -25,6 +25,16 @@ export const CD08_SUBSECTIONS = [
   { id: 'sec-modules', label: 'Intake modules' },
 ];
 
+export const CD17_SUBSECTIONS = [
+  { id: 'sec-overview', label: 'Overview' },
+  { id: 'sec-portal', label: 'Portal' },
+  { id: 'sec-staff', label: 'Staff' },
+  { id: 'sec-attachments', label: 'Attachments' },
+  { id: 'sec-sensitive', label: 'Sensitive cases' },
+  { id: 'sec-workflow', label: 'Workflow' },
+  { id: 'sec-notify', label: 'Notifications' },
+];
+
 export const CD06_SUBSECTIONS = [
   { id: 'sec-general', label: 'Form settings' },
   { id: 'sec-complainant', label: 'Complainant' },
@@ -123,7 +133,13 @@ export const ADMIN_SECTIONS: { label: string; icon?: string; entries: AdminEntry
       { type: 'domain', domain: 'cd12_referrals' },
     ],
   },
-  { label: 'Communication', entries: [{ type: 'domain', domain: 'cd09_notifications' }] },
+  {
+    label: 'Communication',
+    entries: [
+      { type: 'domain', domain: 'cd17_correspondence' },
+      { type: 'domain', domain: 'cd09_notifications' },
+    ],
+  },
   {
     label: 'Platform',
     entries: [
@@ -171,6 +187,9 @@ export const DOMAIN_CATALOGUE: DomainMeta[] = [
   { domain: 'cd08_channels', cd: 'CD-08', title: 'Channels', icon: 'i-lucide-radio', strict: true,
     description: 'Public contact routes (portal landing page) and intake channel module enablement.',
     subsections: CD08_SUBSECTIONS },
+  { domain: 'cd17_correspondence', cd: 'CD-17', title: 'Correspondence', icon: 'i-lucide-messages-square', strict: true,
+    description: 'Case thread: staff ↔ complainant messages, logged offline contact, portal reply policy, and sensitive redaction.',
+    subsections: CD17_SUBSECTIONS },
   { domain: 'cd09_notifications', cd: 'CD-09', title: 'Notifications', icon: 'i-lucide-bell', strict: true,
     description: 'Event subscriptions, recipient selectors, templates per locale and channel, kill switches, sender identities. Requires admin:notifications (or admin:tenant_config / admin:*).',
     subsections: CD09_SUBSECTIONS },
