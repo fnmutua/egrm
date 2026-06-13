@@ -5,17 +5,20 @@ import {
   channelApiConfig,
   SMS_PROVIDER_PRESETS,
   EMAIL_PROVIDER_PRESETS,
+  WHATSAPP_PROVIDER_PRESETS,
 } from './provider-api.js';
 
 export {
   ADVANTA_SMS_SENDOTP_URL,
   ADVANTA_SMS_SENDBULK_URL,
+  META_WHATSAPP_API_VERSION,
   channelApiConfig,
   providerField,
   PROVIDER_FIELD_PLACEHOLDERS,
   resolveProviderFields,
   SMS_PROVIDER_PRESETS,
   EMAIL_PROVIDER_PRESETS,
+  WHATSAPP_PROVIDER_PRESETS,
   applyProviderPreset,
   ensureChannelApiConfig,
   migrateLegacySender,
@@ -51,7 +54,7 @@ export const NOTIFICATION_EVENTS = [
 
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
 
-export const NOTIFICATION_CHANNELS = ['sms', 'email', 'in_app'] as const;
+export const NOTIFICATION_CHANNELS = ['sms', 'email', 'whatsapp', 'in_app'] as const;
 
 /** Allowed template variables — unknown tokens fail validation at config time (spec 06 §1.3). */
 export const TEMPLATE_VARIABLES = [
@@ -140,7 +143,18 @@ const templateChannelBody = z.object({
   body: z.string().min(1),
 });
 
-type TemplateVariants = Record<string, { sms?: { body: string; subject?: string }; email?: { body: string; subject?: string }; in_app?: { body: string } }>;
+const whatsappTemplateBody = templateChannelBody.extend({
+  wa_template_name: z.string().optional(),
+  wa_template_language: z.string().optional(),
+  wa_body_param_keys: z.array(z.string()).optional(),
+});
+
+type TemplateVariants = Record<string, {
+  sms?: { body: string; subject?: string };
+  email?: { body: string; subject?: string };
+  whatsapp?: { body: string; subject?: string };
+  in_app?: { body: string };
+}>;
 
 /** Drop channel entries with blank bodies so the editor can show optional fields safely. */
 export function stripEmptyTemplateVariants(
@@ -171,6 +185,7 @@ export const notificationTemplate = z.object({
     z.object({
       sms: templateChannelBody.optional(),
       email: templateChannelBody.optional(),
+      whatsapp: whatsappTemplateBody.optional(),
       in_app: templateChannelBody.optional(),
     }),
   ),
@@ -189,9 +204,18 @@ export const smsSenderIdentity = channelApiConfig.extend({
   bulk_api_url: z.string().optional(),
 });
 
+export const WHATSAPP_SENDER_MODES = ['test', 'live'] as const;
+
 export const whatsappSenderIdentity = channelApiConfig.extend({
+  /** Test = Meta sandbox (hello_world, sandbox recipient list). Live = production number + approved templates. */
+  mode: z.enum(WHATSAPP_SENDER_MODES).default('test'),
   phone_number_id: z.string().optional(),
   display_number: z.string().optional(),
+  /** Meta-approved template name (e.g. hello_world). Required for business-initiated messages. */
+  template_name: z.string().default('hello_world'),
+  template_language: z.string().default('en_US'),
+  /** Optional {{1}}, {{2}}… parameter keys from notification template variables. */
+  template_body_param_keys: z.array(z.string()).optional(),
 });
 
 export const cd09Notifications = z
@@ -304,6 +328,9 @@ export function defaultNotificationPack(): Cd09Notifications {
           sms: {
             body: '{{tenant.name}}: your grievance {{case.reference}} is registered. Track: {{tracking.url}}',
           },
+          whatsapp: {
+            body: '{{tenant.name}}: your grievance {{case.reference}} is registered. Track: {{tracking.url}}',
+          },
           email: {
             subject: 'Grievance registered — {{case.reference}}',
             body: 'Dear complainant,\n\nYour grievance {{case.reference}} has been registered with {{tenant.name}}.\n\nStatus: {{case.status_label}}\nTrack your case: {{tracking.url}}\n\nThank you.',
@@ -314,6 +341,9 @@ export function defaultNotificationPack(): Cd09Notifications {
         },
         sw: {
           sms: {
+            body: '{{tenant.name}}: malalamiko {{case.reference}} yamepokelewa. Fuatilia: {{tracking.url}}',
+          },
+          whatsapp: {
             body: '{{tenant.name}}: malalamiko {{case.reference}} yamepokelewa. Fuatilia: {{tracking.url}}',
           },
           email: {
@@ -333,6 +363,7 @@ export function defaultNotificationPack(): Cd09Notifications {
       variants: {
         en: {
           sms: { body: '{{tenant.name}}: reference {{case.reference}} registered. Track: {{tracking.url}}' },
+          whatsapp: { body: '{{tenant.name}}: reference {{case.reference}} registered. Track: {{tracking.url}}' },
           email: {
             subject: 'Reference {{case.reference}}',
             body: 'Your submission {{case.reference}} has been registered.\nTrack: {{tracking.url}}',
@@ -340,6 +371,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         },
         sw: {
           sms: { body: '{{tenant.name}}: rejeleo {{case.reference}} limepokelewa. Fuatilia: {{tracking.url}}' },
+          whatsapp: { body: '{{tenant.name}}: rejeleo {{case.reference}} limepokelewa. Fuatilia: {{tracking.url}}' },
           email: {
             subject: 'Rejeleo {{case.reference}}',
             body: 'Wasilisho lako {{case.reference}} limepokelewa.\nFuatilia: {{tracking.url}}',
@@ -354,6 +386,7 @@ export function defaultNotificationPack(): Cd09Notifications {
       variants: {
         en: {
           sms: { body: '{{case.reference}}: status is now {{case.status_label}}. {{tracking.url}}' },
+          whatsapp: { body: '{{case.reference}}: status is now {{case.status_label}}. {{tracking.url}}' },
           email: {
             subject: 'Update on {{case.reference}}',
             body: 'Your grievance {{case.reference}} is now: {{case.status_label}}.\n\nTrack: {{tracking.url}}',
@@ -361,6 +394,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         },
         sw: {
           sms: { body: '{{case.reference}}: hali ni {{case.status_label}}. {{tracking.url}}' },
+          whatsapp: { body: '{{case.reference}}: hali ni {{case.status_label}}. {{tracking.url}}' },
           email: {
             subject: 'Taarifa kuhusu {{case.reference}}',
             body: 'Malalamiko yako {{case.reference}} sasa ni: {{case.status_label}}.\n\nFuatilia: {{tracking.url}}',
@@ -373,8 +407,8 @@ export function defaultNotificationPack(): Cd09Notifications {
       label: 'Status change (privacy-safe)',
       privacy_mode: 'privacy_safe',
       variants: {
-        en: { sms: { body: '{{case.reference}}: status updated. {{tracking.url}}' } },
-        sw: { sms: { body: '{{case.reference}}: hali imesasishwa. {{tracking.url}}' } },
+        en: { sms: { body: '{{case.reference}}: status updated. {{tracking.url}}' }, whatsapp: { body: '{{case.reference}}: status updated. {{tracking.url}}' } },
+        sw: { sms: { body: '{{case.reference}}: hali imesasishwa. {{tracking.url}}' }, whatsapp: { body: '{{case.reference}}: hali imesasishwa. {{tracking.url}}' } },
       },
     },
     {
@@ -447,9 +481,11 @@ export function defaultNotificationPack(): Cd09Notifications {
       variants: {
         en: {
           sms: { body: '{{tenant.name}}: please rate handling of {{case.reference}}: {{tracking.url}}' },
+          whatsapp: { body: '{{tenant.name}}: please rate handling of {{case.reference}}: {{tracking.url}}' },
         },
         sw: {
           sms: { body: '{{tenant.name}}: tafadhali kadiria utendaji wa {{case.reference}}: {{tracking.url}}' },
+          whatsapp: { body: '{{tenant.name}}: tafadhali kadiria utendaji wa {{case.reference}}: {{tracking.url}}' },
         },
       },
     },
@@ -460,6 +496,7 @@ export function defaultNotificationPack(): Cd09Notifications {
       variants: {
         en: {
           sms: { body: '{{case.reference}} is closed. Thank you for using {{tenant.short_name}}.' },
+          whatsapp: { body: '{{case.reference}} is closed. Thank you for using {{tenant.short_name}}.' },
           email: {
             subject: 'Case closed — {{case.reference}}',
             body: 'Your grievance {{case.reference}} has been closed.\n\nThank you,\n{{tenant.name}}',
@@ -467,6 +504,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         },
         sw: {
           sms: { body: '{{case.reference}} imefungwa. Asante kwa kutumia {{tenant.short_name}}.' },
+          whatsapp: { body: '{{case.reference}} imefungwa. Asante kwa kutumia {{tenant.short_name}}.' },
           email: {
             subject: 'Kesi imefungwa — {{case.reference}}',
             body: 'Malalamiko yako {{case.reference}} yamefungwa.\n\nAsante,\n{{tenant.name}}',
@@ -523,6 +561,7 @@ export function defaultNotificationPack(): Cd09Notifications {
       variants: {
         en: {
           sms: { body: '{{tenant.name}}: we need more information for {{case.reference}}. Reply or visit {{tracking.url}}' },
+          whatsapp: { body: '{{tenant.name}}: we need more information for {{case.reference}}. Reply or visit {{tracking.url}}' },
           email: {
             subject: 'More information needed — {{case.reference}}',
             body: 'We need additional information to progress your grievance {{case.reference}}.\n\nPlease sign in or visit: {{tracking.url}}',
@@ -530,6 +569,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         },
         sw: {
           sms: { body: '{{tenant.name}}: tunahitaji taarifa zaidi kwa {{case.reference}}. Tembelea {{tracking.url}}' },
+          whatsapp: { body: '{{tenant.name}}: tunahitaji taarifa zaidi kwa {{case.reference}}. Tembelea {{tracking.url}}' },
           email: {
             subject: 'Taarifa zaidi zinahitajika — {{case.reference}}',
             body: 'Tunahitaji taarifa zaidi ili kuendelea na malalamiko yako {{case.reference}}.\n\nTafadhali tembelea: {{tracking.url}}',
@@ -545,7 +585,7 @@ export function defaultNotificationPack(): Cd09Notifications {
       name: 'Acknowledge complainant on creation',
       on: 'case.created',
       to: [{ party: 'complainant' }, { role: 'grm_officer', scope: 'unit_and_above' }],
-      channels: { party: ['sms', 'email'], staff: ['email', 'in_app'] },
+      channels: { party: ['sms', 'email', 'whatsapp'], staff: ['email', 'in_app'] },
       template: 'case-registered',
       privacy_template: 'case-registered-privacy',
       enabled: true,
@@ -555,7 +595,7 @@ export function defaultNotificationPack(): Cd09Notifications {
       name: 'Status update to complainant',
       on: 'case.status_changed',
       to: [{ party: 'complainant' }],
-      channels: ['sms', 'email'],
+      channels: ['sms', 'email', 'whatsapp'],
       template: 'status-update',
       privacy_template: 'status-update-privacy',
       condition: { not_status: ['Referred'] },
@@ -602,7 +642,7 @@ export function defaultNotificationPack(): Cd09Notifications {
       name: 'Satisfaction survey on resolution',
       on: 'case.resolved',
       to: [{ party: 'complainant' }],
-      channels: ['sms'],
+      channels: ['sms', 'whatsapp'],
       template: 'satisfaction-request',
       enabled: true,
     },
@@ -611,7 +651,7 @@ export function defaultNotificationPack(): Cd09Notifications {
       name: 'Closure notice',
       on: 'case.closed',
       to: [{ party: 'complainant' }],
-      channels: ['sms', 'email'],
+      channels: ['sms', 'email', 'whatsapp'],
       template: 'case-closed',
       enabled: true,
     },
@@ -628,6 +668,7 @@ export function defaultNotificationPack(): Cd09Notifications {
 
   const advantaSms = SMS_PROVIDER_PRESETS.advanta!;
   const gmailEmail = EMAIL_PROVIDER_PRESETS.gmail!;
+  const metaWhatsapp = WHATSAPP_PROVIDER_PRESETS.meta!;
 
   return {
     templates,
@@ -653,14 +694,17 @@ export function defaultNotificationPack(): Cd09Notifications {
         bulk_api_url: ADVANTA_SMS_SENDBULK_URL,
       },
       whatsapp: {
-        provider: 'meta',
-        enabled: false,
-        api_url: '',
-        request_format: 'json',
-        headers: [{ key: 'Authorization', value: 'Bearer ', secret: true }],
-        fields: [],
+        provider: metaWhatsapp.provider,
+        enabled: true,
+        api_url: metaWhatsapp.api_url,
+        request_format: metaWhatsapp.request_format,
+        headers: structuredClone(metaWhatsapp.headers),
+        fields: structuredClone(metaWhatsapp.fields),
         phone_number_id: '',
         display_number: '',
+        mode: 'test',
+        template_name: 'hello_world',
+        template_language: 'en_US',
       },
     },
     quiet_hours: {

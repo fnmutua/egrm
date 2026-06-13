@@ -18,6 +18,15 @@ export interface SmsSenderConfig extends ChannelApiConfig {
   api_token?: string;
 }
 
+export interface WhatsAppSenderConfig extends ChannelApiConfig {
+  mode?: 'test' | 'live';
+  phone_number_id?: string;
+  display_number?: string;
+  template_name?: string;
+  template_language?: string;
+  template_body_param_keys?: string[];
+}
+
 export interface OutboundEmail {
   to: string;
   subject: string;
@@ -27,6 +36,15 @@ export interface OutboundEmail {
 export interface OutboundSms {
   to: string;
   body: string;
+}
+
+export interface OutboundWhatsApp {
+  to: string;
+  /** Rendered preview / log text (not sent when using Meta templates). */
+  body: string;
+  templateName?: string;
+  templateLanguage?: string;
+  templateBodyParams?: string[];
 }
 
 export interface SendResult {

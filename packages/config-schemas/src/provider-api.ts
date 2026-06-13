@@ -34,6 +34,7 @@ export type ChannelApiConfig = z.infer<typeof channelApiConfig>;
 
 export const ADVANTA_SMS_SENDOTP_URL = 'https://quicksms.advantasms.com/api/services/sendotp/';
 export const ADVANTA_SMS_SENDBULK_URL = 'https://quicksms.advantasms.com/api/services/sendbulk/';
+export const META_WHATSAPP_API_VERSION = 'v25.0';
 
 export interface ProviderRuntimeContext {
   to?: string;
@@ -165,6 +166,40 @@ export const EMAIL_PROVIDER_PRESETS: Record<string, ProviderPreset & { from_name
       { key: 'to', value: '{{to}}', secret: false },
       { key: 'subject', value: '{{subject}}', secret: false },
       { key: 'body', value: '{{message}}', secret: false },
+    ],
+  },
+};
+
+export const WHATSAPP_PROVIDER_PRESETS: Record<string, ProviderPreset> = {
+  meta: {
+    label: 'Meta Cloud API',
+    provider: 'meta',
+    api_url: '',
+    request_format: 'json',
+    headers: [{ key: 'Authorization', value: 'Bearer ', secret: true }],
+    fields: [],
+  },
+  twilio: {
+    label: 'Twilio WhatsApp',
+    provider: 'twilio',
+    api_url: '',
+    request_format: 'json',
+    headers: [{ key: 'Authorization', value: 'Basic ', secret: true }],
+    fields: [
+      { key: 'To', value: 'whatsapp:{{to}}', secret: false },
+      { key: 'From', value: 'whatsapp:{{from}}', secret: false },
+      { key: 'Body', value: '{{message}}', secret: false },
+    ],
+  },
+  custom: {
+    label: 'Custom HTTP',
+    provider: 'custom',
+    api_url: '',
+    request_format: 'json',
+    headers: [{ key: 'Authorization', value: 'Bearer ', secret: true }],
+    fields: [
+      { key: 'to', value: '{{to}}', secret: false },
+      { key: 'message', value: '{{message}}', secret: false },
     ],
   },
 };

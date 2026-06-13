@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import type { Cd01Identity, Cd09Notifications, NotificationRule } from '@egrm/config-schemas';
-import { DeliveryError, sendEmail, sendSms } from '@egrm/notifications';
+import { DeliveryError, sendEmail, sendSms, sendWhatsApp } from '@egrm/notifications';
 import { db, schema } from '../db/client.js';
 import { decryptPII } from './crypto.js';
 import { getActiveConfig } from './config.js';
@@ -16,14 +16,40 @@ export function renderTemplateBody(
   vars: Record<string, string>,
 ): { subject: string; body: string } {
   const tpl = cfg.templates.find((t) => t.id === templateId);
+  const localeVariants = tpl?.variants[locale] ?? tpl?.variants.en;
   const variant =
-    tpl?.variants[locale]?.[channel as 'sms' | 'email' | 'in_app'] ??
-    tpl?.variants.en?.[channel as 'sms' | 'email' | 'in_app'];
+    localeVariants?.[channel as 'sms' | 'email' | 'whatsapp' | 'in_app'] ??
+    (channel === 'whatsapp' ? localeVariants?.sms : undefined);
   const replace = (text: string) => text.replace(/\{\{([a-z_.]+)\}\}/g, (_, key: string) => vars[key] ?? `{{${key}}}`);
 
   const body = replace(variant?.body ?? `[${templateId}]`);
   const subject = replace(variant?.subject ?? `Notification — ${vars['case.reference'] ?? ''}`);
   return { subject, body };
+}
+
+function whatsappSendOptions(
+  cfg: Cd09Notifications,
+  templateId: string,
+  locale: string,
+  vars: Record<string, string>,
+  body: string,
+): { body: string; templateName?: string; templateLanguage?: string; templateBodyParams?: string[] } {
+  const tpl = cfg.templates.find((t) => t.id === templateId);
+  const variant =
+    tpl?.variants[locale]?.whatsapp ??
+    tpl?.variants.en?.whatsapp;
+  const sender = cfg.senders.whatsapp;
+  const isTest = (sender?.mode ?? 'test') === 'test';
+  const paramKeys =
+    variant?.wa_body_param_keys ??
+    sender?.template_body_param_keys ??
+    [];
+  return {
+    body,
+    templateName: isTest ? 'hello_world' : variant?.wa_template_name ?? sender?.template_name ?? 'hello_world',
+    templateLanguage: isTest ? 'en_US' : variant?.wa_template_language ?? sender?.template_language ?? 'en_US',
+    templateBodyParams: isTest ? [] : paramKeys.map((key) => vars[key] ?? ''),
+  };
 }
 
 async function ancestorUnitIds(tenantId: string, unitId: string | null): Promise<Set<string>> {
@@ -67,7 +93,7 @@ async function resolveAddresses(
       .where(eq(schema.party.id, caseRow.partyId))
       .limit(1);
     if (!party) return [];
-    if (channel === 'sms') {
+    if (channel === 'sms' || channel === 'whatsapp') {
       const phone = decryptPII(party.phoneEnc);
       return phone ? [phone] : [];
     }
@@ -163,6 +189,7 @@ async function deliverMessage(
   to: string,
   subject: string,
   body: string,
+  opts?: { templateId: string; locale: string; vars: Record<string, string> },
 ): Promise<{ messageId: string; provider: string }> {
   if (env.NOTIFICATIONS_DEV_LOG_ONLY) {
     console.log(`[notifications:dev] ${channel.toUpperCase()} → ${to}`);
@@ -176,6 +203,12 @@ async function deliverMessage(
   }
   if (channel === 'sms') {
     return sendSms(cfg.senders.sms, { to, body });
+  }
+  if (channel === 'whatsapp') {
+    const waOpts = opts
+      ? whatsappSendOptions(cfg, opts.templateId, opts.locale, opts.vars, body)
+      : { body, templateName: cfg.senders.whatsapp?.template_name, templateLanguage: cfg.senders.whatsapp?.template_language };
+    return sendWhatsApp(cfg.senders.whatsapp, { to, ...waOpts });
   }
   if (channel === 'in_app') {
     return { messageId: `in_app-${Date.now()}`, provider: 'in_app' };
@@ -294,7 +327,11 @@ export async function dispatchNotificationOutbox(outboxId: string): Promise<void
 
     for (const to of addresses) {
       try {
-        const result = await deliverMessage(cfg, log.channel, to, subject, body);
+        const result = await deliverMessage(cfg, log.channel, to, subject, body, {
+          templateId: log.templateId,
+          locale: log.locale,
+          vars,
+        });
         lastMessageId = result.messageId;
         sent += 1;
       } catch (err) {

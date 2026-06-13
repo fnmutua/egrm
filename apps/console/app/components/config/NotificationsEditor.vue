@@ -12,6 +12,7 @@ import {
   ADVANTA_SMS_SENDBULK_URL,
   SMS_PROVIDER_PRESETS,
   EMAIL_PROVIDER_PRESETS,
+  WHATSAPP_PROVIDER_PRESETS,
   PROVIDER_FIELD_PLACEHOLDERS,
   applyProviderPreset,
   ensureChannelApiConfig,
@@ -110,6 +111,16 @@ function ensureSmsSender(sms: Record<string, unknown>) {
   }
 }
 
+function ensureWhatsappSender(wa: Record<string, unknown>) {
+  ensureSenderIdentity(wa, 'whatsapp');
+  wa.mode ??= 'test';
+  wa.template_name ??= 'hello_world';
+  wa.template_language ??= 'en_US';
+  if (!(wa.headers as ProviderField[] | undefined)?.length) {
+    loadWhatsappPreset(wa);
+  }
+}
+
 function addProviderField(list: ProviderField[]) {
   list.push({ key: '', value: '', secret: false });
 }
@@ -131,6 +142,12 @@ function loadEmailPreset(sender: Record<string, unknown>) {
   applyProviderPreset(sender, preset, { keepSecrets: true });
 }
 
+function loadWhatsappPreset(sender: Record<string, unknown>) {
+  const key = String(sender.provider ?? 'meta').toLowerCase();
+  const preset = WHATSAPP_PROVIDER_PRESETS[key] ?? WHATSAPP_PROVIDER_PRESETS.custom;
+  applyProviderPreset(sender, preset, { keepSecrets: true });
+}
+
 watch(
   () => props.payload.senders?.sms?.provider,
   (next, prev) => {
@@ -149,6 +166,27 @@ watch(
   },
 );
 
+watch(
+  () => props.payload.senders?.whatsapp?.provider,
+  (next, prev) => {
+    if (prev !== undefined && next && next !== prev && props.payload.senders?.whatsapp) {
+      loadWhatsappPreset(props.payload.senders.whatsapp);
+    }
+  },
+);
+
+watch(
+  () => props.payload.senders?.whatsapp?.mode,
+  (mode) => {
+    const wa = props.payload.senders?.whatsapp;
+    if (!wa) return;
+    if (mode === 'test') {
+      wa.template_name = 'hello_world';
+      wa.template_language = 'en_US';
+    }
+  },
+);
+
 function ensure() {
   const p = props.payload;
   if (!Array.isArray(p.templates) || p.templates.length === 0) {
@@ -161,7 +199,7 @@ function ensure() {
   p.senders.whatsapp ??= {};
   ensureSenderIdentity(p.senders.email, 'email');
   ensureSmsSender(p.senders.sms);
-  ensureSenderIdentity(p.senders.whatsapp, 'whatsapp');
+  ensureWhatsappSender(p.senders.whatsapp);
   p.quiet_hours ??= {
     enabled: false,
     timezone: 'Africa/Nairobi',
@@ -185,6 +223,32 @@ function ensure() {
     const pruned = stripEmptyTemplateVariants(p.templates as { variants: Record<string, unknown> }[]);
     p.templates.splice(0, p.templates.length, ...pruned);
     for (const tpl of p.templates) stripEmptyLocales(tpl as Record<string, unknown>);
+  }
+  syncWhatsappConfig(p);
+}
+
+/** When WhatsApp sender is enabled, mirror SMS party channels + template bodies. */
+function syncWhatsappConfig(p: Record<string, unknown>) {
+  const wa = p.senders?.whatsapp as Record<string, unknown> | undefined;
+  if (!wa?.enabled) return;
+
+  for (const rule of (p.rules as Record<string, unknown>[]) ?? []) {
+    const ch = rule.channels;
+    if (ch && typeof ch === 'object' && !Array.isArray(ch)) {
+      const party = (ch as { party?: string[] }).party;
+      if (party?.includes('sms') && !party.includes('whatsapp')) party.push('whatsapp');
+    } else if (Array.isArray(ch) && ch.includes('sms') && !ch.includes('whatsapp')) {
+      ch.push('whatsapp');
+    }
+  }
+
+  for (const tpl of (p.templates as { variants: Record<string, Record<string, { body?: string }>> }[]) ?? []) {
+    for (const loc of Object.keys(tpl.variants ?? {})) {
+      const sms = tpl.variants[loc]?.sms;
+      if (sms?.body?.trim() && !tpl.variants[loc]?.whatsapp?.body?.trim()) {
+        tpl.variants[loc].whatsapp = { body: sms.body };
+      }
+    }
   }
 }
 ensure();
@@ -249,7 +313,7 @@ function channelMode(rule: Record<string, unknown>): 'flat' | 'split' {
 
 function setChannelMode(rule: Record<string, unknown>, mode: 'flat' | 'split') {
   if (mode === 'split') {
-    rule.channels = { party: ['sms', 'email'], staff: ['email', 'in_app'] };
+    rule.channels = { party: ['sms', 'email', 'whatsapp'], staff: ['email', 'in_app'] };
   } else {
     rule.channels = ['email'];
   }
@@ -295,11 +359,13 @@ function loadDefaultPack() {
 const CHANNEL_LABELS: Record<string, string> = {
   sms: 'SMS',
   email: 'Email',
+  whatsapp: 'WhatsApp',
   in_app: 'In-app',
 };
 
 const CHANNEL_STARTERS: Record<string, { subject?: string; body: string }> = {
   sms: { body: '{{tenant.name}}: update on {{case.reference}} — {{tracking.url}}' },
+  whatsapp: { body: '{{tenant.name}}: update on {{case.reference}} — {{tracking.url}}' },
   email: {
     subject: 'Update — {{case.reference}}',
     body: 'Your grievance {{case.reference}} has been updated.\nTrack: {{tracking.url}}',
@@ -869,12 +935,54 @@ function varToken(name: string) {
           <USwitch v-model="payload.senders.whatsapp.enabled" size="sm" />
         </div>
         <div v-if="payload.senders.whatsapp.enabled" class="space-y-3">
+          <UFormField
+            label="Environment"
+            help="Test uses Meta sandbox (hello_world template; recipients must be on your sandbox To list). Live uses your production number and approved templates."
+          >
+            <USelectMenu
+              v-model="payload.senders.whatsapp.mode"
+              :items="[
+                { value: 'test', label: 'Test (sandbox)' },
+                { value: 'live', label: 'Live (production)' },
+              ]"
+              value-key="value"
+              label-key="label"
+              class="w-full"
+            />
+          </UFormField>
+          <UAlert
+            v-if="payload.senders.whatsapp.mode === 'test'"
+            color="warning"
+            variant="subtle"
+            icon="i-lucide-flask-conical"
+            title="Sandbox mode"
+            description="Sends hello_world only. Add each recipient number to Meta → WhatsApp → API Setup → To."
+          />
           <div class="grid sm:grid-cols-2 gap-3">
             <UFormField label="Display number" help="Business number shown to recipients (E.164).">
               <UInput v-model="payload.senders.whatsapp.display_number" class="w-full" placeholder="+254…" />
             </UFormField>
-            <UFormField label="Phone number ID" help="Meta / Twilio business phone number id.">
-              <UInput v-model="payload.senders.whatsapp.phone_number_id" class="w-full font-mono" />
+            <UFormField label="Phone number ID" help="Numeric ID from Meta → WhatsApp → API Setup (not your +254 display number).">
+              <UInput v-model="payload.senders.whatsapp.phone_number_id" class="w-full font-mono" placeholder="1107744639097239" />
+            </UFormField>
+            <UFormField
+              label="Template name"
+              :help="payload.senders.whatsapp.mode === 'test' ? 'Locked to hello_world in test mode.' : 'Meta-approved template name for business-initiated messages.'"
+            >
+              <UInput
+                v-model="payload.senders.whatsapp.template_name"
+                class="w-full font-mono"
+                placeholder="hello_world"
+                :disabled="payload.senders.whatsapp.mode === 'test'"
+              />
+            </UFormField>
+            <UFormField label="Template language" :help="payload.senders.whatsapp.mode === 'test' ? 'Locked to en_US in test mode.' : undefined">
+              <UInput
+                v-model="payload.senders.whatsapp.template_language"
+                class="w-full font-mono"
+                placeholder="en_US"
+                :disabled="payload.senders.whatsapp.mode === 'test'"
+              />
             </UFormField>
             <UFormField label="Provider preset">
               <USelectMenu

@@ -88,6 +88,14 @@ function recipientKindLabel(selector: RecipientSelector): string {
   return 'unknown';
 }
 
+function expandPartyChannels(channels: string[], selector: RecipientSelector, cfg: Cd09Notifications): string[] {
+  const out = new Set(channels);
+  const waEnabled = cfg.senders?.whatsapp?.enabled !== false;
+  const isParty = 'party' in selector || 'address' in selector;
+  if (waEnabled && isParty && out.has('sms')) out.add('whatsapp');
+  return [...out];
+}
+
 /** Evaluate CD-09 rules; enqueue outbox + notification_log inside the caller's transaction. */
 export async function enqueueNotifications(
   ctx: NotificationEventContext,
@@ -129,7 +137,7 @@ export async function enqueueNotifications(
     const selectors = rule.to.length > 0 ? rule.to : [{ party: 'complainant' as const }];
 
     for (const selector of selectors) {
-      const channels = channelsForRule(rule, selector);
+      const channels = expandPartyChannels(channelsForRule(rule, selector), selector, cfg);
       for (const channel of new Set(channels)) {
         const killReason = isChannelKilled(cfg, channel);
         const { body } = renderTemplateBody(cfg, templateId, locale, channel, vars);

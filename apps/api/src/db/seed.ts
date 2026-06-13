@@ -462,6 +462,11 @@ export async function runSeed() {
   setSenderField(kisipNotifications.senders.sms, 'partnerID', '12108');
   setSenderField(kisipNotifications.senders.sms, 'shortcode', 'KISIP');
 
+  // WhatsApp Meta Cloud API — set phone_number_id + Bearer token in console → Sender identities
+  kisipNotifications.senders.whatsapp.enabled = true;
+  kisipNotifications.senders.whatsapp.provider = 'meta';
+  kisipNotifications.senders.whatsapp.mode = 'test';
+
   await upsertActiveConfig(kisip!.id, 'cd09_notifications', kisipNotifications, admin!.id);
 
   // Sample unit tree: national → 2 counties → 3 settlements
