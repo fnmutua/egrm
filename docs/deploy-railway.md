@@ -145,6 +145,13 @@ The Nuxt apps always send `x-tenant: kisip`, so API calls work even without host
 **421 unknown_tenant**  
 Run seed, or set `DEFAULT_TENANT=kisip`, or send `x-tenant: kisip` header.
 
+**Healthcheck fails / API never becomes healthy**  
+Check **Deploy logs** (not build logs) for `[migrate] failed:` or `[server] starting`. Common causes:
+
+- `DATABASE_URL` not linked — use `${{Postgres.DATABASE_URL}}` on the API service.
+- `JWT_SECRET` / `PII_SECRET` missing — set both before deploy.
+- Migration error — fix SQL/DB state, then redeploy (migrations run in `preDeployCommand`).
+
 **Database connection errors**  
 Use `${{Postgres.DATABASE_URL}}` reference (internal network). If using an external URL, append `?sslmode=require`.
 

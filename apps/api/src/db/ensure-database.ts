@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { pgPoolConfig } from './pg-config.js';
 
 type PgError = Error & { code?: string };
 
@@ -42,7 +43,7 @@ export function formatDatabaseError(err: unknown, connectionString: string): str
 /** Create the application database if it does not exist (connects via the `postgres` maintenance DB). */
 export async function ensureDatabase(connectionString: string): Promise<void> {
   const { dbName, url } = maintenanceUrl(connectionString);
-  const client = new pg.Client({ connectionString: url });
+  const client = new pg.Client(pgPoolConfig(url));
 
   try {
     await client.connect();

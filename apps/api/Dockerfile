@@ -28,4 +28,4 @@ COPY --from=build /app/apps/api/package.json ./apps/api/package.json
 WORKDIR /app/apps/api
 ENV HOST=0.0.0.0
 EXPOSE 4100
-CMD ["sh", "-c", "node dist/db/migrate.js && node dist/server.js"]
+CMD ["node", "dist/server.js"]

@@ -31,7 +31,9 @@ await app.register(roleRoutes);
 await app.register(userRoutes);
 
 try {
+  console.log(`[server] starting on 0.0.0.0:${env.API_PORT}`);
   await app.listen({ port: env.API_PORT, host: '0.0.0.0' });
+  console.log(`[server] listening on 0.0.0.0:${env.API_PORT}`);
 } catch (err) {
   app.log.error(err);
   process.exit(1);
