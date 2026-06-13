@@ -10,8 +10,14 @@ export interface ThreadTreeEntry {
   created_at?: string;
 }
 
+export type ThreadTreeOrder = 'asc' | 'desc';
+
 /** Build a nested thread from flat entries ordered by parent links. */
-export function buildThreadTree<T extends ThreadTreeEntry>(entries: T[]): ThreadTreeNode<T>[] {
+export function buildThreadTree<T extends ThreadTreeEntry>(
+  entries: T[],
+  options?: { order?: ThreadTreeOrder },
+): ThreadTreeNode<T>[] {
+  const order = options?.order ?? 'asc';
   const byId = new Map(entries.map((e) => [e.id, e]));
   const childrenOf = new Map<string, T[]>();
   const roots: T[] = [];
@@ -27,7 +33,10 @@ export function buildThreadTree<T extends ThreadTreeEntry>(entries: T[]): Thread
     }
   }
 
-  const sortByTime = (a: T, b: T) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? ''));
+  const sortByTime = (a: T, b: T) => {
+    const cmp = String(a.created_at ?? '').localeCompare(String(b.created_at ?? ''));
+    return order === 'desc' ? -cmp : cmp;
+  };
 
   const buildNode = (entry: T, depth: number): ThreadTreeNode<T> => ({
     entry,

@@ -18,7 +18,7 @@ const replyInput = ref<HTMLInputElement | null>(null);
 
 const messageTree = computed(() => {
   const messages = result.value?.messages ?? [];
-  return buildThreadTree(messages);
+  return buildThreadTree(messages, { order: 'desc' });
 });
 
 const messageById = computed(() =>
@@ -161,20 +161,8 @@ async function doReply() {
 
           <div v-if="result.messages?.length">
             <div class="text-sm font-medium mb-2">Messages</div>
+            <p class="text-xs text-muted mb-3">Tap a message to read the full text.</p>
             <PortalThreadTree :nodes="messageTree" :entry-by-id="messageById" />
-          </div>
-
-          <div>
-            <div class="text-sm font-medium mb-2">Timeline</div>
-            <ol class="space-y-2">
-              <li v-for="(ev, i) in result.timeline" :key="i" class="flex gap-3 text-sm">
-                <UIcon name="i-lucide-circle-dot" class="mt-0.5 text-primary shrink-0" />
-                <div>
-                  <span class="font-medium capitalize">{{ ev.kind.replaceAll('_', ' ') }}</span>
-                  <span class="text-muted"> — {{ new Date(ev.createdAt).toLocaleString() }}</span>
-                </div>
-              </li>
-            </ol>
           </div>
 
           <div v-if="result.reply_allowed" class="pt-4 border-t border-default space-y-3">
