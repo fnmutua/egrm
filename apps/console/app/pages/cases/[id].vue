@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { TimelineItem } from '@nuxt/ui';
 import { kindsForChannel, threadChannelLabel } from '@egrm/config-schemas';
 import { buildThreadTree, hasPermission } from '@egrm/core';
 
@@ -477,6 +478,56 @@ function eventSummary(ev: CaseDetail['events'][number]): string | null {
   }
   return null;
 }
+
+interface CaseTimelineItem extends TimelineItem {
+  kind: string;
+  actorType: string;
+  visibility: string;
+}
+
+const EVENT_ICONS: Record<string, string> = {
+  created: 'i-lucide-file-plus',
+  status_changed: 'i-lucide-git-compare-arrows',
+  assigned: 'i-lucide-user-round-check',
+  message_external: 'i-lucide-send',
+  message_inbound: 'i-lucide-message-circle-reply',
+  note_internal: 'i-lucide-sticky-note',
+  attachment_added: 'i-lucide-paperclip',
+  level_moved: 'i-lucide-layers',
+  referred_out: 'i-lucide-external-link',
+  reopened: 'i-lucide-rotate-ccw',
+  closed: 'i-lucide-archive',
+  resolved: 'i-lucide-check-circle',
+};
+
+function eventKindLabel(kind: string): string {
+  return kind.replaceAll('_', ' ');
+}
+
+function eventIcon(kind: string): string {
+  return EVENT_ICONS[kind] ?? 'i-lucide-circle-dot';
+}
+
+const timelineItems = computed((): CaseTimelineItem[] =>
+  (detail.value?.events ?? []).map((ev) => {
+    const summary = eventSummary(ev);
+    return {
+      value: ev.id,
+      date: new Date(ev.createdAt).toLocaleString(),
+      title: eventKindLabel(ev.kind),
+      description: summary ?? undefined,
+      icon: eventIcon(ev.kind),
+      kind: ev.kind,
+      actorType: ev.actorType,
+      visibility: ev.visibility,
+    };
+  }),
+);
+
+const timelineActive = computed(() => {
+  const items = timelineItems.value;
+  return items.length ? items[items.length - 1]!.value : undefined;
+});
 
 async function loadAssignees() {
   if (!canAssign.value) return;
@@ -1257,20 +1308,25 @@ onMounted(async () => {
         <div v-if="detail.events.length === 0" class="text-sm text-muted py-4 text-center">
           No events recorded yet.
         </div>
-        <ol v-else class="space-y-4">
-          <li v-for="ev in detail.events" :key="ev.id" class="flex gap-3 text-sm">
-            <UIcon name="i-lucide-circle-dot" class="mt-0.5 text-primary shrink-0" />
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center flex-wrap gap-2">
-                <span class="font-medium capitalize">{{ ev.kind.replaceAll('_', ' ') }}</span>
-                <UBadge size="sm" variant="subtle" color="neutral">{{ ev.actorType }}</UBadge>
-                <UBadge v-if="ev.visibility === 'internal'" size="sm" variant="subtle" color="warning">internal</UBadge>
-              </div>
-              <p v-if="eventSummary(ev)" class="text-muted mt-0.5">{{ eventSummary(ev) }}</p>
-              <div class="text-muted text-xs mt-1">{{ new Date(ev.createdAt).toLocaleString() }}</div>
+        <UTimeline
+          v-else
+          :items="timelineItems"
+          :default-value="timelineActive"
+          size="sm"
+          color="primary"
+          class="max-w-2xl"
+          :ui="{
+            description: 'px-3 py-2 ring ring-default mt-1.5 rounded-md text-default text-sm',
+          }"
+        >
+          <template #title="{ item }">
+            <div class="flex items-center flex-wrap gap-2">
+              <span class="capitalize">{{ item.title }}</span>
+              <UBadge size="sm" variant="subtle" color="neutral">{{ item.actorType }}</UBadge>
+              <UBadge v-if="item.visibility === 'internal'" size="sm" variant="subtle" color="warning">internal</UBadge>
             </div>
-          </li>
-        </ol>
+          </template>
+        </UTimeline>
       </UCard>
     </div>
   </div>
