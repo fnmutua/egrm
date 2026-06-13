@@ -1,13 +1,12 @@
 /** Fresh-install bootstrap: .env → create DB → migrate → seed. */
+import 'dotenv/config';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import dotenv from 'dotenv';
 import { ensureEnvFile, assertEnvConfigured } from './ensure-env.js';
 
 const apiRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 ensureEnvFile();
-dotenv.config({ path: path.join(apiRoot, '.env') });
 assertEnvConfigured();
 
 const { env } = await import('../env.js');
