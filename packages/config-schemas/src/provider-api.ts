@@ -10,6 +10,11 @@ export const providerField = z.object({
 
 export type ProviderField = z.infer<typeof providerField>;
 
+/** Shallow clone of provider field rows (portable alternative to structuredClone for CI/Docker TS lib). */
+export function cloneProviderFields(fields: ProviderField[]): ProviderField[] {
+  return fields.map((f) => ({ ...f }));
+}
+
 /** Runtime placeholders substituted when sending. */
 export const PROVIDER_FIELD_PLACEHOLDERS = [
   '{{to}}',
@@ -215,7 +220,7 @@ export function applyProviderPreset(
   target.provider = preset.provider;
   target.api_url = preset.api_url ?? '';
   target.request_format = preset.request_format ?? 'json';
-  target.headers = structuredClone(preset.headers ?? []);
+  target.headers = cloneProviderFields(preset.headers ?? []);
   target.fields = (preset.fields ?? []).map((f) => ({
     ...f,
     value: opts?.keepSecrets && f.secret && secretByKey.has(f.key) ? secretByKey.get(f.key)! : f.value,
