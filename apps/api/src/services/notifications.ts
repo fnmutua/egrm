@@ -180,10 +180,13 @@ export async function enqueueNotifications(
 
     for (const selector of selectors) {
       let channels = expandPartyChannels(channelsForRule(rule, selector), selector, cfg);
-      channels = filterChannelsForPartyPreference(channels, selector, ctx.case.partyNotificationChannels);
       const notifyChannel = typeof ctx.data?.notify_channel === 'string' ? ctx.data.notify_channel : null;
-      if (notifyChannel && ('party' in selector || 'address' in selector)) {
+      const isPartyTarget = 'party' in selector || 'address' in selector;
+      if (notifyChannel && isPartyTarget) {
+        // Staff chose delivery channel on correspondence — honour it over intake opt-in.
         channels = channels.filter((ch) => ch === notifyChannel);
+      } else {
+        channels = filterChannelsForPartyPreference(channels, selector, ctx.case.partyNotificationChannels);
       }
       for (const channel of new Set(channels)) {
         const killReason = isChannelKilled(cfg, channel);

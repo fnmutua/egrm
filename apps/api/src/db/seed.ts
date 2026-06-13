@@ -2,9 +2,10 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import bcrypt from 'bcryptjs';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { ConfigDomain } from '@egrm/core';
-import { validateConfig, defaultNotificationPack, defaultStaffProfileFields, DEFAULT_ATTACHMENT_KINDS, DEFAULT_ATTACHMENT_POLICY, DEFAULT_CORRESPONDENCE_POLICY } from '@egrm/config-schemas';
+import { validateConfig, defaultNotificationPack, defaultStaffProfileFields, DEFAULT_ATTACHMENT_KINDS, DEFAULT_ATTACHMENT_POLICY, DEFAULT_CORRESPONDENCE_POLICY, mergeMissingNotificationItems } from '@egrm/config-schemas';
+import type { Cd09Notifications } from '@egrm/config-schemas';
 import { db, pool, schema } from './client.js';
 import { syncRolesFromOrgAccess } from '../services/org-access.js';
 
@@ -141,6 +142,66 @@ async function upsertActiveConfig(tenantId: string, domain: ConfigDomain, payloa
     changedBy,
     activatedAt: new Date(),
   });
+}
+
+/** Merge new platform notification templates/rules (e.g. thread.*) into an existing active CD-09 pack. */
+async function ensureCd09Notifications(tenantId: string, freshPack: Cd09Notifications, changedBy: string) {
+  const [active] = await db
+    .select({
+      id: schema.configVersion.id,
+      version: schema.configVersion.version,
+      payload: schema.configVersion.payload,
+    })
+    .from(schema.configVersion)
+    .where(
+      and(
+        eq(schema.configVersion.tenantId, tenantId),
+        eq(schema.configVersion.domain, 'cd09_notifications'),
+        eq(schema.configVersion.status, 'active'),
+      ),
+    )
+    .limit(1);
+
+  if (!active) {
+    await upsertActiveConfig(tenantId, 'cd09_notifications', freshPack, changedBy);
+    return;
+  }
+
+  const current = active.payload as Cd09Notifications;
+  const { merged, changed } = mergeMissingNotificationItems(current, defaultNotificationPack());
+  if (!changed) return;
+
+  const parsed = validateConfig('cd09_notifications', merged);
+  if (!parsed.success) {
+    throw new Error(`CD-09 merge invalid: ${JSON.stringify(parsed.error.issues, null, 2)}`);
+  }
+
+  const [maxRow] = await db
+    .select({ max: sql<number>`coalesce(max(${schema.configVersion.version}), 0)::int` })
+    .from(schema.configVersion)
+    .where(and(eq(schema.configVersion.tenantId, tenantId), eq(schema.configVersion.domain, 'cd09_notifications')));
+
+  const nextVersion = (maxRow?.max ?? 0) + 1;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.configVersion)
+      .set({ status: 'retired' })
+      .where(eq(schema.configVersion.id, active.id));
+
+    await tx.insert(schema.configVersion).values({
+      tenantId,
+      domain: 'cd09_notifications',
+      version: nextVersion,
+      status: 'active',
+      payload: parsed.data,
+      changeNote: 'seed: merge thread notification templates and rules',
+      changedBy,
+      activatedAt: new Date(),
+    });
+  });
+
+  console.log('[seed] merged thread notification templates/rules into active CD-09');
 }
 
 /** Full landing-page branding for the KISIP reference tenant (CD-01). */
@@ -525,7 +586,7 @@ export async function runSeed() {
   kisipNotifications.senders.whatsapp.provider = 'meta';
   kisipNotifications.senders.whatsapp.mode = 'test';
 
-  await upsertActiveConfig(kisip!.id, 'cd09_notifications', kisipNotifications, admin!.id);
+  await ensureCd09Notifications(kisip!.id, kisipNotifications, admin!.id);
 
   await upsertActiveConfig(kisip!.id, 'cd17_correspondence', {
     correspondence_policy: DEFAULT_CORRESPONDENCE_POLICY,

@@ -551,6 +551,34 @@ export function buildStatusChangeStaffRule(cfg: {
   };
 }
 
+/** Add templates/rules from defaults that are missing in an active tenant pack (e.g. after platform upgrades). */
+export function mergeMissingNotificationItems(
+  current: Cd09Notifications,
+  defaults: Cd09Notifications,
+): { merged: Cd09Notifications; changed: boolean } {
+  const merged: Cd09Notifications = {
+    ...current,
+    templates: [...current.templates],
+    rules: [...current.rules],
+  };
+  let changed = false;
+
+  for (const template of defaults.templates) {
+    if (!merged.templates.some((t) => t.id === template.id)) {
+      merged.templates.push(template);
+      changed = true;
+    }
+  }
+  for (const rule of defaults.rules) {
+    if (!merged.rules.some((r) => r.id === rule.id)) {
+      merged.rules.push(rule);
+      changed = true;
+    }
+  }
+
+  return { merged, changed };
+}
+
 /** Platform default rule pack (spec 06 §4). Tenants edit from here. */
 export function defaultNotificationPack(): Cd09Notifications {
   const templates: NotificationTemplate[] = [
