@@ -192,6 +192,7 @@ onMounted(async () => {
             <ConfigCorrespondenceEditor v-else-if="domain === 'cd17_correspondence'" :payload="payload" :section="activeSection" />
             <ConfigNotificationsEditor v-else-if="domain === 'cd09_notifications'" :payload="payload" :section="activeSection" />
             <ConfigOrgAccessEditor v-else-if="domain === 'cd10_org_access'" :payload="payload" :section="activeSection" />
+            <ConfigDashboardsEditor v-else-if="domain === 'cd15_dashboards'" :payload="payload" />
             <ConfigValueEditor v-else :model-value="payload" @update:model-value="payload = ($event as Record<string, any>)" />
           </div>
 
@@ -200,7 +201,7 @@ onMounted(async () => {
             v-else
             v-model="editorText"
             spellcheck="false"
-            class="w-full h-[28rem] font-mono text-xs p-3 rounded border border-default bg-elevated/40 focus:outline-none focus:ring-2 ring-primary/40"
+            class="w-full h-112 font-mono text-xs p-3 rounded border border-default bg-elevated/40 focus:outline-none focus:ring-2 ring-primary/40"
           />
 
           <UAlert v-if="jsonError" color="error" :title="jsonError" class="mt-3" />

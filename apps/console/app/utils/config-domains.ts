@@ -206,7 +206,10 @@ export const DOMAIN_CATALOGUE: DomainMeta[] = [
   { domain: 'cd14_features', cd: 'CD-14', title: 'Feature flags', icon: 'i-lucide-toggle-right', strict: true,
     description: 'Module activation: knowledge base, tasks, committees, appeals, USSD, hotline, chatbot, AI assistance, custom dashboards…' },
   { domain: 'cd15_dashboards', cd: 'CD-15', title: 'Dashboards', icon: 'i-lucide-layout-dashboard', strict: false,
-    description: 'Admin-built dashboards: sections and declarative widgets over the semantic layer.' },
+    description: 'Admin-built dashboards: sections and declarative widgets over the semantic layer.',
+    subsections: [
+      { id: 'sec-dashboards', label: 'Dashboards' },
+    ] },
   { domain: 'cd16_ai', cd: 'CD-16', title: 'Chatbot & AI', icon: 'i-lucide-bot', strict: false,
     description: 'AI provider profiles, chatbot persona/intents, per-capability flags, safety policy. Default off.' },
 ];
