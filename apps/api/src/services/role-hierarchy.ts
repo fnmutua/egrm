@@ -1,6 +1,7 @@
 import type { Cd10OrgAccess } from '@egrm/config-schemas';
 import {
   canManageTargetRole,
+  canEditTargetUserRoleAssignments,
   hasStaffUserManagementScope,
   manageableRoleNames,
   userRolesAreManageable,
@@ -47,6 +48,15 @@ export function targetUserIsManageable(
   opts?: { pendingNoRoles?: boolean },
 ): boolean {
   return userRolesAreManageable(ctx.holderRoleNames, ctx.permissions, targetRoleNames, catalog, opts);
+}
+
+export function targetUserRolesEditable(
+  ctx: StaffUserManagerContext,
+  targetRoleNames: string[],
+  catalog: RoleCatalogEntry[],
+  opts?: { selfEdit?: boolean },
+): boolean {
+  return canEditTargetUserRoleAssignments(ctx.holderRoleNames, ctx.permissions, targetRoleNames, catalog, opts);
 }
 
 export async function getRoleCatalog(tenantId: string): Promise<RoleCatalogEntry[]> {

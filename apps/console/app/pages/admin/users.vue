@@ -22,6 +22,7 @@ interface StaffUser {
   registration_status: 'pending' | 'approved' | 'rejected';
   profile: Record<string, string>;
   created_at: string;
+  roles_editable?: boolean;
   roles: UserRole[];
 }
 
@@ -83,8 +84,9 @@ const roleItems = computed(() =>
   roles.value.map((r) => ({ value: r.id, label: r.label || r.name })),
 );
 
+const editRolesEditable = computed(() => selected.value?.roles_editable !== false);
+
 const editRoleItems = computed(() => {
-  const items = [...roleItems.value];
   for (const row of editRoles.value) {
     if (!row.role_id || items.some((i) => i.value === row.role_id)) continue;
     const fromUser = selected.value?.roles.find((r) => r.role_id === row.role_id);
@@ -225,13 +227,15 @@ async function saveEdit() {
     if (editForm.password) body.password = editForm.password;
     await api(`/api/v1/users/${selected.value.id}`, { method: 'PATCH', body });
 
-    const rolesBody = editRoles.value
-      .filter((r) => r.role_id)
-      .map((r) => ({ role_id: r.role_id, unit_id: r.unit_id }));
-    await api(`/api/v1/users/${selected.value.id}/roles`, {
-      method: 'PUT',
-      body: { roles: rolesBody },
-    });
+    if (editRolesEditable.value) {
+      const rolesBody = editRoles.value
+        .filter((r) => r.role_id)
+        .map((r) => ({ role_id: r.role_id, unit_id: r.unit_id }));
+      await api(`/api/v1/users/${selected.value.id}/roles`, {
+        method: 'PUT',
+        body: { roles: rolesBody },
+      });
+    }
 
     toast.add({ title: 'User updated', color: 'success' });
     editOpen.value = false;
@@ -466,7 +470,7 @@ function rowActions(row: StaffUser) {
           <UFormField label="New password" help="Leave blank to keep current password">
             <PasswordInput v-model="editForm.password" autocomplete="new-password" />
           </UFormField>
-          <div class="space-y-3 pt-1">
+          <div v-if="editRolesEditable" class="space-y-3 pt-1">
             <p class="text-sm font-medium">Role assignments</p>
             <div
               v-for="(row, i) in editRoles"
@@ -493,6 +497,11 @@ function rowActions(row: StaffUser) {
                 />
               </UFormField>
             </div>
+          </div>
+          <div v-else-if="selected?.roles.length" class="space-y-1 pt-1">
+            <p class="text-sm font-medium">Role assignments</p>
+            <p class="text-sm text-muted">{{ formatRoles(selected) }}</p>
+            <p class="text-xs text-muted">Role and jurisdiction cannot be changed for users at the same level in the hierarchy.</p>
           </div>
           <label class="flex items-center gap-2 text-sm">
             <UCheckbox v-model="editForm.active" />

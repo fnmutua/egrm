@@ -46,6 +46,34 @@ export function manageableRoleNames(
   return out;
 }
 
+/** True when the target user holds any of the same roles as the holder (hierarchy peers). */
+export function sharesHolderRole(
+  holderRoleNames: readonly string[],
+  targetRoleNames: readonly string[],
+): boolean {
+  const holder = new Set(holderRoleNames);
+  return targetRoleNames.some((t) => holder.has(t));
+}
+
+/** True when any holder role and target role are siblings (same parent in the role tree). */
+export function hasSiblingRolePair(
+  holderRoleNames: readonly string[],
+  targetRoleNames: readonly string[],
+  roles: RoleHierarchyNode[],
+): boolean {
+  const byName = new Map(roles.map((r) => [r.name, r]));
+  for (const h of holderRoleNames) {
+    const parentH = byName.get(h)?.parent_role?.trim();
+    if (!parentH) continue;
+    for (const t of targetRoleNames) {
+      if (h === t) return true;
+      const parentT = byName.get(t)?.parent_role?.trim();
+      if (parentT && parentT === parentH) return true;
+    }
+  }
+  return false;
+}
+
 export function canManageTargetRole(
   holderRoleNames: readonly string[],
   holderPermissions: readonly string[],
@@ -76,6 +104,25 @@ export function userRolesAreManageable(
 ): boolean {
   if (holderPermissions.includes('admin:*') || holderPermissions.includes('admin:users')) return true;
   if (targetRoleNames.length === 0) return opts?.pendingNoRoles === true;
+  const manageable = manageableRoleNames(holderRoleNames, roles);
+  return targetRoleNames.every((n) => manageable.has(n));
+}
+
+/** Whether the holder may change role and jurisdiction assignments on the target user. */
+export function canEditTargetUserRoleAssignments(
+  holderRoleNames: readonly string[],
+  holderPermissions: readonly string[],
+  targetRoleNames: readonly string[],
+  roles: RoleHierarchyNode[],
+  opts?: { selfEdit?: boolean },
+): boolean {
+  if (opts?.selfEdit) {
+    return holderPermissions.includes('admin:*') || holderPermissions.includes('admin:users');
+  }
+  if (holderPermissions.includes('admin:*') || holderPermissions.includes('admin:users')) return true;
+  if (targetRoleNames.length === 0) return true;
+  if (sharesHolderRole(holderRoleNames, targetRoleNames)) return false;
+  if (hasSiblingRolePair(holderRoleNames, targetRoleNames, roles)) return false;
   const manageable = manageableRoleNames(holderRoleNames, roles);
   return targetRoleNames.every((n) => manageable.has(n));
 }

@@ -22,6 +22,7 @@ import {
   canAccessStaffUserManagement,
   getRoleCatalog,
   targetUserIsManageable,
+  targetUserRolesEditable,
   validateAssignableRoles,
   type StaffUserManagerContext,
 } from '../services/role-hierarchy.js';
@@ -118,7 +119,11 @@ async function loadUserRoles(userId: string, tenantId: string) {
     .where(and(eq(schema.userRole.userId, userId), eq(schema.role.tenantId, tenantId)));
 }
 
-function publicUser(row: typeof schema.appUser.$inferSelect, roles: Awaited<ReturnType<typeof loadUserRoles>>) {
+function publicUser(
+  row: typeof schema.appUser.$inferSelect,
+  roles: Awaited<ReturnType<typeof loadUserRoles>>,
+  opts?: { roles_editable?: boolean },
+) {
   return {
     id: row.id,
     email: row.email,
@@ -127,6 +132,7 @@ function publicUser(row: typeof schema.appUser.$inferSelect, roles: Awaited<Retu
     registration_status: row.registrationStatus,
     profile: row.profile ?? {},
     created_at: row.createdAt,
+    roles_editable: opts?.roles_editable,
     roles: roles.map((r) => ({
       id: r.id,
       role_id: r.roleId,
@@ -188,6 +194,20 @@ async function assertTargetUserManageable(
   return 'You may not manage this user — their role(s) are outside your hierarchy';
 }
 
+async function assertCanEditTargetRoles(
+  ctx: StaffUserManagerContext,
+  tenantId: string,
+  targetUserId: string,
+  actorUserId: string,
+): Promise<string | null> {
+  const [catalog, roles] = await Promise.all([getRoleCatalog(tenantId), loadUserRoles(targetUserId, tenantId)]);
+  const roleNames = roles.map((r) => r.roleName);
+  const selfEdit = targetUserId === actorUserId;
+  if (targetUserRolesEditable(ctx, roleNames, catalog, { selfEdit })) return null;
+  if (selfEdit) return 'You may not change your own role or jurisdiction';
+  return 'You may not change role or jurisdiction for a user at the same level in the hierarchy';
+}
+
 export default async function userRoutes(app: FastifyInstance) {
   const requireStaffUserManager = async (req: FastifyRequest, reply: FastifyReply) => {
     await app.authenticate(req, reply);
@@ -238,7 +258,10 @@ export default async function userRoutes(app: FastifyInstance) {
           ) {
             return null;
           }
-          return publicUser(u, roles);
+          const rolesEditable = targetUserRolesEditable(ctx, roleNames, catalog, {
+            selfEdit: u.id === req.user.sub,
+          });
+          return publicUser(u, roles, { roles_editable: rolesEditable });
         }),
       )
     ).filter((u): u is NonNullable<typeof u> => u != null);
@@ -263,7 +286,12 @@ export default async function userRoutes(app: FastifyInstance) {
     });
     if (manageError) return reply.code(403).send({ error: 'user_not_manageable', message: manageError });
 
-    return { user: publicUser(user, await loadUserRoles(user.id, req.tenant.id)) };
+    const roleNames = (await loadUserRoles(user.id, req.tenant.id)).map((r) => r.roleName);
+    const rolesEditable = targetUserRolesEditable(ctx, roleNames, await getRoleCatalog(req.tenant.id), {
+      selfEdit: user.id === req.user.sub,
+    });
+
+    return { user: publicUser(user, await loadUserRoles(user.id, req.tenant.id), { roles_editable: rolesEditable }) };
   });
 
   app.post('/api/v1/users', { onRequest: [requireStaffUserManager] }, async (req, reply) => {
@@ -398,6 +426,9 @@ export default async function userRoutes(app: FastifyInstance) {
 
     const manageError = await assertTargetUserManageable(ctx, req.tenant.id, id);
     if (manageError) return reply.code(403).send({ error: 'user_not_manageable', message: manageError });
+
+    const roleEditError = await assertCanEditTargetRoles(ctx, req.tenant.id, id, req.user.sub);
+    if (roleEditError) return reply.code(403).send({ error: 'roles_not_editable', message: roleEditError });
 
     const userModel = await getUserModel(req.tenant.id);
     const assignError = validateRoleAssignments(userModel, parsed.data.roles);
