@@ -65,6 +65,15 @@ const locales = ref<string[]>(['en', 'sw']);
 const expandedRule = ref<number | null>(0);
 const expandedTemplate = ref<number | null>(0);
 
+type SenderChannel = 'email' | 'sms' | 'whatsapp';
+const senderExpanded = ref(new Set<SenderChannel>());
+
+function toggleSender(channel: SenderChannel) {
+  if (senderExpanded.value.has(channel)) senderExpanded.value.delete(channel);
+  else senderExpanded.value.add(channel);
+  senderExpanded.value = new Set(senderExpanded.value);
+}
+
 onMounted(async () => {
   try {
     const identity = await api<{ payload?: { locales?: { enabled?: string[] } } }>('/api/v1/config/cd01_identity');
@@ -727,14 +736,22 @@ function varToken(name: string) {
         </p>
       </div>
 
-      <UCard :ui="{ body: 'p-4 space-y-3' }">
-        <div class="flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-mail" class="size-4 text-primary" />
+      <UCard :ui="{ body: 'p-0' }">
+        <div class="flex items-center justify-between gap-2 px-4 py-3 cursor-pointer select-none" @click="toggleSender('email')">
+          <div class="flex items-center gap-2 min-w-0">
+            <UIcon name="i-lucide-mail" class="size-4 text-primary shrink-0" />
             <span class="text-sm font-medium">Email</span>
+            <UBadge v-if="!payload.senders.email.enabled" size="sm" variant="subtle" color="neutral">Off</UBadge>
           </div>
-          <USwitch v-model="payload.senders.email.enabled" size="sm" />
+          <div class="flex items-center gap-2 shrink-0" @click.stop>
+            <USwitch v-model="payload.senders.email.enabled" size="sm" />
+            <UIcon
+              :name="senderExpanded.has('email') ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+              class="size-4 text-muted"
+            />
+          </div>
         </div>
+        <div v-if="senderExpanded.has('email')" class="border-t border-default px-4 py-3 space-y-3">
         <div v-if="payload.senders.email.enabled" class="space-y-3">
           <div class="grid sm:grid-cols-2 gap-3">
             <UFormField label="From name">
@@ -822,16 +839,25 @@ function varToken(name: string) {
             </div>
           </div>
         </div>
+        </div>
       </UCard>
 
-      <UCard :ui="{ body: 'p-4 space-y-3' }">
-        <div class="flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-message-square" class="size-4 text-primary" />
+      <UCard :ui="{ body: 'p-0' }">
+        <div class="flex items-center justify-between gap-2 px-4 py-3 cursor-pointer select-none" @click="toggleSender('sms')">
+          <div class="flex items-center gap-2 min-w-0">
+            <UIcon name="i-lucide-message-square" class="size-4 text-primary shrink-0" />
             <span class="text-sm font-medium">SMS</span>
+            <UBadge v-if="!payload.senders.sms.enabled" size="sm" variant="subtle" color="neutral">Off</UBadge>
           </div>
-          <USwitch v-model="payload.senders.sms.enabled" size="sm" />
+          <div class="flex items-center gap-2 shrink-0" @click.stop>
+            <USwitch v-model="payload.senders.sms.enabled" size="sm" />
+            <UIcon
+              :name="senderExpanded.has('sms') ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+              class="size-4 text-muted"
+            />
+          </div>
         </div>
+        <div v-if="senderExpanded.has('sms')" class="border-t border-default px-4 py-3 space-y-3">
         <div v-if="payload.senders.sms.enabled" class="space-y-3">
           <div class="grid sm:grid-cols-2 gap-3">
             <UFormField label="Provider preset">
@@ -924,16 +950,33 @@ function varToken(name: string) {
             </div>
           </div>
         </div>
+        </div>
       </UCard>
 
-      <UCard :ui="{ body: 'p-4 space-y-3' }">
-        <div class="flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-message-circle" class="size-4 text-primary" />
+      <UCard :ui="{ body: 'p-0' }">
+        <div class="flex items-center justify-between gap-2 px-4 py-3 cursor-pointer select-none" @click="toggleSender('whatsapp')">
+          <div class="flex items-center gap-2 min-w-0">
+            <UIcon name="i-lucide-message-circle" class="size-4 text-primary shrink-0" />
             <span class="text-sm font-medium">WhatsApp</span>
+            <UBadge v-if="!payload.senders.whatsapp.enabled" size="sm" variant="subtle" color="neutral">Off</UBadge>
+            <UBadge
+              v-else-if="payload.senders.whatsapp.mode === 'test'"
+              size="sm"
+              variant="subtle"
+              color="warning"
+            >
+              Test
+            </UBadge>
           </div>
-          <USwitch v-model="payload.senders.whatsapp.enabled" size="sm" />
+          <div class="flex items-center gap-2 shrink-0" @click.stop>
+            <USwitch v-model="payload.senders.whatsapp.enabled" size="sm" />
+            <UIcon
+              :name="senderExpanded.has('whatsapp') ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+              class="size-4 text-muted"
+            />
+          </div>
         </div>
+        <div v-if="senderExpanded.has('whatsapp')" class="border-t border-default px-4 py-3 space-y-3">
         <div v-if="payload.senders.whatsapp.enabled" class="space-y-3">
           <UFormField
             label="Environment"
@@ -1062,6 +1105,7 @@ function varToken(name: string) {
               <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" @click="removeProviderField(payload.senders.whatsapp.fields, fi)" />
             </div>
           </div>
+        </div>
         </div>
       </UCard>
     </section>
