@@ -2,9 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
+import multipart from '@fastify/multipart';
 import type { Cd01Identity, Cd02Hierarchy, Cd03Taxonomy, Cd06IntakeForms } from '../types.js';
 import type { Cd09Notifications } from '@egrm/config-schemas';
-import { configuredPartyNotificationChannels } from '@egrm/config-schemas';
+import { configuredPartyNotificationChannels, kindsForChannel } from '@egrm/config-schemas';
 import type { Cd10OrgAccess } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
 import { getActiveConfig } from '../services/config.js';
@@ -50,6 +51,7 @@ async function departmentCodes(tenantId: string): Promise<string[]> {
 /** Public (unauthenticated) surface: intake metadata, submission, tracking. Rate-limited. */
 export default async function publicRoutes(app: FastifyInstance) {
   const rateLimit = { rateLimit: { max: 30, timeWindow: '1 minute' } };
+  await app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024, files: 10 } });
 
   // Everything the portal needs to render the configured intake form.
   app.get('/api/v1/public/intake-meta', { config: rateLimit }, async (req, reply) => {
@@ -82,21 +84,75 @@ export default async function publicRoutes(app: FastifyInstance) {
       levels: hierarchy.levels,
       units,
       notification_channels: notifications ? configuredPartyNotificationChannels(notifications) : [],
+      attachments: {
+        enabled: form.attachment_policy.intake_enabled,
+        max_files: form.attachment_policy.intake_max_files,
+        kinds: kindsForChannel(form, 'intake').map((k) => ({
+          code: k.code,
+          label: k.label,
+        })),
+      },
     };
   });
 
   app.post('/api/v1/public/cases', { config: rateLimit }, async (req, reply) => {
-    const parsed = submitBody.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+    let anonymous = false;
+    let consent = false;
+    let values: Record<string, unknown> = {};
+    const files: { kind: string; filename: string; mime: string; data: Buffer }[] = [];
+    const kindsQueue: string[] = [];
+
+    if (req.isMultipart()) {
+      const parts = req.parts();
+      for await (const part of parts) {
+        if (part.type === 'file') {
+          const data = await part.toBuffer();
+          files.push({
+            kind: 'evidence',
+            filename: part.filename || 'upload',
+            mime: part.mimetype || 'application/octet-stream',
+            data,
+          });
+        } else if (part.fieldname === 'payload') {
+          const raw = String(part.value);
+          try {
+            const parsed = submitBody.safeParse(JSON.parse(raw));
+            if (!parsed.success) {
+              return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+            }
+            anonymous = parsed.data.anonymous;
+            consent = parsed.data.consent;
+            values = parsed.data.values;
+          } catch {
+            return reply.code(400).send({ error: 'invalid_body', message: 'Invalid payload JSON' });
+          }
+        } else if (part.fieldname === 'kinds') {
+          kindsQueue.push(String(part.value));
+        }
+      }
+
+      for (let i = 0; i < files.length; i++) {
+        if (kindsQueue[i]) files[i]!.kind = kindsQueue[i]!;
+      }
+    } else {
+      const parsed = submitBody.safeParse(req.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+      anonymous = parsed.data.anonymous;
+      consent = parsed.data.consent;
+      values = parsed.data.values;
+    }
 
     const result = await createCase({
       tenantId: req.tenant.id,
       channel: 'web',
-      anonymous: parsed.data.anonymous,
-      consent: parsed.data.consent,
-      values: parsed.data.values,
+      anonymous,
+      consent,
+      values,
+      attachments: files.length ? files : undefined,
     });
-    if (!result.ok) return reply.code(result.code).send({ error: result.error, details: result.details });
+    if (!result.ok) {
+      return reply.code(result.code).send({ error: result.error, message: result.message, details: result.details });
+    }
 
     return reply.code(201).send({
       reference: result.reference,

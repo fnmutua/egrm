@@ -8,12 +8,68 @@ const anonymous = ref(false);
 const consent = ref(false);
 const values = reactive<Record<string, unknown>>({});
 const notificationChannels = ref<string[]>([]);
+const pendingFiles = ref<{ id: string; file: File; kind: string }[]>([]);
+const defaultAttachmentKind = ref('evidence');
+const attachmentInput = ref<HTMLInputElement | null>(null);
 const step = ref(0);
 const error = ref('');
 const submitting = ref(false);
 const result = ref<{ reference: string; tracking_pin?: string } | null>(null);
 
 const configuredChannels = computed(() => meta.value?.notification_channels ?? []);
+
+const attachmentsEnabled = computed(() => meta.value?.attachments?.enabled && (meta.value?.attachments?.kinds?.length ?? 0) > 0);
+const attachmentKinds = computed(() => meta.value?.attachments?.kinds ?? []);
+const maxAttachmentFiles = computed(() => meta.value?.attachments?.max_files ?? 5);
+
+const attachmentKindItems = computed(() =>
+  attachmentKinds.value.map((k) => ({
+    value: k.code,
+    label: k.label[locale.value] ?? k.label.en ?? k.code,
+  })),
+);
+
+watch(attachmentKinds, (kinds) => {
+  if (kinds.length && !kinds.some((k) => k.code === defaultAttachmentKind.value)) {
+    defaultAttachmentKind.value = kinds[0]!.code;
+  }
+}, { immediate: true });
+
+function attachmentKindLabel(code: string) {
+  const k = attachmentKinds.value.find((x) => x.code === code);
+  return k?.label[locale.value] ?? k?.label.en ?? code;
+}
+
+function onAttachmentFileChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const selected = [...(input.files ?? [])];
+  input.value = '';
+  if (!selected.length) return;
+
+  const room = maxAttachmentFiles.value - pendingFiles.value.length;
+  if (room <= 0) {
+    error.value = `You can attach at most ${maxAttachmentFiles.value} file(s).`;
+    return;
+  }
+
+  for (const file of selected.slice(0, room)) {
+    pendingFiles.value.push({
+      id: crypto.randomUUID(),
+      file,
+      kind: defaultAttachmentKind.value,
+    });
+  }
+}
+
+function removePendingFile(id: string) {
+  pendingFiles.value = pendingFiles.value.filter((f) => f.id !== id);
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 function channelLabel(ch: { label: Record<string, string>; value: string }) {
   return ch.label[locale.value] ?? ch.label.en ?? ch.value;
@@ -55,6 +111,7 @@ const sections = computed(() => {
   const all = [
     { key: 'complainant', title: 'Your details', skip: anonymous.value },
     { key: 'grievance', title: 'The grievance', skip: false },
+    { key: 'documents', title: 'Supporting documents', skip: !attachmentsEnabled.value },
     { key: 'outcome', title: 'Expected outcome & consent', skip: false },
   ] as const;
   return all.filter((s) => !s.skip);
@@ -65,7 +122,9 @@ const fieldsFor = (section: string) => meta.value?.fields.filter((f) => f.sectio
 
 function validateStep(): boolean {
   error.value = '';
-  for (const f of fieldsFor(currentSection.value!.key)) {
+  const key = currentSection.value!.key;
+  if (key === 'documents') return true;
+  for (const f of fieldsFor(key)) {
     if (!f.required) continue;
     const v = values[f.key];
     if (v == null || v === '' || (Array.isArray(v) && v.length === 0)) {
@@ -98,6 +157,9 @@ function submitErrorMessage(e: unknown): string {
     missing_required_fields: `Please complete: ${(err.data?.details?.fields ?? []).join(', ') || 'required fields'}.`,
     consent_required: 'Consent is required to process your personal data.',
     anonymous_not_allowed: 'Anonymous submissions are not allowed for this programme.',
+    intake_attachments_disabled: 'Document uploads are not enabled for this programme.',
+    attachment_kind_not_allowed: 'That document type is not allowed.',
+    attachment_policy_violation: 'One or more files exceed size or type limits.',
     tenant_not_configured: 'This programme is not fully configured yet. Try again later.',
   };
   if (code && messages[code]) return messages[code];
@@ -127,6 +189,9 @@ async function doSubmit() {
         ...values,
         notification_channels: anonymous.value ? [] : notificationChannels.value,
       },
+      files: pendingFiles.value.length
+        ? pendingFiles.value.map((f) => ({ file: f.file, kind: f.kind }))
+        : undefined,
     });
   } catch (e: unknown) {
     error.value = submitErrorMessage(e);
@@ -194,6 +259,66 @@ async function doSubmit() {
             :locale="locale"
             :options="fieldOptions(f, locale)"
           />
+
+          <div
+            v-if="currentSection?.key === 'documents'"
+            class="space-y-4"
+          >
+            <div>
+              <p class="text-sm text-muted">
+                Photos, PDFs, or scans that help explain your grievance. This step is optional — you can continue without attaching anything.
+                Up to {{ maxAttachmentFiles }} file(s).
+              </p>
+            </div>
+
+            <UFormField label="Document type for next file">
+              <USelectMenu
+                v-model="defaultAttachmentKind"
+                :items="attachmentKindItems"
+                value-key="value"
+                label-key="label"
+                class="w-full"
+              />
+            </UFormField>
+
+            <div>
+              <input
+                ref="attachmentInput"
+                type="file"
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                class="hidden"
+                :disabled="pendingFiles.length >= maxAttachmentFiles"
+                @change="onAttachmentFileChange"
+              />
+              <UButton
+                variant="soft"
+                icon="i-lucide-paperclip"
+                :disabled="pendingFiles.length >= maxAttachmentFiles"
+                @click="attachmentInput?.click()"
+              >
+                Add files
+              </UButton>
+            </div>
+
+            <ul v-if="pendingFiles.length" class="space-y-2">
+              <li
+                v-for="item in pendingFiles"
+                :key="item.id"
+                class="flex flex-wrap items-center justify-between gap-2 text-sm border border-default rounded-md px-3 py-2"
+              >
+                <div class="min-w-0">
+                  <div class="truncate font-medium">{{ item.file.name }}</div>
+                  <div class="text-xs text-muted">
+                    {{ attachmentKindLabel(item.kind) }} · {{ formatFileSize(item.file.size) }}
+                  </div>
+                </div>
+                <UButton size="xs" variant="ghost" color="error" @click="removePendingFile(item.id)">Remove</UButton>
+              </li>
+            </ul>
+
+            <p v-else class="text-sm text-muted">No files added yet.</p>
+          </div>
 
           <!-- Consent + notification channels on final step -->
           <div v-if="step === sections.length - 1 && !anonymous" class="pt-2 border-t border-default space-y-3">

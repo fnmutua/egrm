@@ -1,5 +1,6 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Cd06IntakeForms } from '@egrm/config-schemas';
+import type { AttachmentChannel } from '@egrm/config-schemas';
 import { kindsForChannel, mergeDefaultAttachmentKinds } from '@egrm/config-schemas';
 import { hasPermission } from '@egrm/core';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -73,6 +74,129 @@ async function caseAttachmentStats(tenantId: string, caseId: string) {
   return { count: row?.count ?? 0, totalBytes: row?.total ?? 0 };
 }
 
+export interface IntakeAttachmentInput {
+  kind: string;
+  filename: string;
+  mime: string;
+  data: Buffer;
+}
+
+function validateAttachmentFile(
+  cfg: Cd06IntakeForms,
+  input: {
+    channel: AttachmentChannel;
+    kind: string;
+    filename: string;
+    mime: string;
+    sizeBytes: number;
+  },
+): { error: string; message?: string } | null {
+  const kindDef = kindsForChannel(cfg, input.channel).find((k) => k.code === input.kind);
+  if (!kindDef) {
+    return { error: 'attachment_kind_not_allowed', message: 'This document type is not allowed for upload here' };
+  }
+
+  const policy = cfg.attachment_policy;
+  if (policy.block_executable && isBlockedExecutable(input.mime, input.filename)) {
+    return { error: 'attachment_policy_violation', message: 'Executable file types are not allowed' };
+  }
+
+  const maxMb = kindDef.max_size_mb ?? policy.max_total_case_size_mb;
+  if (input.sizeBytes > maxMb * 1024 * 1024) {
+    return { error: 'attachment_policy_violation', message: `File exceeds ${maxMb} MB limit` };
+  }
+
+  if (!mimeAllowed(input.mime, kindDef.allowed_mime, policy.allowed_mime_default)) {
+    return { error: 'attachment_policy_violation', message: 'File type not allowed for this document type' };
+  }
+
+  return null;
+}
+
+/** Validate complainant files before intake case creation. */
+export async function validateIntakeAttachments(
+  tenantId: string,
+  files: IntakeAttachmentInput[],
+): Promise<{ ok: true } | { error: string; message?: string }> {
+  if (files.length === 0) return { ok: true };
+
+  const cfg = await loadAttachmentConfig(tenantId);
+  const policy = cfg.attachment_policy;
+  if (!policy.intake_enabled) {
+    return { error: 'intake_attachments_disabled', message: 'Attachments are not accepted on this intake form' };
+  }
+  if (files.length > policy.intake_max_files) {
+    return { error: 'attachment_policy_violation', message: `You may attach at most ${policy.intake_max_files} file(s)` };
+  }
+
+  let totalBytes = 0;
+  for (const file of files) {
+    const err = validateAttachmentFile(cfg, {
+      channel: 'intake',
+      kind: file.kind,
+      filename: file.filename,
+      mime: file.mime,
+      sizeBytes: file.data.length,
+    });
+    if (err) return err;
+    totalBytes += file.data.length;
+  }
+
+  if (totalBytes > policy.max_total_case_size_mb * 1024 * 1024) {
+    return { error: 'attachment_policy_violation', message: 'Total attachment size exceeds the limit' };
+  }
+
+  return { ok: true };
+}
+
+/** Persist intake attachments atomically with case creation (active, not staged). */
+export async function attachIntakeFiles(
+  tx: DbTx,
+  input: {
+    tenantId: string;
+    caseId: string;
+    caseEventId: string;
+    files: IntakeAttachmentInput[];
+  },
+): Promise<{ summaries: { id: string; kind: string; filename: string }[] }> {
+  if (input.files.length === 0) return { summaries: [] };
+
+  const cfg = await loadAttachmentConfig(input.tenantId);
+  const policy = cfg.attachment_policy;
+  const summaries: { id: string; kind: string; filename: string }[] = [];
+
+  for (const file of input.files) {
+    const kindDef = kindsForChannel(cfg, 'intake').find((k) => k.code === file.kind)!;
+    const id = crypto.randomUUID();
+    const storageKey = attachmentStorageKey(input.tenantId, input.caseId, id);
+    const sha256 = await writeAttachmentBlob(storageKey, file.data);
+    const visibility = kindDef.default_visibility as 'public' | 'staff' | 'restricted';
+
+    await tx.insert(schema.caseAttachment).values({
+      id,
+      tenantId: input.tenantId,
+      caseId: input.caseId,
+      caseEventId: input.caseEventId,
+      kind: file.kind,
+      title: file.filename,
+      filename: file.filename,
+      mime: file.mime,
+      sizeBytes: file.data.length,
+      sha256,
+      storageKey,
+      visibility,
+      status: 'active',
+      malwareScanStatus: policy.malware_scan ? 'pending' : 'skipped',
+      uploadedBy: null,
+      uploadChannel: 'portal',
+    });
+
+    summaries.push({ id, kind: file.kind, filename: file.filename });
+  }
+
+  return { summaries };
+}
+
 export async function stageCaseAttachment(input: {
   tenantId: string;
   caseId: string;
@@ -86,25 +210,17 @@ export async function stageCaseAttachment(input: {
 }): Promise<{ id: string } | { error: string; message?: string }> {
   const cfg = await loadAttachmentConfig(input.tenantId);
   const channel = input.channel ?? 'console';
-  const kindDef = kindByCode(cfg, input.kind, channel);
-  if (!kindDef) {
-    return { error: 'attachment_kind_not_allowed', message: 'This document type is not allowed for upload here' };
-  }
+  const fileErr = validateAttachmentFile(cfg, {
+    channel,
+    kind: input.kind,
+    filename: input.filename,
+    mime: input.mime,
+    sizeBytes: input.data.length,
+  });
+  if (fileErr) return fileErr;
 
+  const kindDef = kindByCode(cfg, input.kind, channel)!;
   const policy = cfg.attachment_policy;
-  if (policy.block_executable && isBlockedExecutable(input.mime, input.filename)) {
-    return { error: 'attachment_policy_violation', message: 'Executable file types are not allowed' };
-  }
-
-  const maxMb = kindDef.max_size_mb ?? policy.max_total_case_size_mb;
-  const maxBytes = maxMb * 1024 * 1024;
-  if (input.data.length > maxBytes) {
-    return { error: 'attachment_policy_violation', message: `File exceeds ${maxMb} MB limit` };
-  }
-
-  if (!mimeAllowed(input.mime, kindDef.allowed_mime, policy.allowed_mime_default)) {
-    return { error: 'attachment_policy_violation', message: 'File type not allowed for this document type' };
-  }
 
   const stats = await caseAttachmentStats(input.tenantId, input.caseId);
   if (stats.count >= policy.max_files_per_case) {

@@ -155,6 +155,19 @@ Detailed in spec 05 §7. Default-off; each capability independently switchable:
 
 Platform-level AI governance rules (human-in-the-loop, audit of every suggestion, sensitive fail-safe) are **not** configurable — see spec 05 §7.3.
 
+### CD-17 Complainant correspondence
+Detailed in spec 15. Per tenant:
+
+| Item | Notes |
+|---|---|
+| **Portal policy** | Enable messages on track page; allow complainant reply; max body length; rate limits |
+| **Staff policy** | Outbound messages; log phone/in-person contact; internal notes; optional mirror of status-update text into thread |
+| **Attachment policy** | Per-message file limits; which CD-06 kinds allowed on staff outbound vs complainant reply |
+| **Sensitive redaction** | Generic outbound text shown to complainant on sensitive cases |
+| **Workflow hooks** | Inbound reply unpauses `Awaiting information`; optional auto-transition status |
+
+Bundled CD-09 notification rules for `thread.reply_external` and `thread.reply_inbound` are merged on seed when CD-17 is enabled.
+
 ### CD-14 Feature flags (module activation)
 Coarse switches for whole modules so light tenants stay simple: knowledge base, tasks, committees, appeals, satisfaction survey, public transparency page, registered complainant accounts, organizations directory, USSD, hotline, public API, custom dashboards, chatbot intake, AI assistance.
 

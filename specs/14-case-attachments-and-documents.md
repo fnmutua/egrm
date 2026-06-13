@@ -2,7 +2,7 @@
 
 How files (evidence, reports, signed forms, correspondence) are captured, stored, linked to workflow steps, and exposed across intake, status updates, reporting, and exports. This is **attachment management with access control**, not a full document-management system (spec 01 §2).
 
-**Status:** Specification draft v0.1 — design before implementation. Extends [03-domain-model.md](03-domain-model.md) §2.6, [04-workflow-engine.md](04-workflow-engine.md) §2–3, [07-security-access-control.md](07-security-access-control.md), and [13-staff-console-case-handling.md](13-staff-console-case-handling.md).
+**Status:** Specification draft v0.1 — design before implementation. Extends [03-domain-model.md](03-domain-model.md) §2.6, [04-workflow-engine.md](04-workflow-engine.md) §2–3, [07-security-access-control.md](07-security-access-control.md), [13-staff-console-case-handling.md](13-staff-console-case-handling.md), and [15-complainant-correspondence.md](15-complainant-correspondence.md) (thread attachments).
 
 ---
 
@@ -227,8 +227,8 @@ Checks: `attachment:download` or `attachment:read_protected` for `restricted`; j
 
 ### 5.5 Public / complainant surfaces
 
-- **Intake:** attachments staged during form submit; committed when case is created (`POST /public/cases` includes `attachment_ids`).
-- **Track / reply:** complainant may upload when adding information (`POST /public/cases/{ref}/reply`) — stricter policy (smaller size, image/PDF only, CAPTCHA).
+- **Intake:** attachments staged during form submit; committed when case is created (`POST /public/cases` multipart).
+- **Track / reply:** complainant may attach files when posting a thread reply (`POST /public/cases/{ref}/reply`) — spec [15](15-complainant-correspondence.md); stricter policy than staff; rate-limited.
 - **Public visibility:** only attachments with `visibility=public` appear on track portal; staff must explicitly mark acknowledgement letters public.
 
 ---

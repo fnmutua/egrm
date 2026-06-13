@@ -82,7 +82,7 @@ Priorities: **M**ust (MVP), **S**hould (fast-follow), **C**ould (differentiator)
 |---|---|---|---|
 | GEN-CASE-01 | M | Queues: open/my/team/overdue/closed + saved views (filters, columns, sharing) | K2 FR-STAFF-02, ADM queues |
 | GEN-CASE-02 | M | Search: basic + advanced criteria builder, RBAC-scoped; sensitive cases excluded without clearance | K2 FR-STAFF-03; KIS |
-| GEN-CASE-03 | M | Case detail: timeline (single event stream), thread (external vs internal), parties, tasks, attachments, SLA clocks, available actions from engine | K2 FR-STAFF-07/08/17 — **partial:** [spec 13](13-staff-console-case-handling.md); attachments: [spec 14](14-case-attachments-and-documents.md) |
+| GEN-CASE-03 | M | Case detail: timeline (single event stream), thread (external vs internal), parties, tasks, attachments, SLA clocks, available actions from engine | K2 FR-STAFF-07/08/17 — **partial:** [spec 13](13-staff-console-case-handling.md); attachments: [spec 14](14-case-attachments-and-documents.md); thread: [spec 15](15-complainant-correspondence.md) |
 | GEN-CASE-04 | M | Field edits audited with before/after; revert as new inverse event | KIS history/revert |
 | GEN-CASE-05 | M | Assignment/transfer with reason; collaborator management; claim-on-response option | K2 FR-STAFF-14/15/06 — **partial:** assignment tab in spec 13 |
 | GEN-CASE-06 | M | Bulk actions (assign/transfer/status where guards allow) with per-case guard evaluation + per-case audit | K2 FR-STAFF-21; KIS bulk refer |

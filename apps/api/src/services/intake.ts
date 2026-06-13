@@ -10,6 +10,7 @@ import { allocateReference } from './reference.js';
 import { enqueueNotifications } from './notifications.js';
 import { scheduleOutboxDispatch } from './notification-queue.js';
 import { coerceIntakeString, coerceIntakeStringArray } from './intake-values.js';
+import { attachIntakeFiles, validateIntakeAttachments, type IntakeAttachmentInput } from './attachments.js';
 
 export interface IntakeInput {
   tenantId: string;
@@ -18,6 +19,8 @@ export interface IntakeInput {
   consent: boolean;
   /** Flat field values keyed by CD-06 field key. */
   values: Record<string, unknown>;
+  /** Complainant files submitted with the intake form. */
+  attachments?: IntakeAttachmentInput[];
   /** Staff actor for assisted intake; null for public submissions. */
   staffActorId?: string | null;
 }
@@ -36,6 +39,7 @@ export interface IntakeError {
   ok: false;
   code: number;
   error: string;
+  message?: string;
   details?: unknown;
 }
 
@@ -71,6 +75,14 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
   }
   if (missing.length > 0) {
     return { ok: false, code: 422, error: 'missing_required_fields', details: { fields: missing } };
+  }
+
+  const attachments = input.attachments ?? [];
+  if (attachments.length > 0) {
+    const attachValidation = await validateIntakeAttachments(input.tenantId, attachments);
+    if ('error' in attachValidation) {
+      return { ok: false, code: 422, error: attachValidation.error, message: attachValidation.message };
+    }
   }
 
   const name = coerceIntakeString(input.values.name);
@@ -195,7 +207,7 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
       })
       .returning({ id: schema.grmCase.id });
 
-    await tx.insert(schema.caseEvent).values({
+    const [createdEv] = await tx.insert(schema.caseEvent).values({
       tenantId: input.tenantId,
       caseId: c!.id,
       kind: 'created',
@@ -203,7 +215,48 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
       actorId: input.staffActorId ?? null,
       visibility: 'public',
       data: { channel: input.channel, status: initialStatus, anonymous: input.anonymous },
-    });
+    }).returning({ id: schema.caseEvent.id });
+
+    let attachmentSummaries: { id: string; kind: string; filename: string }[] = [];
+    if (attachments.length > 0) {
+      const [attachEv] = await tx.insert(schema.caseEvent).values({
+        tenantId: input.tenantId,
+        caseId: c!.id,
+        kind: 'attachment_added',
+        actorType: input.staffActorId ? 'staff' : 'complainant',
+        actorId: input.staffActorId ?? null,
+        visibility: 'public',
+        data: { channel: input.channel, intake: true },
+      }).returning({ id: schema.caseEvent.id });
+
+      const attached = await attachIntakeFiles(tx, {
+        tenantId: input.tenantId,
+        caseId: c!.id,
+        caseEventId: attachEv!.id,
+        files: attachments,
+      });
+      attachmentSummaries = attached.summaries;
+
+      await tx.update(schema.caseEvent).set({
+        data: {
+          channel: input.channel,
+          intake: true,
+          attachment_ids: attachmentSummaries.map((a) => a.id),
+          attachment_summary: attachmentSummaries,
+        },
+      }).where(eq(schema.caseEvent.id, attachEv!.id));
+    }
+
+    if (attachmentSummaries.length > 0 && createdEv?.id) {
+      await tx.update(schema.caseEvent).set({
+        data: {
+          channel: input.channel,
+          status: initialStatus,
+          anonymous: input.anonymous,
+          attachment_count: attachmentSummaries.length,
+        },
+      }).where(eq(schema.caseEvent.id, createdEv.id));
+    }
 
     const { outboxId } = await enqueueNotifications(
       {

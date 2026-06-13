@@ -36,6 +36,8 @@ Route: `/cases/{id}`
 | **Assignment** | Current officer, history, assign/reassign | `case:read` (view); `case:assign` (mutate) |
 | **Notifications** | Delivery log for this case | `case:read` |
 | **Timeline** | Append-only `case_event` stream | `case:read` |
+| **Correspondence** | Case thread: messages, logged contact, internal notes | `thread:read` |
+| **Documents** | Attachments list + upload | `case:read` / `attachment:upload` |
 
 Tabs are independent panels — no nested routing. State (e.g. notification list loaded) is per-tab.
 
@@ -229,8 +231,8 @@ Discuss before build:
 
 | Item | Notes |
 |---|---|
-| **Thread** | External vs internal replies on case detail (GEN-CASE-03) |
-| **Attachments / Documents** | Staged upload, Documents tab, per-transition required kinds — [spec 14](14-case-attachments-and-documents.md) |
+| **Thread** | External vs internal replies on case detail (GEN-CASE-03) — [spec 15](15-complainant-correspondence.md) |
+| **Attachments / Documents** | Implemented — [spec 14](14-case-attachments-and-documents.md) |
 | **SLA clocks** | At-risk/breach display on detail header or dedicated panel |
 | **Transfer with reason** | Distinct from assign; may need new action type |
 | **Field edit UI** | Audited before/after (GEN-CASE-04) |

@@ -17,6 +17,17 @@ export interface IntakeNotificationChannel {
   requires: 'phone' | 'email';
 }
 
+export interface IntakeAttachmentKind {
+  code: string;
+  label: Record<string, string>;
+}
+
+export interface IntakeAttachmentsMeta {
+  enabled: boolean;
+  max_files: number;
+  kinds: IntakeAttachmentKind[];
+}
+
 export interface IntakeMeta {
   locales: { default: string; enabled: string[] };
   anonymous_allowed: boolean;
@@ -27,6 +38,7 @@ export interface IntakeMeta {
   units: IntakeUnit[];
   /** CD-09 configured outbound channels the complainant may opt into. */
   notification_channels: IntakeNotificationChannel[];
+  attachments: IntakeAttachmentsMeta;
 }
 
 export interface IntakeUnit {
@@ -161,7 +173,38 @@ export function useIntake() {
     return [];
   }
 
-  async function submit(payload: { anonymous: boolean; consent: boolean; values: Record<string, unknown> }) {
+  async function submit(payload: {
+    anonymous: boolean;
+    consent: boolean;
+    values: Record<string, unknown>;
+    files?: { file: File; kind: string }[];
+  }) {
+    const body = {
+      anonymous: payload.anonymous,
+      consent: payload.consent,
+      values: normalizeIntakeValues(payload.values),
+    };
+
+    if (payload.files?.length) {
+      const form = new FormData();
+      form.append('payload', JSON.stringify(body));
+      for (const item of payload.files) {
+        form.append('files', item.file);
+        form.append('kinds', item.kind);
+      }
+      return await $fetch<{
+        reference: string;
+        status: string;
+        tracking_pin?: string;
+        possible_duplicates: number;
+      }>('/api/v1/public/cases', {
+        baseURL: config.public.apiBase,
+        method: 'POST',
+        headers,
+        body: form,
+      });
+    }
+
     return await $fetch<{
       reference: string;
       status: string;
@@ -171,10 +214,7 @@ export function useIntake() {
       baseURL: config.public.apiBase,
       method: 'POST',
       headers,
-      body: {
-        ...payload,
-        values: normalizeIntakeValues(payload.values),
-      },
+      body,
     });
   }
 
