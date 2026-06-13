@@ -37,6 +37,7 @@ interface Transition {
   roles: string[];
   levels?: string[];
   requires?: { fields?: string[]; attachments?: string[]; note?: boolean };
+  allows?: { attachments?: string[] };
   effects?: Record<string, string>[];
   guard?: string;
 }
@@ -66,7 +67,7 @@ onMounted(async () => {
       label: typeof l.label === 'string' ? l.label : l.code,
     }));
     attachmentKindItems.value = (intake.payload?.attachment_kinds ?? [])
-      .filter((k) => k.active !== false)
+      .filter((k) => k.active !== false && k.console_allowed !== false)
       .map((k) => ({
         value: k.code,
         label: k.label?.en ?? k.code,
@@ -239,6 +240,15 @@ function setRequiresAttachments(t: Transition, codes: string[]) {
   if (!t.requires.attachments?.length && !t.requires.fields?.length && !t.requires.note) {
     t.requires = undefined;
   }
+}
+
+function setAllowsAttachments(t: Transition, codes: string[]) {
+  if (!codes.length) {
+    t.allows = undefined;
+    return;
+  }
+  t.allows ??= {};
+  t.allows.attachments = codes;
 }
 
 const txSummary = (t: Transition) => {
@@ -496,6 +506,30 @@ const reachabilityHint = computed(() => {
                 class="w-full font-mono"
                 placeholder="signed_resolution_form"
                 @update:model-value="setRequiresAttachments(t, ($event as string).split(',').map((s) => s.trim()).filter(Boolean))"
+              />
+            </UFormField>
+
+            <UFormField
+              label="Allowed document types (optional)"
+              help="When set, only these types may be attached on this transition (required types must be included here)."
+            >
+              <USelectMenu
+                v-if="attachmentKindItems.length"
+                :model-value="t.allows?.attachments ?? []"
+                :items="attachmentKindItems"
+                value-key="value"
+                label-key="label"
+                multiple
+                class="w-full"
+                placeholder="Any active type…"
+                @update:model-value="setAllowsAttachments(t, $event as string[])"
+              />
+              <UInput
+                v-else
+                :model-value="(t.allows?.attachments ?? []).join(', ')"
+                class="w-full font-mono"
+                placeholder="evidence, investigation_report"
+                @update:model-value="setAllowsAttachments(t, ($event as string).split(',').map((s) => s.trim()).filter(Boolean))"
               />
             </UFormField>
 

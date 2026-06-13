@@ -19,6 +19,8 @@ export const PERMISSIONS = [
   'thread:note_internal',
   'attachment:upload',
   'attachment:download',
+  'attachment:read_protected',
+  'attachment:delete_soft',
   // Sensitive cases (combined with sensitivity-class designation)
   'sensitive:read',
   'sensitive:handle',

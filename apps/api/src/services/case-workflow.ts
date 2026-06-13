@@ -1,5 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import type { Cd02Hierarchy, Cd04Workflow, Cd06IntakeForms } from '@egrm/config-schemas';
+import type { Cd02Hierarchy, Cd04Workflow, Cd06IntakeForms, PartyNotificationChannel } from '@egrm/config-schemas';
 import { hasPermission } from '@egrm/core';
 import { db, schema } from '../db/client.js';
 import { getActiveConfig } from './config.js';
@@ -24,6 +24,9 @@ export interface AvailableTransition {
     note?: boolean;
     fields?: string[];
     attachments?: { kind: string; label: string; min_count: number }[];
+  };
+  allows?: {
+    attachments?: { kind: string; label: string }[];
   };
 }
 
@@ -277,6 +280,14 @@ export async function getAvailableCaseActions(
               })),
             }
           : undefined,
+        allows: t.allows?.attachments?.length
+          ? {
+              attachments: t.allows.attachments.map((kind) => ({
+                kind,
+                label: intakeCfg ? kindLabel(intakeCfg, kind) : kind,
+              })),
+            }
+          : undefined,
       });
     }
   }
@@ -405,7 +416,12 @@ export async function applyCaseAction(
   }
 
   const stagedKinds = await loadStagedAttachmentKinds(tenantId, caseId, attachmentIds);
-  const attachErr = validateTransitionAttachments(transition.requires?.attachments, attachmentIds, stagedKinds);
+  const attachErr = validateTransitionAttachments(
+    transition.requires?.attachments,
+    transition.allows?.attachments,
+    attachmentIds,
+    stagedKinds,
+  );
   if (attachErr) return { ok: false, code: 422, error: attachErr };
 
   const guardErr = validateGuard(transition, caseRow, access);

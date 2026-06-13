@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Cd06IntakeForms } from '@egrm/config-schemas';
-import { mergeDefaultAttachmentKinds } from '@egrm/config-schemas';
+import { kindsForChannel, mergeDefaultAttachmentKinds } from '@egrm/config-schemas';
 import { hasPermission } from '@egrm/core';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { db, schema } from '../db/client.js';
@@ -43,12 +43,12 @@ export async function loadAttachmentConfig(tenantId: string): Promise<Cd06Intake
   };
 }
 
-function kindByCode(cfg: Cd06IntakeForms, code: string) {
-  return cfg.attachment_kinds.find((k) => k.code === code && k.active !== false);
+function kindByCode(cfg: Cd06IntakeForms, code: string, channel: 'console' | 'intake' = 'console') {
+  return kindsForChannel(cfg, channel).find((k) => k.code === code);
 }
 
 export function kindLabel(cfg: Cd06IntakeForms, code: string): string {
-  return kindByCode(cfg, code)?.label?.en ?? code;
+  return mergeDefaultAttachmentKinds(cfg.attachment_kinds).find((k) => k.code === code)?.label?.en ?? code;
 }
 
 function mimeAllowed(mime: string, allowed: string[] | undefined, defaults: string[]): boolean {
@@ -82,10 +82,14 @@ export async function stageCaseAttachment(input: {
   mime: string;
   data: Buffer;
   visibility?: string;
+  channel?: 'console' | 'intake';
 }): Promise<{ id: string } | { error: string; message?: string }> {
   const cfg = await loadAttachmentConfig(input.tenantId);
-  const kindDef = kindByCode(cfg, input.kind);
-  if (!kindDef) return { error: 'unknown_attachment_kind' };
+  const channel = input.channel ?? 'console';
+  const kindDef = kindByCode(cfg, input.kind, channel);
+  if (!kindDef) {
+    return { error: 'attachment_kind_not_allowed', message: 'This document type is not allowed for upload here' };
+  }
 
   const policy = cfg.attachment_policy;
   if (policy.block_executable && isBlockedExecutable(input.mime, input.filename)) {
@@ -150,7 +154,7 @@ export async function stageCaseAttachment(input: {
     status: 'staging',
     malwareScanStatus: policy.malware_scan ? 'pending' : 'skipped',
     uploadedBy: input.actorId,
-    uploadChannel: 'console',
+    uploadChannel: channel === 'intake' ? 'portal' : 'console',
   });
 
   return { id };
@@ -340,15 +344,28 @@ export async function promoteAttachments(
 
 export function validateTransitionAttachments(
   requiredKinds: string[] | undefined,
+  allowedKinds: string[] | undefined,
   attachmentIds: string[] | undefined,
   stagedKinds: Map<string, string>,
 ): string | null {
-  if (!requiredKinds?.length) return null;
   const ids = attachmentIds ?? [];
-  const kindsPresent = new Set(ids.map((id) => stagedKinds.get(id)).filter(Boolean));
-  for (const kind of requiredKinds) {
-    if (!kindsPresent.has(kind)) return 'required_attachment_missing';
+  const kindsPresent = new Set(
+    ids.map((id) => stagedKinds.get(id)).filter((k): k is string => typeof k === 'string'),
+  );
+
+  if (requiredKinds?.length) {
+    for (const kind of requiredKinds) {
+      if (!kindsPresent.has(kind)) return 'required_attachment_missing';
+    }
   }
+
+  if (allowedKinds?.length) {
+    const allowed = new Set(allowedKinds);
+    for (const kind of kindsPresent) {
+      if (!allowed.has(kind)) return 'attachment_kind_not_allowed';
+    }
+  }
+
   return null;
 }
 

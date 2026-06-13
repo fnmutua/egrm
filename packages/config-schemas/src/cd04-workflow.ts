@@ -26,6 +26,11 @@ const transitionDef = z.object({
       note: z.boolean().optional(),
     })
     .optional(),
+  allows: z
+    .object({
+      attachments: z.array(z.string()).optional(),
+    })
+    .optional(),
   effects: z.array(transitionEffect).optional(),
   guard: z.string().optional(),
 });

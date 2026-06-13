@@ -38,6 +38,25 @@ export const cd06IntakeForms = z.object({
   if (new Set(kindCodes).size !== kindCodes.length) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['attachment_kinds'], message: 'Document type codes must be unique' });
   }
+  const kindSet = new Set(kindCodes);
+  for (const code of form.attachment_policy.console_kind_codes ?? []) {
+    if (!kindSet.has(code)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['attachment_policy', 'console_kind_codes'],
+        message: `Unknown document type '${code}' in console limit`,
+      });
+    }
+  }
+  for (const code of form.attachment_policy.intake_kind_codes ?? []) {
+    if (!kindSet.has(code)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['attachment_policy', 'intake_kind_codes'],
+        message: `Unknown document type '${code}' in intake limit`,
+      });
+    }
+  }
 });
 
 export type Cd06IntakeForms = z.infer<typeof cd06IntakeForms>;

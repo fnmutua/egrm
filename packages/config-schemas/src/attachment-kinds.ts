@@ -15,6 +15,10 @@ export const attachmentKindDef = z.object({
   allowed_mime: z.array(z.string().min(1)).optional(),
   max_size_mb: z.number().positive().optional(),
   active: z.boolean().default(true),
+  /** When false, hidden from staff console upload pickers (spec 14 §3). */
+  console_allowed: z.boolean().default(true),
+  /** When true, available on public intake when global intake attachments are enabled. */
+  intake_allowed: z.boolean().default(false),
 });
 
 export const attachmentPolicy = z.object({
@@ -27,6 +31,10 @@ export const attachmentPolicy = z.object({
   duplicate_detection: z.enum(['off', 'warn', 'block']).default('warn'),
   intake_enabled: z.boolean().default(true),
   intake_max_files: z.number().int().positive().default(5),
+  /** Optional whitelist for staff console; empty = all active kinds with console_allowed. */
+  console_kind_codes: z.array(z.string().min(1)).optional(),
+  /** Optional whitelist for public intake; empty = all active kinds with intake_allowed. */
+  intake_kind_codes: z.array(z.string().min(1)).optional(),
 });
 
 export type AttachmentKindDef = z.infer<typeof attachmentKindDef>;
@@ -39,6 +47,8 @@ export const DEFAULT_ATTACHMENT_KINDS: AttachmentKindDef[] = [
     label: { en: 'Evidence', sw: 'Ushahidi' },
     default_visibility: 'staff',
     active: true,
+    console_allowed: true,
+    intake_allowed: true,
   },
   {
     code: 'investigation_report',
@@ -50,6 +60,8 @@ export const DEFAULT_ATTACHMENT_KINDS: AttachmentKindDef[] = [
     ],
     max_size_mb: 25,
     active: true,
+    console_allowed: true,
+    intake_allowed: false,
   },
   {
     code: 'signed_resolution_form',
@@ -58,6 +70,8 @@ export const DEFAULT_ATTACHMENT_KINDS: AttachmentKindDef[] = [
     allowed_mime: ['application/pdf', 'image/jpeg', 'image/png'],
     max_size_mb: 10,
     active: true,
+    console_allowed: true,
+    intake_allowed: false,
   },
   {
     code: 'acknowledgement',
@@ -66,12 +80,16 @@ export const DEFAULT_ATTACHMENT_KINDS: AttachmentKindDef[] = [
     allowed_mime: ['application/pdf'],
     max_size_mb: 5,
     active: true,
+    console_allowed: true,
+    intake_allowed: true,
   },
   {
     code: 'correspondence',
     label: { en: 'Correspondence', sw: 'Barua / mawasiliano' },
     default_visibility: 'staff',
     active: true,
+    console_allowed: true,
+    intake_allowed: false,
   },
   {
     code: 'committee_minutes',
@@ -80,6 +98,8 @@ export const DEFAULT_ATTACHMENT_KINDS: AttachmentKindDef[] = [
     allowed_mime: ['application/pdf'],
     max_size_mb: 15,
     active: true,
+    console_allowed: true,
+    intake_allowed: false,
   },
   {
     code: 'legal',
@@ -88,12 +108,16 @@ export const DEFAULT_ATTACHMENT_KINDS: AttachmentKindDef[] = [
     allowed_mime: ['application/pdf'],
     max_size_mb: 25,
     active: true,
+    console_allowed: true,
+    intake_allowed: false,
   },
   {
     code: 'other',
     label: { en: 'Other', sw: 'Nyingine' },
     default_visibility: 'staff',
     active: true,
+    console_allowed: true,
+    intake_allowed: false,
   },
 ];
 
@@ -108,6 +132,35 @@ export const DEFAULT_ATTACHMENT_POLICY: AttachmentPolicy = {
   intake_enabled: true,
   intake_max_files: 5,
 };
+
+/** Which upload surface a kind is being selected for. */
+export type AttachmentChannel = 'console' | 'intake';
+
+/** Active document kinds permitted for a channel (spec 14 §3). */
+export function kindsForChannel(
+  cfg: { attachment_kinds: AttachmentKindDef[]; attachment_policy?: AttachmentPolicy },
+  channel: AttachmentChannel,
+): AttachmentKindDef[] {
+  const kinds = mergeDefaultAttachmentKinds(cfg.attachment_kinds).filter((k) => k.active !== false);
+  const policy = cfg.attachment_policy ?? DEFAULT_ATTACHMENT_POLICY;
+
+  if (channel === 'intake') {
+    if (!policy.intake_enabled) return [];
+    let allowed = kinds.filter((k) => k.intake_allowed === true);
+    if (policy.intake_kind_codes?.length) {
+      const codes = new Set(policy.intake_kind_codes);
+      allowed = allowed.filter((k) => codes.has(k.code));
+    }
+    return allowed;
+  }
+
+  let allowed = kinds.filter((k) => k.console_allowed !== false);
+  if (policy.console_kind_codes?.length) {
+    const codes = new Set(policy.console_kind_codes);
+    allowed = allowed.filter((k) => codes.has(k.code));
+  }
+  return allowed;
+}
 
 /** Merge missing default kinds into a tenant payload (non-destructive). */
 export function mergeDefaultAttachmentKinds(kinds: AttachmentKindDef[] | undefined): AttachmentKindDef[] {

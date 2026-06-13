@@ -16,6 +16,8 @@ interface AttachmentKind {
   allowed_mime?: string[];
   max_size_mb?: number;
   active: boolean;
+  console_allowed?: boolean;
+  intake_allowed?: boolean;
 }
 
 const MIME_PRESETS = [
@@ -69,6 +71,8 @@ function ensureKind(k: AttachmentKind) {
   for (const loc of locales.value) k.label[loc] ??= '';
   k.default_visibility ??= 'staff';
   k.active ??= true;
+  k.console_allowed ??= true;
+  k.intake_allowed ??= false;
 }
 
 function ensure() {
@@ -92,6 +96,12 @@ watch(() => props.payload, ensure, { deep: false });
 
 const kinds = computed<AttachmentKind[]>(() => props.payload.attachment_kinds ?? []);
 const policy = computed(() => props.payload.attachment_policy as Record<string, unknown>);
+
+const kindSelectItems = computed(() =>
+  kinds.value
+    .filter((k) => k.active !== false)
+    .map((k) => ({ value: k.code, label: displayLabel(k) })),
+);
 
 const usedCodes = computed(() => new Set(kinds.value.map((k) => k.code)));
 
@@ -161,6 +171,14 @@ const presetOptions = computed(() =>
               <label class="flex items-center gap-1.5 text-xs text-muted">
                 <UCheckbox v-model="k.active" />
                 Active
+              </label>
+              <label class="flex items-center gap-1.5 text-xs text-muted">
+                <UCheckbox v-model="k.console_allowed" />
+                Staff console
+              </label>
+              <label class="flex items-center gap-1.5 text-xs text-muted">
+                <UCheckbox v-model="k.intake_allowed" />
+                Public intake
               </label>
               <UButton
                 v-if="kinds.length > 1"
@@ -259,6 +277,37 @@ const presetOptions = computed(() =>
           label-key="label"
           multiple
           class="w-full"
+        />
+      </UFormField>
+
+      <UFormField
+        label="Limit document types in staff console"
+        help="Optional whitelist. Leave empty to allow all active types marked for staff console."
+      >
+        <USelectMenu
+          v-model="policy.console_kind_codes"
+          :items="kindSelectItems"
+          value-key="value"
+          label-key="label"
+          multiple
+          class="w-full"
+          placeholder="All staff-console types…"
+        />
+      </UFormField>
+
+      <UFormField
+        v-if="policy.intake_enabled"
+        label="Limit document types at intake"
+        help="Optional whitelist. Leave empty to allow all active types marked for public intake."
+      >
+        <USelectMenu
+          v-model="policy.intake_kind_codes"
+          :items="kindSelectItems"
+          value-key="value"
+          label-key="label"
+          multiple
+          class="w-full"
+          placeholder="All intake types…"
         />
       </UFormField>
 

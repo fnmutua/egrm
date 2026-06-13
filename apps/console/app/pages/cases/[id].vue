@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { kindsForChannel } from '@egrm/config-schemas';
+
 const route = useRoute();
 const { api } = useApi();
 const { user, fetchMe } = useAuth();
@@ -57,6 +59,9 @@ interface AvailableTransition {
     fields?: string[];
     attachments?: { kind: string; label: string; min_count: number }[];
   };
+  allows?: {
+    attachments?: { kind: string; label: string }[];
+  };
 }
 
 interface AvailableAssign {
@@ -97,10 +102,20 @@ const notifications = ref<CaseNotification[]>([]);
 const notificationsLoading = ref(false);
 const notificationsLoaded = ref(false);
 const activeTab = ref('overview');
+const attachments = ref<CaseAttachment[]>([]);
+const attachmentsLoading = ref(false);
+const attachmentsLoaded = ref(false);
+const attachmentKinds = ref<AttachmentKindOption[]>([]);
+const stagedAttachments = ref<StagedAttachment[]>([]);
+const stagingUpload = ref(false);
+const docUploadKind = ref('evidence');
+const docUploadNote = ref('');
+const docFileInput = ref<HTMLInputElement | null>(null);
 
 const tabItems = [
   { label: 'Overview', value: 'overview', icon: 'i-lucide-layout-dashboard' },
   { label: 'Actions', value: 'actions', icon: 'i-lucide-play' },
+  { label: 'Documents', value: 'documents', icon: 'i-lucide-paperclip' },
   { label: 'Assignment', value: 'assignment', icon: 'i-lucide-user-check' },
   { label: 'Notifications', value: 'notifications', icon: 'i-lucide-bell' },
   { label: 'Timeline', value: 'timeline', icon: 'i-lucide-history' },
@@ -141,6 +156,11 @@ function workflowErrorMessage(code: string, fallback?: string): string {
     unknown_assignee: 'Selected assignee is not valid.',
     assignee_id_required: 'Select an assignee first.',
     forbidden: 'You do not have permission for this action.',
+    required_attachment_missing: 'Attach the required document type(s) before updating status.',
+    attachment_kind_not_allowed: 'That document type is not allowed for this transition.',
+    attachment_policy_violation: 'File upload violates attachment policy.',
+    unknown_attachment_kind: 'Unknown document type.',
+    duplicate_attachment: 'This file was already uploaded.',
   };
   return messages[code] ?? fallback ?? code.replaceAll('_', ' ');
 }
@@ -153,13 +173,40 @@ const statusItems = computed(() =>
 const selectedTransition = computed(() =>
   transitionActions.value.find((t) => t.to_status === selectedToStatus.value) ?? null,
 );
+
+const requiredAttachmentKinds = computed(() => selectedTransition.value?.requires?.attachments ?? []);
+
+const optionalTransitionKinds = computed(() => {
+  const allows = selectedTransition.value?.allows?.attachments ?? [];
+  if (!allows.length) return [];
+  const required = new Set(requiredAttachmentKinds.value.map((r) => r.kind));
+  return allows.filter((a) => !required.has(a.kind));
+});
+
+const stagedKindCodes = computed(() => new Set(stagedAttachments.value.map((a) => a.kind)));
+
+const attachmentsRequirementMet = computed(() =>
+  requiredAttachmentKinds.value.every((r) => stagedKindCodes.value.has(r.kind)),
+);
+
 const canSubmitTransition = computed(() =>
   Boolean(
     selectedToStatus.value
     && actionTaken.value.trim()
-    && updateSummary.value.trim(),
+    && updateSummary.value.trim()
+    && attachmentsRequirementMet.value,
   ),
 );
+
+const kindSelectItems = computed(() =>
+  attachmentKinds.value.map((k) => ({ value: k.code, label: k.label })),
+);
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const assigneeById = computed(() => {
   const map = new Map(assignees.value.map((a) => [a.id, a]));
@@ -186,7 +233,92 @@ watch(selectedToStatus, (status) => {
   for (const field of t?.requires?.fields ?? []) {
     transitionFields.value[field] = '';
   }
+  stagedAttachments.value = [];
 });
+
+async function loadAttachmentKinds() {
+  try {
+    const res = await api<{
+      payload?: {
+        attachment_kinds?: { code: string; label?: Record<string, string>; active?: boolean; console_allowed?: boolean }[];
+        attachment_policy?: { console_kind_codes?: string[] };
+      };
+    }>('/api/v1/config/cd06_intake_forms');
+    const allowed = kindsForChannel(
+      {
+        attachment_kinds: res.payload?.attachment_kinds ?? [],
+        attachment_policy: res.payload?.attachment_policy,
+      },
+      'console',
+    );
+    attachmentKinds.value = allowed.map((k) => ({ code: k.code, label: k.label?.en ?? k.code }));
+    if (attachmentKinds.value.length && !attachmentKinds.value.some((k) => k.code === docUploadKind.value)) {
+      docUploadKind.value = attachmentKinds.value[0]!.code;
+    }
+  } catch {
+    attachmentKinds.value = [{ code: 'evidence', label: 'Evidence' }];
+  }
+}
+
+async function loadAttachments() {
+  attachmentsLoading.value = true;
+  try {
+    const res = await api<{ attachments: CaseAttachment[] }>(`/api/v1/cases/${route.params.id}/attachments`);
+    attachments.value = res.attachments;
+    attachmentsLoaded.value = true;
+  } finally {
+    attachmentsLoading.value = false;
+  }
+}
+
+async function onStageFile(file: File, kind: string) {
+  stagingUpload.value = true;
+  try {
+    const res = await stageFile(file, kind);
+    stagedAttachments.value.push({ id: res.attachment_id, kind, filename: file.name });
+  } finally {
+    stagingUpload.value = false;
+  }
+}
+
+async function onTransitionFileInput(kind: string, event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  await onStageFile(file, kind);
+  input.value = '';
+}
+
+async function removeStagedAttachment(item: StagedAttachment) {
+  await removeStaged(item.id);
+  stagedAttachments.value = stagedAttachments.value.filter((a) => a.id !== item.id);
+}
+
+async function onDocFileChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = input.files;
+  if (!files?.length) return;
+  stagingUpload.value = true;
+  try {
+    const ids: string[] = [];
+    for (const file of files) {
+      const res = await stageFile(file, docUploadKind.value);
+      ids.push(res.attachment_id);
+    }
+    if (ids.length) {
+      await api(`/api/v1/cases/${route.params.id}/attachments`, {
+        method: 'POST',
+        body: { attachment_ids: ids, note: docUploadNote.value.trim() || undefined },
+      });
+      docUploadNote.value = '';
+      await loadAttachments();
+      if (detail.value) await loadCase();
+    }
+  } finally {
+    stagingUpload.value = false;
+    input.value = '';
+  }
+}
 
 function eventSummary(ev: CaseDetail['events'][number]): string | null {
   const d = ev.data;
@@ -195,6 +327,10 @@ function eventSummary(ev: CaseDetail['events'][number]): string | null {
     if (d.from_status && d.to_status) parts.push(`${d.from_status} → ${d.to_status}`);
     if (typeof d.action_taken === 'string' && d.action_taken) parts.push(`Action: ${d.action_taken}`);
     if (typeof d.update_summary === 'string' && d.update_summary) parts.push(`Updated: ${d.update_summary}`);
+    if (Array.isArray(d.attachment_summary)) {
+      const names = (d.attachment_summary as { filename?: string }[]).map((a) => a.filename).filter(Boolean);
+      if (names.length) parts.push(`Files: ${names.join(', ')}`);
+    }
     return parts.length ? parts.join(' · ') : null;
   }
   if (ev.kind === 'assigned') {
@@ -205,6 +341,10 @@ function eventSummary(ev: CaseDetail['events'][number]): string | null {
     return 'Assignee cleared';
   }
   if (ev.kind === 'note_internal' && typeof d.body === 'string') return d.body as string;
+  if (ev.kind === 'attachment_added' && Array.isArray(d.attachment_summary)) {
+    const names = (d.attachment_summary as { filename?: string }[]).map((a) => a.filename).filter(Boolean);
+    return names.length ? `Documents added: ${names.join(', ')}` : 'Documents added';
+  }
   return null;
 }
 
@@ -234,6 +374,7 @@ function resetTransitionForm() {
   actionTaken.value = '';
   updateSummary.value = '';
   transitionFields.value = {};
+  stagedAttachments.value = [];
   actionError.value = '';
 }
 
@@ -250,9 +391,11 @@ async function runTransition() {
         action_taken: actionTaken.value.trim(),
         update_summary: updateSummary.value.trim(),
         fields: Object.keys(transitionFields.value).length ? transitionFields.value : undefined,
+        attachment_ids: stagedAttachments.value.length ? stagedAttachments.value.map((a) => a.id) : undefined,
       },
     });
     resetTransitionForm();
+    attachmentsLoaded.value = false;
     notificationsLoaded.value = false;
     await loadCase();
   } catch (e: unknown) {
@@ -298,12 +441,13 @@ async function loadNotifications() {
 
 watch(activeTab, (tab) => {
   if (tab === 'notifications') loadNotifications();
+  if (tab === 'documents' && !attachmentsLoaded.value) loadAttachments();
   if (tab === 'assignment' && canAssign.value && assignees.value.length === 0) loadAssignees();
 });
 
 onMounted(async () => {
   if (!(await fetchMe())) return navigateTo('/login');
-  await loadCase();
+  await Promise.all([loadCase(), loadAttachmentKinds()]);
 });
 </script>
 
@@ -453,6 +597,58 @@ onMounted(async () => {
                   <UTextarea v-model="transitionFields[field]" class="w-full" :rows="field === 'resolution_summary' ? 4 : 2" />
                 </UFormField>
 
+                <div v-if="requiredAttachmentKinds.length || selectedToStatus" class="space-y-3 pt-1 border-t border-default">
+                  <p class="text-sm font-medium">Documents</p>
+                  <p v-if="requiredAttachmentKinds.length" class="text-xs text-muted">
+                    Required for this transition:
+                    <span v-for="(req, i) in requiredAttachmentKinds" :key="req.kind">
+                      {{ req.label }}<span v-if="stagedKindCodes.has(req.kind)" class="text-success"> ✓</span><span v-if="i < requiredAttachmentKinds.length - 1">, </span>
+                    </span>
+                  </p>
+                  <div
+                    v-for="req in requiredAttachmentKinds"
+                    :key="req.kind"
+                    class="flex flex-wrap items-center gap-2"
+                  >
+                    <span class="text-sm min-w-40">{{ req.label }}</span>
+                    <label class="cursor-pointer">
+                      <input
+                        type="file"
+                        class="hidden"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                        @change="onTransitionFileInput(req.kind, $event)"
+                      />
+                      <UButton size="xs" variant="soft" :loading="stagingUpload" as="span">Choose file</UButton>
+                    </label>
+                  </div>
+                  <div
+                    v-for="opt in optionalTransitionKinds"
+                    :key="opt.kind"
+                    class="flex flex-wrap items-center gap-2"
+                  >
+                    <span class="text-sm min-w-40 text-muted">{{ opt.label }} (optional)</span>
+                    <label class="cursor-pointer">
+                      <input
+                        type="file"
+                        class="hidden"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                        @change="onTransitionFileInput(opt.kind, $event)"
+                      />
+                      <UButton size="xs" variant="ghost" :loading="stagingUpload" as="span">Choose file</UButton>
+                    </label>
+                  </div>
+                  <div v-if="stagedAttachments.length" class="space-y-1">
+                    <div
+                      v-for="item in stagedAttachments"
+                      :key="item.id"
+                      class="flex items-center justify-between text-sm gap-2 py-1"
+                    >
+                      <span class="truncate">{{ item.filename }} <span class="text-muted">({{ item.kind }})</span></span>
+                      <UButton size="xs" variant="ghost" color="error" @click="removeStagedAttachment(item)">Remove</UButton>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="flex flex-wrap gap-2 pt-1">
                   <UButton :loading="actionLoading" :disabled="!canSubmitTransition" @click="runTransition">
                     Update status
@@ -470,6 +666,70 @@ onMounted(async () => {
           </p>
 
           <UAlert v-if="actionError" color="error" :title="actionError" />
+        </div>
+      </UCard>
+    </div>
+
+    <div v-else-if="activeTab === 'documents'">
+      <UCard>
+        <template #header><span class="font-medium">Case documents</span></template>
+        <div class="space-y-6">
+          <div class="grid sm:grid-cols-2 gap-3">
+            <UFormField label="Document type">
+              <USelectMenu
+                v-model="docUploadKind"
+                :items="kindSelectItems"
+                value-key="value"
+                label-key="label"
+                class="w-full"
+              />
+            </UFormField>
+            <UFormField label="Note (optional)">
+              <UInput v-model="docUploadNote" class="w-full" placeholder="e.g. Site visit photos" />
+            </UFormField>
+          </div>
+          <div>
+            <input
+              ref="docFileInput"
+              type="file"
+              multiple
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+              class="hidden"
+              @change="onDocFileChange"
+            />
+            <UButton icon="i-lucide-upload" :loading="stagingUpload" @click="docFileInput?.click()">
+              Upload documents
+            </UButton>
+          </div>
+
+          <div v-if="attachmentsLoading" class="text-sm text-muted">Loading…</div>
+          <div v-else-if="attachments.length === 0" class="text-sm text-muted">No documents yet.</div>
+          <div v-else class="overflow-x-auto">
+            <table class="w-full text-sm min-w-[520px]">
+              <thead>
+                <tr class="text-left text-muted border-b border-default">
+                  <th class="py-2 pr-3">Type</th>
+                  <th class="py-2 pr-3">File</th>
+                  <th class="py-2 pr-3">Size</th>
+                  <th class="py-2 pr-3">Uploaded</th>
+                  <th class="py-2 w-20" />
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="doc in attachments" :key="doc.id" class="border-b border-default">
+                  <td class="py-2 pr-3">{{ doc.kind_label }}</td>
+                  <td class="py-2 pr-3 truncate max-w-xs">{{ doc.filename }}</td>
+                  <td class="py-2 pr-3 text-muted">{{ formatBytes(doc.size_bytes) }}</td>
+                  <td class="py-2 pr-3 text-muted text-xs">
+                    {{ doc.uploaded_by_name ?? '—' }} · {{ new Date(doc.created_at).toLocaleDateString() }}
+                  </td>
+                  <td class="py-2">
+                    <UButton size="xs" variant="ghost" icon="i-lucide-download" @click="downloadFile(doc.id, doc.filename)" />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </UCard>
     </div>

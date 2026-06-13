@@ -9,4 +9,4 @@ dist/
 !.env.example
 coverage/
 .DS_Store
-specs/egrm-specifications.html
+data/
