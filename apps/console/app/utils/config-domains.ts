@@ -32,6 +32,7 @@ export const CD06_SUBSECTIONS = [
 
 export const CD10_SUBSECTIONS = [
   { id: 'sec-roles', label: 'Roles & permissions' },
+  { id: 'sec-user-model', label: 'Staff user model' },
   { id: 'sec-departments', label: 'Departments' },
   { id: 'sec-auth', label: 'Authentication policy' },
 ];
@@ -157,7 +158,7 @@ export const DOMAIN_CATALOGUE: DomainMeta[] = [
     description: 'Event subscriptions, recipient selectors, templates per locale and channel, kill switches, sender identities. Requires admin:notifications (or admin:tenant_config / admin:*).',
     subsections: CD09_SUBSECTIONS },
   { domain: 'cd10_org_access', cd: 'CD-10', title: 'Org & access', icon: 'i-lucide-shield', strict: true,
-    description: 'Role definitions (permission sets), departments/teams, and authentication policy. Roles sync to the database on activation.',
+    description: 'Role definitions, staff user model, departments, and authentication policy. Roles sync to the database on activation.',
     subsections: CD10_SUBSECTIONS },
   { domain: 'cd11_committees', cd: 'CD-11', title: 'Committees', icon: 'i-lucide-users', strict: false,
     description: 'Committee definitions per level, rosters, workflow bindings for decision records.' },

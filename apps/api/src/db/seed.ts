@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import bcrypt from 'bcryptjs';
 import { and, eq } from 'drizzle-orm';
 import type { ConfigDomain } from '@egrm/core';
-import { validateConfig, defaultNotificationPack } from '@egrm/config-schemas';
+import { validateConfig, defaultNotificationPack, defaultStaffProfileFields } from '@egrm/config-schemas';
 import { db, pool, schema } from './client.js';
 import { syncRolesFromOrgAccess } from '../services/org-access.js';
 
@@ -63,10 +63,50 @@ export const kisipOrgAccess = {
     { code: 'national_grm', name: 'National GRM unit', description: 'Programme-wide coordination' },
     { code: 'county_coordination', name: 'County coordination', description: 'County-level GRM focal points' },
   ],
+  user_model: {
+    provisioning: 'admin_only' as const,
+    allow_multiple_assignments: true,
+    require_jurisdiction_scope: false,
+    require_role_assignment: true,
+    default_assignment_days: 0,
+    staff_email_domains: ['kisip.local'],
+    contractor_role_names: [],
+    profile_fields: defaultStaffProfileFields(),
+    registration_approval: {
+      required: true,
+      approver_role_names: ['administrator'],
+      pending_message:
+        'Your account is pending administrator approval. You will be notified when it is approved.',
+      rejected_message: 'Your registration was not approved. Contact your programme administrator.',
+    },
+  },
   auth_policy: {
-    password_min_length: 12,
-    session_idle_minutes: 60,
-    mfa_required_roles: ['administrator', 'gbv_officer'],
+    local_login: {
+      enabled: true,
+      password_min_length: 12,
+      password_require_uppercase: true,
+      password_require_number: true,
+      password_rotation_days: 0,
+      lockout_after_failures: 5,
+      lockout_minutes: 15,
+    },
+    sessions: {
+      access_token_minutes: 480,
+      refresh_token_days: 7,
+      idle_timeout_minutes: 60,
+      absolute_timeout_hours: 12,
+      max_concurrent_sessions: 0,
+    },
+    sso: {
+      enabled: false,
+      protocol: 'oidc' as const,
+      allowed_email_domains: [],
+      group_role_mappings: [],
+      jit_provisioning: true,
+      fallback_local_login: true,
+      claim_mapping: { email: 'email', name: 'name', phone: 'phone_number' },
+    },
+    console_ip_allowlist: [],
   },
 };
 
@@ -261,9 +301,14 @@ export async function runSeed() {
         email: adminEmail,
         passwordHash: await bcrypt.hash('ChangeMe!2026', 10),
         displayName: 'Platform Administrator',
+        mfaEnrolled: true,
       })
       .returning();
     await db.insert(schema.userRole).values({ userId: admin!.id, roleId: roleIds.administrator! });
+  } else {
+    if (!admin.mfaEnrolled) {
+      await db.update(schema.appUser).set({ mfaEnrolled: true }).where(eq(schema.appUser.id, admin.id));
+    }
   }
 
   // Active config versions

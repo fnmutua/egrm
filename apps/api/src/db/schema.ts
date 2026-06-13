@@ -29,6 +29,15 @@ export const appUser = pgTable(
     passwordHash: text('password_hash').notNull(),
     displayName: text('display_name').notNull(),
     active: boolean('active').notNull().default(true),
+    failedLoginCount: integer('failed_login_count').notNull().default(0),
+    lockedUntil: timestamp('locked_until', { withTimezone: true }),
+    passwordChangedAt: timestamp('password_changed_at', { withTimezone: true }).notNull().defaultNow(),
+    mfaEnrolled: boolean('mfa_enrolled').notNull().default(false),
+    registrationStatus: text('registration_status', { enum: ['pending', 'approved', 'rejected'] })
+      .notNull()
+      .default('approved'),
+    /** Optional staff profile values keyed by CD-10 user_model.profile_fields. */
+    profile: jsonb('profile').$type<Record<string, string>>().notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('app_user_tenant_email').on(t.tenantId, t.email)],
@@ -40,13 +49,30 @@ export const role = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     tenantId: uuid('tenant_id').notNull().references(() => tenant.id),
     name: text('name').notNull(),
+    label: text('label'),
     /** Permission patterns from the platform catalogue, wildcards allowed (e.g. case:*). */
     permissions: text('permissions').array().notNull().default([]),
     /** Sensitivity class codes this role may read/handle (from CD-10). */
     sensitiveClasses: text('sensitive_classes').array().notNull().default([]),
+    mfaRequired: boolean('mfa_required').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('role_tenant_name').on(t.tenantId, t.name)],
+);
+
+export const refreshSession = pgTable(
+  'refresh_session',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenant.id),
+    userId: uuid('user_id').notNull().references(() => appUser.id),
+    tokenHash: text('token_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => [uniqueIndex('refresh_session_token_hash').on(t.tokenHash)],
 );
 
 export const userRole = pgTable(

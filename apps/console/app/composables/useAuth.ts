@@ -8,21 +8,50 @@ interface AuthUser {
 export function useAuth() {
   const config = useRuntimeConfig();
   const token = useCookie<string | null>('egrm_token', { sameSite: 'strict' });
+  const refreshToken = useCookie<string | null>('egrm_refresh', { sameSite: 'strict' });
   const user = useState<AuthUser | null>('auth_user', () => null);
 
   async function login(email: string, password: string) {
-    const res = await $fetch<{ token: string; user: AuthUser }>('/api/v1/auth/login', {
+    const res = await $fetch<{
+      token: string;
+      refresh_token: string;
+      user: AuthUser;
+    }>('/api/v1/auth/login', {
       baseURL: config.public.apiBase,
       method: 'POST',
       headers: { 'x-tenant': config.public.tenant },
       body: { email, password },
     });
     token.value = res.token;
+    refreshToken.value = res.refresh_token;
     user.value = res.user;
     return res.user;
   }
 
+  async function refreshAccessToken(): Promise<string | null> {
+    if (!refreshToken.value) return null;
+    try {
+      const res = await $fetch<{ token: string; refresh_token: string }>('/api/v1/auth/refresh', {
+        baseURL: config.public.apiBase,
+        method: 'POST',
+        headers: { 'x-tenant': config.public.tenant },
+        body: { refresh_token: refreshToken.value },
+      });
+      token.value = res.token;
+      refreshToken.value = res.refresh_token;
+      return res.token;
+    } catch {
+      token.value = null;
+      refreshToken.value = null;
+      user.value = null;
+      return null;
+    }
+  }
+
   async function fetchMe() {
+    if (!token.value && refreshToken.value) {
+      await refreshAccessToken();
+    }
     if (!token.value) return null;
     try {
       const res = await $fetch<{ user: AuthUser }>('/api/v1/me', {
@@ -32,17 +61,30 @@ export function useAuth() {
       user.value = res.user;
       return res.user;
     } catch {
-      token.value = null;
-      user.value = null;
-      return null;
+      const refreshed = await refreshAccessToken();
+      if (!refreshed) return null;
+      try {
+        const res = await $fetch<{ user: AuthUser }>('/api/v1/me', {
+          baseURL: config.public.apiBase,
+          headers: { authorization: `Bearer ${refreshed}`, 'x-tenant': config.public.tenant },
+        });
+        user.value = res.user;
+        return res.user;
+      } catch {
+        token.value = null;
+        refreshToken.value = null;
+        user.value = null;
+        return null;
+      }
     }
   }
 
   function logout() {
     token.value = null;
+    refreshToken.value = null;
     user.value = null;
     return navigateTo('/login');
   }
 
-  return { token, user, login, logout, fetchMe };
+  return { token, refreshToken, user, login, logout, fetchMe, refreshAccessToken };
 }

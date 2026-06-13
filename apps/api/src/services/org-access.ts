@@ -17,16 +17,20 @@ export async function syncRolesFromOrgAccess(tenantId: string, payload: Cd10OrgA
       await db
         .update(schema.role)
         .set({
+          label: roleDef.label,
           permissions: roleDef.permissions,
           sensitiveClasses: roleDef.sensitive_classes ?? [],
+          mfaRequired: roleDef.mfa_required ?? false,
         })
         .where(eq(schema.role.id, existing.id));
     } else {
       await db.insert(schema.role).values({
         tenantId,
         name: roleDef.name,
+        label: roleDef.label,
         permissions: roleDef.permissions,
         sensitiveClasses: roleDef.sensitive_classes ?? [],
+        mfaRequired: roleDef.mfa_required ?? false,
       });
     }
   }

@@ -18,7 +18,13 @@ export default async function roleRoutes(app: FastifyInstance) {
     { onRequest: [app.authenticate] },
     async (req) => {
       const rows = await db
-        .select({ id: schema.role.id, name: schema.role.name, permissions: schema.role.permissions })
+        .select({
+          id: schema.role.id,
+          name: schema.role.name,
+          label: schema.role.label,
+          permissions: schema.role.permissions,
+          mfaRequired: schema.role.mfaRequired,
+        })
         .from(schema.role)
         .where(eq(schema.role.tenantId, req.tenant.id))
         .orderBy(schema.role.name);

@@ -36,6 +36,27 @@
       "when": 1781262000000,
       "tag": "0004_notification_log_recipients",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781263000000,
+      "tag": "0005_auth_policy",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781264000000,
+      "tag": "0006_user_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781265000000,
+      "tag": "0007_registration_status",
+      "breakpoints": true
     }
   ]
 }
