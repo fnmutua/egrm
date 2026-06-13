@@ -1,0 +1,11 @@
+[phases.setup]
+nixPackages = ["pnpm"]
+
+[phases.install]
+cmds = ["corepack enable pnpm", "pnpm install --frozen-lockfile"]
+
+[phases.build]
+cmds = ["pnpm build"]
+
+[phases.start]
+cmd = "pnpm --filter @egrm/portal dev"
