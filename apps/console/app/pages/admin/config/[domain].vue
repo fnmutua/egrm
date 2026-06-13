@@ -143,6 +143,10 @@ onMounted(async () => {
 
 <template>
   <div v-if="user" class="p-4 sm:p-6 lg:p-8 w-full max-w-none">
+    <UBreadcrumb
+      :items="[{ label: 'Configuration overview', to: '/admin', icon: 'i-lucide-layout-grid' }, { label: meta?.title ?? domain }]"
+      class="mb-4"
+    />
     <div class="flex items-center gap-3 mb-1 flex-wrap">
       <UIcon :name="meta?.icon ?? 'i-lucide-settings'" class="text-2xl text-primary" />
       <h1 class="text-2xl font-semibold">{{ meta?.title ?? domain }}</h1>

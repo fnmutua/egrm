@@ -101,7 +101,7 @@ watch([q, status, unitId, page], () => load());
 </script>
 
 <template>
-  <div v-if="user" class="p-4 sm:p-8 max-w-6xl mx-auto">
+  <div v-if="user" class="p-4 sm:p-8">
     <div class="flex items-center justify-between mb-6 gap-3">
       <div>
         <h1 class="text-2xl font-semibold">Cases</h1>

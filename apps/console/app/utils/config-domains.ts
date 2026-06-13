@@ -45,7 +45,8 @@ export const CD06_SUBSECTIONS = [
 ];
 
 export const CD10_SUBSECTIONS = [
-  { id: 'sec-roles', label: 'Roles & permissions' },
+  { id: 'sec-permissions', label: 'Permissions' },
+  { id: 'sec-roles', label: 'Roles' },
   { id: 'sec-user-model', label: 'Staff user model' },
   { id: 'sec-departments', label: 'Departments' },
   { id: 'sec-auth', label: 'Authentication policy' },
@@ -95,9 +96,9 @@ export type AdminEntry =
 /** Sidebar grouping for the admin area, in display order. Related tools live together. */
 export const ADMIN_SECTIONS: { label: string; icon?: string; entries: AdminEntry[] }[] = [
   { label: 'Identity', entries: [{ type: 'domain', domain: 'cd01_identity' }] },
-  { label: 'Roles & permissions', entries: [{ type: 'domain', domain: 'cd10_org_access' }] },
+  { label: 'Access Control', entries: [{ type: 'domain', domain: 'cd10_org_access' }] },
   {
-    label: 'Jurisdiction & hierarchy',
+    label: 'Locations and Hierarchy',
     icon: 'i-lucide-network',
     entries: [
       { type: 'domain', domain: 'cd02_hierarchy' },
@@ -111,7 +112,7 @@ export const ADMIN_SECTIONS: { label: string; icon?: string; entries: AdminEntry
     ],
   },
   {
-    label: 'Case setup',
+    label: 'Case Setup',
     entries: [
       { type: 'domain', domain: 'cd03_taxonomy' },
       { type: 'domain', domain: 'cd04_workflow' },
@@ -120,7 +121,7 @@ export const ADMIN_SECTIONS: { label: string; icon?: string; entries: AdminEntry
     ],
   },
   {
-    label: 'Intake & channels',
+    label: 'Intake and Channels',
     entries: [
       { type: 'domain', domain: 'cd06_intake_forms' },
       { type: 'domain', domain: 'cd08_channels' },
@@ -150,7 +151,7 @@ export const ADMIN_SECTIONS: { label: string; icon?: string; entries: AdminEntry
     ],
   },
   {
-    label: 'Admin',
+    label: 'Administration',
     icon: 'i-lucide-user-cog',
     entries: [
       {

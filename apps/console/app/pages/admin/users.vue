@@ -328,7 +328,7 @@ function rowActions(row: StaffUser) {
 </script>
 
 <template>
-  <div v-if="user" class="p-4 sm:p-8 max-w-6xl">
+  <div v-if="user" class="p-4 sm:p-8">
     <div class="flex flex-wrap items-start justify-between gap-3 mb-6">
       <div>
         <h1 class="text-2xl font-semibold mb-1">Users</h1>

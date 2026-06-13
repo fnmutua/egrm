@@ -15,6 +15,7 @@ interface DomainRow {
 
 const rows = ref<DomainRow[]>([]);
 const loading = ref(true);
+const search = ref('');
 
 onMounted(async () => {
   const me = await fetchMe();
@@ -25,7 +26,7 @@ onMounted(async () => {
   loading.value = false;
 });
 
-const visibleSections = computed(() =>
+const permittedSections = computed(() =>
   ADMIN_SECTIONS.map((section) => ({
     ...section,
     entries: section.entries.filter((entry) => {
@@ -35,19 +36,57 @@ const visibleSections = computed(() =>
   })).filter((section) => section.entries.length > 0),
 );
 
+const visibleSections = computed(() => {
+  const q = search.value.trim().toLowerCase();
+  if (!q) return permittedSections.value;
+  return permittedSections.value
+    .map((section) => ({
+      ...section,
+      entries: section.entries.filter((entry) => {
+        if (entry.type === 'page') {
+          return (
+            entry.label.toLowerCase().includes(q) ||
+            entry.description.toLowerCase().includes(q)
+          );
+        }
+        const meta = domainMeta(entry.domain);
+        return (
+          (meta?.cd ?? '').toLowerCase().includes(q) ||
+          (meta?.title ?? '').toLowerCase().includes(q) ||
+          (meta?.description ?? '').toLowerCase().includes(q) ||
+          entry.domain.toLowerCase().includes(q) ||
+          section.label.toLowerCase().includes(q) ||
+          (meta?.subsections ?? []).some((s) => s.label.toLowerCase().includes(q))
+        );
+      }),
+    }))
+    .filter((section) => section.entries.length > 0);
+});
+
 const byDomain = computed(() => new Map(rows.value.map((r) => [r.domain, r])));
 const configuredCount = computed(() => rows.value.filter((r) => r.active_version).length);
 </script>
 
 <template>
-  <div v-if="user" class="p-4 sm:p-8 max-w-4xl">
+  <div v-if="user" class="p-4 sm:p-8">
     <h1 class="text-2xl font-semibold mb-1">Configuration overview</h1>
-    <p class="text-muted mb-6">
+    <p class="text-muted mb-4">
       Every domain is versioned: draft → validate → activate, with full history and rollback.
       <template v-if="!loading">{{ configuredCount }} of {{ rows.length }} domains configured.</template>
     </p>
 
+    <UInput
+      v-model="search"
+      icon="i-lucide-search"
+      placeholder="Search configs…"
+      class="mb-6"
+      :disabled="loading"
+    />
+
     <div v-if="loading" class="text-muted p-8 text-center">Loading…</div>
+    <div v-else-if="visibleSections.length === 0" class="text-muted p-8 text-center">
+      No configs match "{{ search }}"
+    </div>
     <div v-else class="space-y-6">
       <div v-for="section in visibleSections" :key="section.label">
         <h2 class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">{{ section.label }}</h2>

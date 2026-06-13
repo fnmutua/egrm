@@ -726,7 +726,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="user && detail" class="p-4 sm:p-8 max-w-5xl mx-auto">
+  <div v-if="user && detail" class="p-4 sm:p-8">
     <UButton to="/cases" variant="ghost" icon="i-lucide-arrow-left" class="mb-4">All cases</UButton>
 
     <div class="flex items-start justify-between mb-4">

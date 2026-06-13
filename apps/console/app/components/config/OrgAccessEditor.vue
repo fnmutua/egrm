@@ -27,6 +27,12 @@ interface Department {
   description?: string;
 }
 
+interface CustomPermission {
+  name: string;
+  label: string;
+  group?: string;
+}
+
 const props = defineProps<{ payload: Record<string, any>; section?: string }>();
 const { api } = useApi();
 
@@ -131,6 +137,7 @@ function ensure() {
     r.label ??= r.name;
   }
   p.departments ??= [];
+  p.custom_permissions ??= [];
   ensureAuthPolicy(p);
   p.user_model ??= {};
   const um = p.user_model as Record<string, unknown>;
@@ -178,6 +185,21 @@ watch(() => props.payload, ensure, { deep: false });
 
 const roles = computed<RoleDef[]>(() => props.payload.roles);
 const departments = computed<Department[]>(() => props.payload.departments);
+const customPermissions = computed<CustomPermission[]>(() => props.payload.custom_permissions);
+
+const allPermissionGroups = computed(() => {
+  if (!customPermissions.value.length) return PERMISSION_GROUPS;
+  const grouped = new Map<string, string[]>();
+  for (const cp of customPermissions.value) {
+    const g = cp.group?.trim() || 'Custom';
+    if (!grouped.has(g)) grouped.set(g, []);
+    grouped.get(g)!.push(cp.name);
+  }
+  return [
+    ...PERMISSION_GROUPS,
+    ...Array.from(grouped.entries()).map(([label, permissions]) => ({ label, permissions })),
+  ];
+});
 const localLogin = computed(() => props.payload.auth_policy.local_login);
 const userModel = computed(() => props.payload.user_model);
 const coreIdentityRequired = computed(
@@ -362,11 +384,75 @@ function removeDepartment(dept: Department) {
   props.payload.departments = departments.value.filter((d) => d !== dept);
 }
 
+function addCustomPermission() {
+  props.payload.custom_permissions.push({ name: '', label: '', group: '' });
+}
+function removeCustomPermission(cp: CustomPermission) {
+  props.payload.custom_permissions = customPermissions.value.filter((p) => p !== cp);
+}
+
 const roleNameItems = computed(() => roles.value.map((r) => ({ value: r.name, label: r.label || r.name })));
 </script>
 
 <template>
   <div class="space-y-6">
+
+    <!-- Permissions catalogue -->
+    <section v-if="show('sec-permissions')" id="sec-permissions" class="space-y-3">
+      <h2 class="text-sm font-semibold">Permissions</h2>
+      <p class="text-xs text-muted">
+        The platform permission catalogue. Review these before configuring roles — each role is built by selecting a subset.
+        Add custom permissions below to extend the catalogue with tenant-specific entries.
+      </p>
+
+      <UCard :ui="{ body: 'p-4 space-y-4' }">
+        <p class="text-xs font-semibold text-muted uppercase tracking-wide">Platform permissions</p>
+        <div class="space-y-1">
+          <p class="text-xs font-medium text-muted mb-2">Wildcards</p>
+          <div class="flex flex-wrap gap-2">
+            <UBadge
+              v-for="wc in PERMISSION_WILDCARDS"
+              :key="wc"
+              variant="subtle"
+              color="warning"
+              class="font-mono"
+            >{{ wc }}</UBadge>
+          </div>
+        </div>
+        <div v-for="group in PERMISSION_GROUPS" :key="group.label" class="space-y-1">
+          <p class="text-xs font-medium text-muted uppercase tracking-wide">{{ group.label }}</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-0.5">
+            <span v-for="perm in group.permissions" :key="perm" class="text-sm font-mono text-default">{{ perm }}</span>
+          </div>
+        </div>
+      </UCard>
+
+      <UCard :ui="{ body: 'p-4 space-y-3' }">
+        <div class="flex items-center justify-between">
+          <p class="text-xs font-semibold text-muted uppercase tracking-wide">Custom permissions</p>
+          <UButton size="xs" variant="soft" icon="i-lucide-plus" @click="addCustomPermission">Add permission</UButton>
+        </div>
+        <p class="text-xs text-muted">Tenant-specific permissions that extend the platform catalogue and become available when configuring roles.</p>
+        <div v-if="customPermissions.length === 0" class="text-xs text-muted italic">No custom permissions defined.</div>
+        <div
+          v-for="(cp, i) in customPermissions"
+          :key="i"
+          class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end p-3 rounded-lg border border-default"
+        >
+          <UFormField label="Key" help="e.g. reports:export_custom">
+            <UInput v-model="cp.name" class="w-full font-mono" placeholder="resource:action" />
+          </UFormField>
+          <UFormField label="Label">
+            <UInput v-model="cp.label" class="w-full" placeholder="Human-readable name" />
+          </UFormField>
+          <UFormField label="Group" help="Groups with the same name appear together in the role editor.">
+            <UInput v-model="cp.group" class="w-full" placeholder="Custom" />
+          </UFormField>
+          <UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" class="mb-0.5" @click="removeCustomPermission(cp)" />
+        </div>
+      </UCard>
+    </section>
+
     <UAlert
       v-if="show('sec-roles')"
       color="info"
@@ -379,7 +465,7 @@ const roleNameItems = computed(() => roles.value.map((r) => ({ value: r.name, la
     <section v-if="show('sec-roles')" id="sec-roles" class="space-y-3">
       <h2 class="text-sm font-semibold">Roles</h2>
       <p class="text-xs text-muted">
-        Named permission sets from the platform catalogue (spec 07). Set a parent role to form an administration hierarchy:
+        Named permission sets built from the catalogue above (spec 07). Set a parent role to form an administration hierarchy:
         holders of a role may manage users with descendant roles only, and child permissions must stay within the parent's rights.
       </p>
 
@@ -477,7 +563,7 @@ const roleNameItems = computed(() => roles.value.map((r) => ({ value: r.name, la
               </div>
             </div>
 
-            <div v-for="group in PERMISSION_GROUPS" :key="group.label" class="space-y-2">
+            <div v-for="group in allPermissionGroups" :key="group.label" class="space-y-2">
               <p class="text-xs font-medium text-muted uppercase tracking-wide">{{ group.label }}</p>
               <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-1">
                 <label

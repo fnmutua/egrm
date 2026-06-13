@@ -276,7 +276,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="user" class="p-4 sm:p-8 max-w-5xl">
+  <div v-if="user" class="p-4 sm:p-8">
     <div class="flex items-start justify-between gap-3 mb-1 flex-wrap">
       <h1 class="text-2xl font-semibold">Jurisdiction units</h1>
       <UButton v-if="topLevel && !hasRoot" icon="i-lucide-plus" @click="openCreate(null)">
