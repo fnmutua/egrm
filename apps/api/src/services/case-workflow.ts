@@ -1,11 +1,18 @@
-import { and, eq } from 'drizzle-orm';
-import type { Cd02Hierarchy, Cd04Workflow, PartyNotificationChannel } from '@egrm/config-schemas';
+import { and, eq, inArray } from 'drizzle-orm';
+import type { Cd02Hierarchy, Cd04Workflow, Cd06IntakeForms } from '@egrm/config-schemas';
 import { hasPermission } from '@egrm/core';
 import { db, schema } from '../db/client.js';
 import { getActiveConfig } from './config.js';
 import type { UserAccess } from './access.js';
 import { canAccessCase } from './access.js';
 import { enqueueNotifications } from './notifications.js';
+import {
+  kindLabel,
+  loadAttachmentConfig,
+  loadStagedAttachmentKinds,
+  promoteAttachments,
+  validateTransitionAttachments,
+} from './attachments.js';
 import { scheduleOutboxDispatch } from './notification-queue.js';
 
 type WorkflowTransition = Cd04Workflow['transitions'][number];
@@ -13,7 +20,11 @@ type WorkflowTransition = Cd04Workflow['transitions'][number];
 export interface AvailableTransition {
   type: 'transition';
   to_status: string;
-  requires?: { note?: boolean; fields?: string[] };
+  requires?: {
+    note?: boolean;
+    fields?: string[];
+    attachments?: { kind: string; label: string; min_count: number }[];
+  };
 }
 
 export interface AvailableAssign {
@@ -30,6 +41,7 @@ export interface CaseActionInput {
   action_taken?: string;
   update_summary?: string;
   fields?: Record<string, unknown>;
+  attachment_ids?: string[];
 }
 
 function transitionActionTaken(input: CaseActionInput): string {
@@ -236,6 +248,13 @@ export async function getAvailableCaseActions(
   const workflow = await getActiveConfig<Cd04Workflow>(tenantId, 'cd04_workflow');
   if (!workflow) return { error: 'tenant_not_configured', code: 503 };
 
+  let intakeCfg: Cd06IntakeForms | null = null;
+  try {
+    intakeCfg = await loadAttachmentConfig(tenantId);
+  } catch {
+    intakeCfg = null;
+  }
+
   const actions: AvailableAction[] = [];
 
   if (hasPermission(access.permissions, 'case:transition')) {
@@ -251,6 +270,11 @@ export async function getAvailableCaseActions(
           ? {
               note: t.requires.note,
               fields: t.requires.fields,
+              attachments: t.requires.attachments?.map((kind) => ({
+                kind,
+                label: intakeCfg ? kindLabel(intakeCfg, kind) : kind,
+                min_count: 1,
+              })),
             }
           : undefined,
       });
@@ -368,6 +392,22 @@ export async function applyCaseAction(
   const reqErr = validateTransitionRequires(transition, input);
   if (reqErr) return { ok: false, code: 422, error: reqErr };
 
+  const attachmentIds = input.attachment_ids ?? [];
+  if (attachmentIds.length > 0) {
+    try {
+      const intakeCfg = await loadAttachmentConfig(tenantId);
+      if (attachmentIds.length > intakeCfg.attachment_policy.max_files_per_action) {
+        return { ok: false, code: 422, error: 'attachment_policy_violation', message: 'Too many attachments for this action' };
+      }
+    } catch {
+      return { ok: false, code: 503, error: 'tenant_not_configured' };
+    }
+  }
+
+  const stagedKinds = await loadStagedAttachmentKinds(tenantId, caseId, attachmentIds);
+  const attachErr = validateTransitionAttachments(transition.requires?.attachments, attachmentIds, stagedKinds);
+  if (attachErr) return { ok: false, code: 422, error: attachErr };
+
   const guardErr = validateGuard(transition, caseRow, access);
   if (guardErr) return { ok: false, code: 422, error: guardErr, message: 'National confirmation authority required' };
 
@@ -420,24 +460,41 @@ export async function applyCaseAction(
       })
       .where(eq(schema.grmCase.id, caseId));
 
-    await tx.insert(schema.caseEvent).values({
-      tenantId,
-      caseId,
-      kind: 'status_changed',
-      actorType: 'staff',
-      actorId,
-      visibility: 'public',
-      data: {
-        from_status: fromStatus,
-        to_status: toStatus,
-        action_taken: actionTaken,
-        update_summary: updateSummary,
-        note: transitionNote || null,
-        fields: input.fields ?? {},
-        level_code: levelCode,
-        unit_id: unitId,
-      },
-    });
+    let attachmentSummary: { id: string; kind: string; filename: string }[] = [];
+    if (attachmentIds.length > 0) {
+      attachmentSummary = await promoteAttachments(tx, tenantId, caseId, attachmentIds, actorId);
+    }
+
+    const [statusEvent] = await tx
+      .insert(schema.caseEvent)
+      .values({
+        tenantId,
+        caseId,
+        kind: 'status_changed',
+        actorType: 'staff',
+        actorId,
+        visibility: 'public',
+        data: {
+          from_status: fromStatus,
+          to_status: toStatus,
+          action_taken: actionTaken,
+          update_summary: updateSummary,
+          note: transitionNote || null,
+          fields: input.fields ?? {},
+          level_code: levelCode,
+          unit_id: unitId,
+          attachment_ids: attachmentIds,
+          attachment_summary: attachmentSummary,
+        },
+      })
+      .returning({ id: schema.caseEvent.id });
+
+    if (statusEvent?.id && attachmentIds.length > 0) {
+      await tx
+        .update(schema.caseAttachment)
+        .set({ caseEventId: statusEvent.id })
+        .where(inArray(schema.caseAttachment.id, attachmentIds));
+    }
 
     if (transitionNote) {
       await tx.insert(schema.caseEvent).values({
@@ -470,7 +527,12 @@ export async function applyCaseAction(
           partyId: caseRow.partyId,
           partyNotificationChannels,
         },
-        data: { from_status: fromStatus, to_status: toStatus },
+        data: {
+          from_status: fromStatus,
+          to_status: toStatus,
+          action_taken: actionTaken,
+          update_summary: updateSummary,
+        },
       },
       tx,
     );

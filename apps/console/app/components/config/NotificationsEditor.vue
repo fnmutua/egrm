@@ -67,6 +67,7 @@ const { roleNames, loadRoleNames } = useTenantRoles();
 const show = (id: string) => !props.section || props.section === id;
 
 const locales = ref<string[]>(['en', 'sw']);
+const workflowStatuses = ref<string[]>(['Rejected', 'Referred', 'Closed', 'Sorting', 'Investigation', 'Resolved']);
 const expandedRule = ref<number | null>(0);
 const expandedTemplate = ref<number | null>(0);
 
@@ -81,14 +82,24 @@ function toggleSender(channel: SenderChannel) {
 
 onMounted(async () => {
   try {
-    const identity = await api<{ payload?: { locales?: { enabled?: string[] } } }>('/api/v1/config/cd01_identity');
+    const [identity, workflow] = await Promise.all([
+      api<{ payload?: { locales?: { enabled?: string[] } } }>('/api/v1/config/cd01_identity'),
+      api<{ payload?: { statuses?: { name: string }[] } }>('/api/v1/config/cd04_workflow').catch(() => ({ payload: undefined })),
+    ]);
     if (identity.payload?.locales?.enabled?.length) locales.value = identity.payload.locales.enabled;
+    if (workflow.payload?.statuses?.length) {
+      workflowStatuses.value = workflow.payload.statuses.map((s) => s.name);
+    }
   } catch {
     /* optional */
   }
   await loadRoleNames();
   ensure();
 });
+
+const workflowStatusItems = computed(() =>
+  workflowStatuses.value.map((n) => ({ value: n, label: n })),
+);
 
 const PROVIDER_PRESETS = {
   email: [
@@ -239,6 +250,7 @@ function ensure() {
   p.status_change_alerts.channels ??= [...DEFAULT_STATUS_CHANGE_ALERTS.channels];
   p.status_change_alerts.template ??= DEFAULT_STATUS_CHANGE_ALERTS.template;
   p.status_change_alerts.notify_complainant ??= DEFAULT_STATUS_CHANGE_ALERTS.notify_complainant;
+  p.status_change_alerts.complainant_exclude_statuses ??= [...DEFAULT_STATUS_CHANGE_ALERTS.complainant_exclude_statuses];
 
   if (Array.isArray(p.templates)) {
     const ids = new Set(p.templates.map((t: { id: string }) => t.id));
@@ -538,6 +550,22 @@ function varToken(name: string) {
             help="Uses the status-change-complainant rule template (SMS/email/WhatsApp per their intake preferences)."
           >
             <USwitch v-model="payload.status_change_alerts.notify_complainant" />
+          </UFormField>
+
+          <UFormField
+            v-if="payload.status_change_alerts.notify_complainant"
+            label="Skip complainant notice for statuses"
+            help="Complainant is not notified when the case moves to these statuses (e.g. Rejected)."
+          >
+            <USelectMenu
+              v-model="payload.status_change_alerts.complainant_exclude_statuses"
+              :items="workflowStatusItems"
+              value-key="value"
+              label-key="label"
+              multiple
+              placeholder="Select statuses…"
+              class="w-full"
+            />
           </UFormField>
 
           <template v-if="payload.status_change_alerts.enabled">

@@ -17,23 +17,69 @@ interface CaseRow {
   unitName: string | null;
 }
 
+interface FilterUnit {
+  id: string;
+  name: string;
+  level_code: string;
+}
+
 const q = ref('');
 const status = ref<string | undefined>(undefined);
+const unitId = ref<string | null | undefined>(undefined);
 const page = ref(1);
 const rows = ref<CaseRow[]>([]);
 const total = ref(0);
 const loading = ref(false);
+const filterUnits = ref<FilterUnit[]>([]);
+const tenantWide = ref(true);
+const defaultUnitId = ref<string | undefined>(undefined);
+const filtersReady = ref(false);
+
+const unitItems = computed(() => {
+  const items = filterUnits.value.map((u) => ({ value: u.id, label: `${u.name} (${u.level_code})` }));
+  if (!tenantWide.value && filterUnits.value.length > 1) {
+    return [{ value: null, label: 'All my jurisdictions' }, ...items];
+  }
+  return items;
+});
 
 const tagColor: Record<string, string> = {
   open: 'info', in_progress: 'warning', resolved: 'success',
   closed: 'neutral', rejected: 'error', on_hold: 'neutral', appeal: 'warning',
 };
 
+async function loadFilterUnits() {
+  const res = await api<{
+    tenant_wide: boolean;
+    units: FilterUnit[];
+    default_unit_id: string | null;
+  }>('/api/v1/cases/filter-units');
+  filterUnits.value = res.units;
+  tenantWide.value = res.tenant_wide;
+  defaultUnitId.value = res.default_unit_id ?? undefined;
+  if (!res.tenant_wide && res.default_unit_id) {
+    unitId.value = res.default_unit_id;
+  }
+  filtersReady.value = true;
+}
+
+function clearFilters() {
+  status.value = undefined;
+  unitId.value = tenantWide.value ? undefined : defaultUnitId.value;
+}
+
 async function load() {
+  if (!filtersReady.value) return;
   loading.value = true;
   try {
     const res = await api<{ cases: CaseRow[]; total: number }>('/api/v1/cases', {
-      query: { q: q.value || undefined, status: status.value, page: page.value, page_size: 20 },
+      query: {
+        q: q.value || undefined,
+        status: status.value,
+        unit_id: unitId.value ?? undefined,
+        page: page.value,
+        page_size: 20,
+      },
     });
     rows.value = res.cases;
     total.value = res.total;
@@ -44,10 +90,14 @@ async function load() {
 
 onMounted(async () => {
   if (!(await fetchMe())) return navigateTo('/login');
+  await loadFilterUnits();
   await load();
 });
 
-watch([q, status, page], () => load());
+watch([q, status, unitId], () => {
+  page.value = 1;
+});
+watch([q, status, unitId, page], () => load());
 </script>
 
 <template>
@@ -55,21 +105,35 @@ watch([q, status, page], () => load());
     <div class="flex items-center justify-between mb-6 gap-3">
       <div>
         <h1 class="text-2xl font-semibold">Cases</h1>
-        <p class="text-muted text-sm">{{ total }} case(s)</p>
+        <p class="text-muted text-sm">
+          {{ total }} case(s)
+          <span v-if="!tenantWide && unitId" class="text-muted">· jurisdiction filter active</span>
+        </p>
       </div>
       <UButton to="/" variant="ghost" icon="i-lucide-arrow-left">Dashboard</UButton>
     </div>
 
     <div class="flex flex-col sm:flex-row gap-3 mb-4">
       <UInput v-model="q" placeholder="Search reference or summary…" icon="i-lucide-search" class="w-full sm:w-72" />
-      <div class="flex gap-3">
+      <div class="flex flex-wrap gap-3">
+        <USelectMenu
+          v-if="filterUnits.length"
+          v-model="unitId"
+          :items="unitItems"
+          value-key="value"
+          label-key="label"
+          placeholder="All jurisdictions"
+          class="flex-1 sm:w-56"
+        />
         <USelectMenu
           v-model="status"
           :items="['Sorting', 'Investigation', 'Escalated', 'Returned', 'Resolved', 'Closed', 'Rejected', 'In Court']"
           placeholder="All statuses"
           class="flex-1 sm:w-48"
         />
-        <UButton v-if="status" variant="ghost" size="sm" @click="status = undefined">Clear</UButton>
+        <UButton v-if="status || (unitId && unitId !== defaultUnitId)" variant="ghost" size="sm" @click="clearFilters">
+          Clear filters
+        </UButton>
       </div>
     </div>
 

@@ -1,9 +1,11 @@
-import type { Cd09Notifications, NotificationEvent, NotificationRule, PartyNotificationChannel } from '@egrm/config-schemas';
+import type { Cd01Identity, Cd09Notifications, NotificationEvent, NotificationRule, PartyNotificationChannel } from '@egrm/config-schemas';
 import { buildIntakeAlertRule, buildStatusChangeStaffRule, filterChannelsForPartyPreference } from '@egrm/config-schemas';
+import { eq } from 'drizzle-orm';
 import { db, schema } from '../db/client.js';
 import { getActiveConfig } from './config.js';
 import { piiLookupHash } from './crypto.js';
 import { renderTemplateBody } from './notification-dispatch.js';
+import { env } from '../env.js';
 
 export interface NotificationEventContext {
   tenantId: string;
@@ -99,6 +101,39 @@ function expandPartyChannels(channels: string[], selector: RecipientSelector, cf
   return [...out];
 }
 
+function complainantPartyRule(rule: NotificationRule): boolean {
+  return rule.to.some((t) => 'party' in t && t.party === 'complainant');
+}
+
+async function buildNotificationVars(ctx: NotificationEventContext): Promise<Record<string, string>> {
+  const [identity, unitRow] = await Promise.all([
+    getActiveConfig<Cd01Identity>(ctx.tenantId, 'cd01_identity'),
+    ctx.case.unitId
+      ? db.select({ name: schema.unit.name }).from(schema.unit).where(eq(schema.unit.id, ctx.case.unitId)).limit(1)
+      : Promise.resolve([]),
+  ]);
+  const tenantName = identity?.name ?? 'GRM';
+  const trackUrl = `${env.PUBLIC_PORTAL_BASE_URL.replace(/\/$/, '')}/track?ref=${encodeURIComponent(ctx.case.reference)}`;
+  const actionTaken = String(ctx.data?.action_taken ?? '');
+  const updateSummary = String(ctx.data?.update_summary ?? '');
+
+  return {
+    'case.reference': ctx.case.reference,
+    'case.status': ctx.case.status,
+    'case.status_label': ctx.case.status,
+    'case.level': ctx.case.levelCode,
+    'case.unit_name': unitRow[0]?.name ?? ctx.case.levelCode,
+    'case.action_taken': actionTaken,
+    'case.update_summary': updateSummary,
+    'tenant.name': tenantName,
+    'tenant.short_name': tenantName.split(/\s+/)[0] ?? tenantName,
+    'tracking.url': trackUrl,
+    'tracking.link': ctx.case.reference,
+    'date.today': new Date().toISOString().slice(0, 10),
+    'date.deadline': '',
+  };
+}
+
 /** Evaluate CD-09 rules; enqueue outbox + notification_log inside the caller's transaction. */
 export async function enqueueNotifications(
   ctx: NotificationEventContext,
@@ -116,26 +151,17 @@ export async function enqueueNotifications(
   if (ctx.event === 'case.status_changed') {
     const staffRule = buildStatusChangeStaffRule(cfg);
     if (staffRule) matching.push(staffRule);
-    if (cfg.status_change_alerts?.notify_complainant === false) {
-      matching = matching.filter(
-        (r) => !r.to.some((t) => 'party' in t && t.party === 'complainant'),
-      );
+    const toStatus = typeof ctx.data?.to_status === 'string' ? ctx.data.to_status : ctx.case.status;
+    const skipComplainant =
+      cfg.status_change_alerts?.notify_complainant === false
+      || (cfg.status_change_alerts?.complainant_exclude_statuses ?? []).includes(toStatus);
+    if (skipComplainant) {
+      matching = matching.filter((r) => !complainantPartyRule(r));
     }
   }
   if (matching.length === 0) return { count: 0, outboxId: null };
 
-  const vars: Record<string, string> = {
-    'case.reference': ctx.case.reference,
-    'case.status': ctx.case.status,
-    'case.status_label': ctx.case.status,
-    'case.level': ctx.case.levelCode,
-    'case.unit_name': ctx.case.levelCode,
-    'tenant.name': 'GRM',
-    'tenant.short_name': 'GRM',
-    'tracking.url': `/track?ref=${encodeURIComponent(ctx.case.reference)}`,
-    'tracking.link': ctx.case.reference,
-    'date.today': new Date().toISOString().slice(0, 10),
-  };
+  const vars = await buildNotificationVars(ctx);
 
   const [outbox] = await tx
     .insert(schema.notificationOutbox)

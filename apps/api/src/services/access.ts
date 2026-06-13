@@ -104,6 +104,25 @@ export function sensitivityListFilter(
   return or(...parts)!;
 }
 
+/** Whether the actor may narrow the case list to this unit (must sit in their scope). */
+export async function canFilterCasesByUnit(
+  tenantId: string,
+  access: Pick<UserAccess, 'tenantWide' | 'jurisdictionRoots'>,
+  unitId: string,
+): Promise<boolean> {
+  if (access.tenantWide) return true;
+  const allowed = await expandUnitSubtrees(tenantId, access.jurisdictionRoots);
+  return allowed.has(unitId);
+}
+
+/** SQL fragment: cases located in a unit subtree (inclusive). */
+export async function caseUnitSubtreeFilter(tenantId: string, unitId: string): Promise<SQL> {
+  const allowed = await expandUnitSubtrees(tenantId, [unitId]);
+  const allowedIds = [...allowed];
+  if (allowedIds.length === 0) return eq(schema.grmCase.unitId, unitId);
+  return inArray(schema.grmCase.unitId, allowedIds);
+}
+
 /** SQL fragment: cases visible under jurisdiction scope (or assigned to user). */
 export async function caseVisibilityFilter(
   tenantId: string,

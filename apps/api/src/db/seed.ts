@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import bcrypt from 'bcryptjs';
 import { and, eq } from 'drizzle-orm';
 import type { ConfigDomain } from '@egrm/core';
-import { validateConfig, defaultNotificationPack, defaultStaffProfileFields } from '@egrm/config-schemas';
+import { validateConfig, defaultNotificationPack, defaultStaffProfileFields, DEFAULT_ATTACHMENT_KINDS, DEFAULT_ATTACHMENT_POLICY } from '@egrm/config-schemas';
 import { db, pool, schema } from './client.js';
 import { syncRolesFromOrgAccess } from '../services/org-access.js';
 
@@ -355,7 +355,7 @@ export async function runSeed() {
       { from: ['Sorting'], to: 'Rejected', roles: ['grm_officer'], requires: { note: true } },
       { from: ['Sorting', 'Investigation', 'Returned'], to: 'Escalated', roles: ['grm_officer'], effects: [{ move_level: 'up' }, { restart_sla: 'stage' }] },
       { from: ['Escalated'], to: 'Returned', roles: ['grm_officer_national'], effects: [{ move_level: 'down' }] },
-      { from: ['Investigation', 'Escalated', 'Returned'], to: 'Resolved', roles: ['grm_officer'], requires: { fields: ['resolution_summary'] } },
+      { from: ['Investigation', 'Escalated', 'Returned'], to: 'Resolved', roles: ['grm_officer'], requires: { fields: ['resolution_summary'], attachments: ['signed_resolution_form'] } },
       { from: ['Resolved'], to: 'Closed', roles: ['grm_officer_national'], guard: 'confirmation' },
       { from: ['In Court'], to: 'Investigation', roles: ['grm_officer_national'] },
     ],
@@ -473,6 +473,8 @@ export async function runSeed() {
       { key: 'description', type: 'textarea', section: 'grievance', required: true, label: { en: 'Describe your grievance', sw: 'Eleza malalamiko yako' } },
       { key: 'expected_outcome', type: 'textarea', section: 'outcome', required: false, label: { en: 'What outcome do you expect?', sw: 'Unatarajia matokeo gani?' } },
     ],
+    attachment_kinds: DEFAULT_ATTACHMENT_KINDS,
+    attachment_policy: DEFAULT_ATTACHMENT_POLICY,
   }, admin!.id);
 
   await upsertActiveConfig(kisip!.id, 'cd07_numbering', {

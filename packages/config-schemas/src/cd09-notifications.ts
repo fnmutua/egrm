@@ -66,6 +66,8 @@ export const TEMPLATE_VARIABLES = [
   'case.level',
   'case.unit_name',
   'case.category',
+  'case.action_taken',
+  'case.update_summary',
   'tenant.name',
   'tenant.short_name',
   'actor.name',
@@ -156,7 +158,7 @@ export type IntakeAlerts = z.infer<typeof intakeAlerts>;
 export const DEFAULT_INTAKE_ALERTS: IntakeAlerts = {
   enabled: true,
   role: 'grm_officer',
-  scope: 'case_unit',
+  scope: 'unit_and_above',
   channels: ['email', 'in_app'],
   template: 'case-intake-alert',
 };
@@ -170,6 +172,8 @@ export const statusChangeAlerts = z.object({
   template: z.string().min(1).default('case-status-changed-staff'),
   /** When true, complainant receives status-update via the status-change-complainant rule. */
   notify_complainant: z.boolean().default(true),
+  /** Transition targets that skip complainant notification (e.g. Rejected, internal-only). */
+  complainant_exclude_statuses: z.array(z.string().min(1)).default(['Rejected']),
 });
 
 export type StatusChangeAlerts = z.infer<typeof statusChangeAlerts>;
@@ -181,6 +185,7 @@ export const DEFAULT_STATUS_CHANGE_ALERTS: StatusChangeAlerts = {
   channels: ['email', 'in_app'],
   template: 'case-status-changed-staff',
   notify_complainant: true,
+  complainant_exclude_statuses: ['Rejected'],
 };
 
 /** Bundled with the platform — auto-merged when intake_alerts references it. */
@@ -227,10 +232,10 @@ export const CASE_STATUS_CHANGED_STAFF_TEMPLATE = {
       email: {
         subject: 'Status update {{case.reference}} — {{case.status_label}}',
         body:
-          'Case {{case.reference}} at {{case.unit_name}} moved to {{case.status_label}}.\n\nReview the case in the console.',
+          'Case {{case.reference}} at {{case.unit_name}} moved to {{case.status_label}}.\n\nUpdate: {{case.update_summary}}\n\nReview the case in the console.',
       },
       in_app: {
-        body: '{{case.reference}} at {{case.unit_name}} → {{case.status_label}}',
+        body: '{{case.reference}} → {{case.status_label}}: {{case.update_summary}}',
       },
       sms: {
         body: '{{tenant.name}}: {{case.reference}} status {{case.status_label}} ({{case.unit_name}}).',
@@ -400,6 +405,8 @@ export const cd09Notifications = z
 
     if (!data.status_change_alerts) {
       data.status_change_alerts = { ...DEFAULT_STATUS_CHANGE_ALERTS };
+    } else if (!data.status_change_alerts.complainant_exclude_statuses?.length) {
+      data.status_change_alerts.complainant_exclude_statuses = [...DEFAULT_STATUS_CHANGE_ALERTS.complainant_exclude_statuses];
     }
 
     return data;
@@ -615,19 +622,29 @@ export function defaultNotificationPack(): Cd09Notifications {
       privacy_mode: 'standard',
       variants: {
         en: {
-          sms: { body: '{{case.reference}}: status is now {{case.status_label}}. {{tracking.url}}' },
-          whatsapp: { body: '{{case.reference}}: status is now {{case.status_label}}. {{tracking.url}}' },
+          sms: {
+            body: '{{case.reference}}: {{case.status_label}}. {{case.update_summary}} {{tracking.url}}',
+          },
+          whatsapp: {
+            body: '{{case.reference}}: {{case.status_label}}. {{case.update_summary}} {{tracking.url}}',
+          },
           email: {
             subject: 'Update on {{case.reference}}',
-            body: 'Your grievance {{case.reference}} is now: {{case.status_label}}.\n\nTrack: {{tracking.url}}',
+            body:
+              'Your grievance {{case.reference}} is now: {{case.status_label}}.\n\n{{case.update_summary}}\n\nTrack: {{tracking.url}}',
           },
         },
         sw: {
-          sms: { body: '{{case.reference}}: hali ni {{case.status_label}}. {{tracking.url}}' },
-          whatsapp: { body: '{{case.reference}}: hali ni {{case.status_label}}. {{tracking.url}}' },
+          sms: {
+            body: '{{case.reference}}: {{case.status_label}}. {{case.update_summary}} {{tracking.url}}',
+          },
+          whatsapp: {
+            body: '{{case.reference}}: {{case.status_label}}. {{case.update_summary}} {{tracking.url}}',
+          },
           email: {
             subject: 'Taarifa kuhusu {{case.reference}}',
-            body: 'Malalamiko yako {{case.reference}} sasa ni: {{case.status_label}}.\n\nFuatilia: {{tracking.url}}',
+            body:
+              'Malalamiko yako {{case.reference}} sasa ni: {{case.status_label}}.\n\n{{case.update_summary}}\n\nFuatilia: {{tracking.url}}',
           },
         },
       },

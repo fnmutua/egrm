@@ -174,7 +174,16 @@ onMounted(async () => {
             <ConfigTaxonomyEditor v-else-if="domain === 'cd03_taxonomy'" :payload="payload" :section="activeSection" />
             <ConfigWorkflowEditor v-else-if="domain === 'cd04_workflow'" :payload="payload" :section="activeSection" />
             <ConfigSlaEditor v-else-if="domain === 'cd05_sla'" :payload="payload" :section="activeSection" />
-            <ConfigIntakeFormsEditor v-else-if="domain === 'cd06_intake_forms'" :payload="payload" :section="activeSection" />
+            <ConfigIntakeFormsEditor
+              v-else-if="domain === 'cd06_intake_forms' && (!activeSection || ['sec-general', 'sec-complainant', 'sec-grievance', 'sec-outcome'].includes(activeSection))"
+              :payload="payload"
+              :section="activeSection"
+            />
+            <ConfigDocumentTypesEditor
+              v-else-if="domain === 'cd06_intake_forms'"
+              :payload="payload"
+              :section="activeSection"
+            />
             <ConfigChannelsEditor v-else-if="domain === 'cd08_channels'" :payload="payload" :section="activeSection" />
             <ConfigNotificationsEditor v-else-if="domain === 'cd09_notifications'" :payload="payload" :section="activeSection" />
             <ConfigOrgAccessEditor v-else-if="domain === 'cd10_org_access'" :payload="payload" :section="activeSection" />

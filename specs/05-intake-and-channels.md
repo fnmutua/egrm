@@ -79,6 +79,8 @@ Anti-abuse: per-IP and per-identity rate limits on submission and lookup; attach
 - **Completion queue**: cases flagged `requires_completion` (USSD/SMS/email) listed for enrichment; completing them is a guarded action.
 - **Merge/link**: duplicate handling UI — link related cases or merge (merged case closes with reason `duplicate/merged`, thread preserved, audit event both sides).
 
+**Case detail handling** (status updates, assignment, notifications log, timeline) is specified in [13-staff-console-case-handling.md](13-staff-console-case-handling.md).
+
 ## 6. Channel adapter contract
 
 Each channel adapter implements:

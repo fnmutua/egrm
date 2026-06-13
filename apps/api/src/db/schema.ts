@@ -178,7 +178,7 @@ export const caseEvent = pgTable('case_event', {
   tenantId: uuid('tenant_id').notNull().references(() => tenant.id),
   caseId: uuid('case_id').notNull().references(() => grmCase.id),
   kind: text('kind', {
-    enum: ['created', 'status_changed', 'message_external', 'note_internal', 'field_edited', 'assigned'],
+    enum: ['created', 'status_changed', 'message_external', 'note_internal', 'field_edited', 'assigned', 'attachment_added'],
   }).notNull(),
   actorType: text('actor_type', { enum: ['complainant', 'staff', 'system'] }).notNull(),
   actorId: uuid('actor_id'),
@@ -244,4 +244,32 @@ export const notificationLog = pgTable('notification_log', {
   attempts: integer('attempts').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Case file attachments — staged then linked on workflow actions (spec 14). */
+export const caseAttachment = pgTable('case_attachment', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenant.id),
+  caseId: uuid('case_id').notNull().references(() => grmCase.id),
+  caseEventId: uuid('case_event_id').references(() => caseEvent.id),
+  kind: text('kind').notNull(),
+  title: text('title'),
+  filename: text('filename').notNull(),
+  mime: text('mime').notNull(),
+  sizeBytes: integer('size_bytes').notNull(),
+  sha256: text('sha256').notNull(),
+  storageKey: text('storage_key').notNull(),
+  visibility: text('visibility', { enum: ['public', 'staff', 'restricted'] }).notNull().default('staff'),
+  status: text('status', { enum: ['staging', 'active', 'quarantined', 'deleted_soft'] }).notNull().default('staging'),
+  malwareScanStatus: text('malware_scan_status', {
+    enum: ['pending', 'clean', 'infected', 'skipped', 'failed'],
+  })
+    .notNull()
+    .default('skipped'),
+  uploadedBy: uuid('uploaded_by').references(() => appUser.id),
+  uploadChannel: text('upload_channel', { enum: ['console', 'portal', 'api', 'email_inbound', 'migration'] })
+    .notNull()
+    .default('console'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
 });

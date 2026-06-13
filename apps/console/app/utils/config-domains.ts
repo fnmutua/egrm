@@ -30,6 +30,8 @@ export const CD06_SUBSECTIONS = [
   { id: 'sec-complainant', label: 'Complainant' },
   { id: 'sec-grievance', label: 'Grievance' },
   { id: 'sec-outcome', label: 'Expected outcome' },
+  { id: 'sec-document-types', label: 'Document types' },
+  { id: 'sec-upload-policy', label: 'Upload policy' },
 ];
 
 export const CD10_SUBSECTIONS = [
@@ -162,7 +164,7 @@ export const DOMAIN_CATALOGUE: DomainMeta[] = [
     description: 'Acknowledgement/response/resolution targets, per-status durations, working calendars, reminder ladder, and auto-escalation rules.',
     subsections: CD05_SUBSECTIONS },
   { domain: 'cd06_intake_forms', cd: 'CD-06', title: 'Intake forms', icon: 'i-lucide-clipboard-list', strict: true,
-    description: 'The standardized intake dataset: field-by-field enablement, requiredness, labels per locale, options, anonymity policy, consent text.',
+    description: 'Intake dataset, document type catalogue, upload policy, anonymity and consent.',
     subsections: CD06_SUBSECTIONS },
   { domain: 'cd07_numbering', cd: 'CD-07', title: 'Reference numbering', icon: 'i-lucide-hash', strict: true,
     description: 'Reference pattern (e.g. GRM-{YYYY}-{seq:4}), sequence scope, verifier requirement for public tracking.' },

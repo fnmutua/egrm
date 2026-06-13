@@ -3,6 +3,8 @@ interface AuthUser {
   email: string;
   name: string;
   permissions: string[];
+  tenant_wide?: boolean;
+  jurisdiction_roots?: string[];
   manages_staff_users?: boolean;
   staff_user_management_full?: boolean;
   manageable_role_names?: string[];

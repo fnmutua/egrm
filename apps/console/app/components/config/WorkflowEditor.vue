@@ -48,19 +48,29 @@ const { roleNames, loadRoleNames } = useTenantRoles();
 const show = (id: string) => !props.section || props.section === id;
 
 const locales = ref<string[]>(['en']);
+const attachmentKindItems = ref<{ value: string; label: string }[]>([]);
 const hierarchyLevels = ref<{ code: string; label: string }[]>([]);
 
 onMounted(async () => {
   try {
-    const [identity, hierarchy] = await Promise.all([
+    const [identity, hierarchy, intake] = await Promise.all([
       api<{ payload?: { locales?: { enabled?: string[] } } }>('/api/v1/config/cd01_identity'),
       api<{ payload?: { levels?: { code: string; label: string }[] } }>('/api/v1/config/cd02_hierarchy'),
+      api<{ payload?: { attachment_kinds?: { code: string; label?: Record<string, string>; active?: boolean }[] } }>(
+        '/api/v1/config/cd06_intake_forms',
+      ).catch(() => ({ payload: undefined })),
     ]);
     if (identity.payload?.locales?.enabled?.length) locales.value = identity.payload.locales.enabled;
     hierarchyLevels.value = (hierarchy.payload?.levels ?? []).map((l) => ({
       code: l.code,
       label: typeof l.label === 'string' ? l.label : l.code,
     }));
+    attachmentKindItems.value = (intake.payload?.attachment_kinds ?? [])
+      .filter((k) => k.active !== false)
+      .map((k) => ({
+        value: k.code,
+        label: k.label?.en ?? k.code,
+      }));
   } catch {
     /* defaults */
   }
@@ -221,6 +231,14 @@ function requiresFieldsText(t: Transition) {
 function setRequiresFields(t: Transition, text: string) {
   t.requires ??= {};
   t.requires.fields = text.split(',').map((f) => f.trim()).filter(Boolean);
+}
+
+function setRequiresAttachments(t: Transition, codes: string[]) {
+  t.requires ??= {};
+  t.requires.attachments = codes.length ? codes : undefined;
+  if (!t.requires.attachments?.length && !t.requires.fields?.length && !t.requires.note) {
+    t.requires = undefined;
+  }
 }
 
 const txSummary = (t: Transition) => {
@@ -456,6 +474,30 @@ const reachabilityHint = computed(() => {
               <USwitch :model-value="!!t.requires?.note" @update:model-value="(t.requires ??= {}).note = $event || undefined" />
               <span>Requires a note / justification</span>
             </div>
+
+            <UFormField
+              label="Required document types"
+              help="From CD-06 document types. Officer must attach at least one file of each kind before this transition."
+            >
+              <USelectMenu
+                v-if="attachmentKindItems.length"
+                :model-value="t.requires?.attachments ?? []"
+                :items="attachmentKindItems"
+                value-key="value"
+                label-key="label"
+                multiple
+                class="w-full"
+                placeholder="None required…"
+                @update:model-value="setRequiresAttachments(t, $event as string[])"
+              />
+              <UInput
+                v-else
+                :model-value="(t.requires?.attachments ?? []).join(', ')"
+                class="w-full font-mono"
+                placeholder="signed_resolution_form"
+                @update:model-value="setRequiresAttachments(t, ($event as string).split(',').map((s) => s.trim()).filter(Boolean))"
+              />
+            </UFormField>
 
             <div>
               <div class="text-sm font-medium mb-2">Side effects</div>

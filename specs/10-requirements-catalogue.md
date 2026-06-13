@@ -34,7 +34,7 @@ Priorities: **M**ust (MVP), **S**hould (fast-follow), **C**ould (differentiator)
 | GEN-INT-11 | S | Hotline/IVR assisted intake with call metadata | K2 FR-HOT-01–05 |
 | GEN-INT-12 | S | Inbound email processing to triage queue; outbound email Must (see GEN-NOT) | K2 FR-EMAIL-02 |
 | GEN-INT-13 | M | Chatbot intake default-off platform-wide; activates only by explicit tenant opt-in (see GEN-AI) | K2 FR-PUB-15 |
-| GEN-INT-14 | M | Attachment policy enforcement (size/type/count) + authorized download with audit | K2 FR-ATT-01/02 |
+| GEN-INT-14 | M | Attachment policy enforcement (size/type/count) + authorized download with audit | K2 FR-ATT-01/02 — [spec 14](14-case-attachments-and-documents.md) |
 | GEN-INT-15 | S | Malware scanning hook for uploads | K2 FR-ATT-03 |
 | GEN-INT-16 | M | Free-of-charge, confidentiality and non-retaliation assurances displayed (content editable, presence enforced) | K2 FR-PUB-12/14, DOC |
 | GEN-INT-17 | S | Registered complainant accounts (OTP) with case history | K2 FR-PUB-07 |
@@ -82,9 +82,9 @@ Priorities: **M**ust (MVP), **S**hould (fast-follow), **C**ould (differentiator)
 |---|---|---|---|
 | GEN-CASE-01 | M | Queues: open/my/team/overdue/closed + saved views (filters, columns, sharing) | K2 FR-STAFF-02, ADM queues |
 | GEN-CASE-02 | M | Search: basic + advanced criteria builder, RBAC-scoped; sensitive cases excluded without clearance | K2 FR-STAFF-03; KIS |
-| GEN-CASE-03 | M | Case detail: timeline (single event stream), thread (external vs internal), parties, tasks, attachments, SLA clocks, available actions from engine | K2 FR-STAFF-07/08/17 |
+| GEN-CASE-03 | M | Case detail: timeline (single event stream), thread (external vs internal), parties, tasks, attachments, SLA clocks, available actions from engine | K2 FR-STAFF-07/08/17 — **partial:** [spec 13](13-staff-console-case-handling.md); attachments: [spec 14](14-case-attachments-and-documents.md) |
 | GEN-CASE-04 | M | Field edits audited with before/after; revert as new inverse event | KIS history/revert |
-| GEN-CASE-05 | M | Assignment/transfer with reason; collaborator management; claim-on-response option | K2 FR-STAFF-14/15/06 |
+| GEN-CASE-05 | M | Assignment/transfer with reason; collaborator management; claim-on-response option | K2 FR-STAFF-14/15/06 — **partial:** assignment tab in spec 13 |
 | GEN-CASE-06 | M | Bulk actions (assign/transfer/status where guards allow) with per-case guard evaluation + per-case audit | K2 FR-STAFF-21; KIS bulk refer |
 | GEN-CASE-07 | M | Case file PDF export (tenant-branded dossier) | KIS pdf endpoints, K2 FR-STAFF-20 |
 | GEN-CASE-08 | M | Complainant directory (party history); org directory optional | K2 FR-USER-01, FR-ORG-01 |

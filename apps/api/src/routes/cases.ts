@@ -1,17 +1,35 @@
 import type { FastifyInstance } from 'fastify';
-import { and, asc, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { hasPermission } from '@egrm/core';
 import { db, schema } from '../db/client.js';
 import { decryptPII } from '../services/crypto.js';
 import { createCase } from '../services/intake.js';
 import { writeAudit } from '../services/audit.js';
-import { canAccessCase, caseVisibilityFilter, loadUserAccess, sensitivityListFilter } from '../services/access.js';
+import {
+  canAccessCase,
+  canFilterCasesByUnit,
+  caseUnitSubtreeFilter,
+  caseVisibilityFilter,
+  expandUnitSubtrees,
+  loadUserAccess,
+  sensitivityListFilter,
+} from '../services/access.js';
 import { applyCaseAction, getAvailableCaseActions } from '../services/case-workflow.js';
+import { unitSelfAndAncestors } from '../services/units.js';
+import {
+  commitStandaloneAttachments,
+  deleteStagedAttachment,
+  getAttachmentDownload,
+  listCaseAttachments,
+  stageCaseAttachment,
+} from '../services/attachments.js';
+import multipart from '@fastify/multipart';
 
 const listQuery = z.object({
   status: z.string().optional(),
   q: z.string().optional(),
+  unit_id: z.string().uuid().optional(),
   page: z.coerce.number().int().min(1).default(1),
   page_size: z.coerce.number().int().min(1).max(100).default(20),
 });
@@ -31,17 +49,68 @@ const caseActionBody = z.object({
   action_taken: z.string().optional(),
   update_summary: z.string().optional(),
   fields: z.record(z.string(), z.unknown()).optional(),
+  attachment_ids: z.array(z.string().uuid()).optional(),
+});
+
+const commitAttachmentsBody = z.object({
+  attachment_ids: z.array(z.string().uuid()).min(1),
+  note: z.string().optional(),
 });
 
 /** Staff case endpoints with jurisdiction-subtree scoping (spec 07 §2.2). */
 export default async function caseRoutes(app: FastifyInstance) {
+  await app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024, files: 1 } });
+
+  app.get('/api/v1/cases/filter-units', { onRequest: [app.requirePermission('case:read')] }, async (req) => {
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const allowedIds = access.tenantWide
+      ? (await db
+          .select({ id: schema.unit.id })
+          .from(schema.unit)
+          .where(and(eq(schema.unit.tenantId, req.tenant.id), eq(schema.unit.active, true))))
+          .map((u) => u.id)
+      : [...(await expandUnitSubtrees(req.tenant.id, access.jurisdictionRoots))];
+
+    if (allowedIds.length === 0) {
+      return { tenant_wide: access.tenantWide, units: [], default_unit_id: null };
+    }
+
+    const units = await db
+      .select({
+        id: schema.unit.id,
+        name: schema.unit.name,
+        levelCode: schema.unit.levelCode,
+      })
+      .from(schema.unit)
+      .where(and(eq(schema.unit.tenantId, req.tenant.id), inArray(schema.unit.id, allowedIds), eq(schema.unit.active, true)))
+      .orderBy(asc(schema.unit.name));
+
+    const defaultUnitId =
+      !access.tenantWide && access.jurisdictionRoots.length > 0
+        ? access.jurisdictionRoots.find((id) => allowedIds.includes(id)) ?? access.jurisdictionRoots[0] ?? null
+        : null;
+
+    return {
+      tenant_wide: access.tenantWide,
+      units: units.map((u) => ({ id: u.id, name: u.name, level_code: u.levelCode })),
+      default_unit_id: defaultUnitId,
+    };
+  });
+
   app.get('/api/v1/cases', { onRequest: [app.requirePermission('case:read')] }, async (req, reply) => {
     const parsed = listQuery.safeParse(req.query);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_query' });
-    const { status, q, page, page_size } = parsed.data;
+    const { status, q, unit_id, page, page_size } = parsed.data;
 
-    const scopeFilter = await caseVisibilityFilter(req.tenant.id, req.user, req.user.sub);
-    const sensitivityFilter = sensitivityListFilter(req.user, req.user.sub);
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    if (unit_id) {
+      const allowed = await canFilterCasesByUnit(req.tenant.id, access, unit_id);
+      if (!allowed) return reply.code(403).send({ error: 'forbidden', message: 'Unit outside your jurisdiction scope' });
+    }
+
+    const scopeFilter = await caseVisibilityFilter(req.tenant.id, access, req.user.sub);
+    const sensitivityFilter = sensitivityListFilter(access, req.user.sub);
+    const unitFilter = unit_id ? await caseUnitSubtreeFilter(req.tenant.id, unit_id) : undefined;
 
     const where = and(
       eq(schema.grmCase.tenantId, req.tenant.id),
@@ -49,6 +118,7 @@ export default async function caseRoutes(app: FastifyInstance) {
       q ? or(ilike(schema.grmCase.reference, `%${q}%`), ilike(schema.grmCase.summary, `%${q}%`)) : undefined,
       scopeFilter,
       sensitivityFilter,
+      unitFilter,
     );
 
     const [rows, [count]] = await Promise.all([
@@ -255,6 +325,35 @@ export default async function caseRoutes(app: FastifyInstance) {
     const allowed = await canAccessCase(req.tenant.id, access, req.user.sub, c);
     if (!allowed) return reply.code(404).send({ error: 'not_found' });
 
+    const jurisdictionUnitIds = await unitSelfAndAncestors(req.tenant.id, c.unitId);
+    const jurisdictionSet = new Set(jurisdictionUnitIds);
+
+    const roleRows = await db
+      .select({
+        userId: schema.userRole.userId,
+        unitId: schema.userRole.unitId,
+      })
+      .from(schema.userRole)
+      .innerJoin(schema.appUser, eq(schema.userRole.userId, schema.appUser.id))
+      .where(and(eq(schema.appUser.tenantId, req.tenant.id), eq(schema.appUser.active, true)));
+
+    const eligibleUserIds = new Set<string>();
+    const atCaseUnit = new Set<string>();
+    for (const row of roleRows) {
+      if (row.unitId === null || jurisdictionSet.has(row.unitId)) {
+        eligibleUserIds.add(row.userId);
+        if (c.unitId && row.unitId === c.unitId) atCaseUnit.add(row.userId);
+      }
+    }
+
+    if (eligibleUserIds.size === 0 && !c.unitId) {
+      const allActive = await db
+        .select({ id: schema.appUser.id })
+        .from(schema.appUser)
+        .where(and(eq(schema.appUser.tenantId, req.tenant.id), eq(schema.appUser.active, true)));
+      for (const u of allActive) eligibleUserIds.add(u.id);
+    }
+
     const users = await db
       .select({
         id: schema.appUser.id,
@@ -265,7 +364,137 @@ export default async function caseRoutes(app: FastifyInstance) {
       .where(and(eq(schema.appUser.tenantId, req.tenant.id), eq(schema.appUser.active, true)))
       .orderBy(schema.appUser.displayName);
 
-    return { assignees: users.map((u) => ({ id: u.id, name: u.name, email: u.email })) };
+    const filtered = users.filter((u) => eligibleUserIds.has(u.id));
+    const suggested =
+      !c.assigneeId && c.unitId
+        ? filtered.find((u) => atCaseUnit.has(u.id))?.id ?? null
+        : null;
+
+    return {
+      assignees: filtered.map((u) => ({ id: u.id, name: u.name, email: u.email })),
+      suggested_assignee_id: suggested,
+    };
+  });
+
+  app.get('/api/v1/cases/:id/attachments', { onRequest: [app.requirePermission('case:read')] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const attachments = await listCaseAttachments(req.tenant.id, id, access, req.user.sub);
+    return { attachments };
+  });
+
+  app.post('/api/v1/cases/:id/attachments/stage', { onRequest: [app.requirePermission('attachment:upload')] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const [c] = await db
+      .select({ unitId: schema.grmCase.unitId, assigneeId: schema.grmCase.assigneeId, sensitivity: schema.grmCase.sensitivity })
+      .from(schema.grmCase)
+      .where(and(eq(schema.grmCase.tenantId, req.tenant.id), eq(schema.grmCase.id, id)))
+      .limit(1);
+    if (!c) return reply.code(404).send({ error: 'not_found' });
+    const allowed = await canAccessCase(req.tenant.id, access, req.user.sub, c);
+    if (!allowed) return reply.code(404).send({ error: 'not_found' });
+
+    let fileBuffer: Buffer | null = null;
+    let filename = '';
+    let mime = 'application/octet-stream';
+    let kind = 'evidence';
+
+    const parts = req.parts();
+    for await (const part of parts) {
+      if (part.type === 'file') {
+        filename = part.filename || 'upload';
+        mime = part.mimetype || mime;
+        fileBuffer = await part.toBuffer();
+      } else if (part.fieldname === 'kind') {
+        kind = String(part.value);
+      }
+    }
+
+    if (!fileBuffer || !filename) return reply.code(400).send({ error: 'file_required' });
+
+    const result = await stageCaseAttachment({
+      tenantId: req.tenant.id,
+      caseId: id,
+      actorId: req.user.sub,
+      kind,
+      filename,
+      mime,
+      data: fileBuffer,
+    });
+    if ('error' in result) {
+      return reply.code(422).send({ error: result.error, message: result.message });
+    }
+
+    await writeAudit({
+      tenantId: req.tenant.id,
+      actorId: req.user.sub,
+      action: 'attachment.staged',
+      entity: 'case_attachment',
+      entityId: result.id,
+      data: { case_id: id, kind, filename },
+    });
+
+    return { attachment_id: result.id, status: 'staging' };
+  });
+
+  app.post('/api/v1/cases/:id/attachments', { onRequest: [app.requirePermission('attachment:upload')] }, async (req, reply) => {
+    const parsed = commitAttachmentsBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+    const { id } = req.params as { id: string };
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const [c] = await db
+      .select({ unitId: schema.grmCase.unitId, assigneeId: schema.grmCase.assigneeId, sensitivity: schema.grmCase.sensitivity })
+      .from(schema.grmCase)
+      .where(and(eq(schema.grmCase.tenantId, req.tenant.id), eq(schema.grmCase.id, id)))
+      .limit(1);
+    if (!c) return reply.code(404).send({ error: 'not_found' });
+    const allowed = await canAccessCase(req.tenant.id, access, req.user.sub, c);
+    if (!allowed) return reply.code(404).send({ error: 'not_found' });
+
+    try {
+      const result = await commitStandaloneAttachments({
+        tenantId: req.tenant.id,
+        caseId: id,
+        actorId: req.user.sub,
+        attachmentIds: parsed.data.attachment_ids,
+        note: parsed.data.note,
+      });
+      if ('error' in result) return reply.code(result.code).send({ error: result.error, message: result.message });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'commit_failed';
+      return reply.code(422).send({ error: msg });
+    }
+
+    return { ok: true };
+  });
+
+  app.get('/api/v1/cases/:id/attachments/:aid/download', { onRequest: [app.requirePermission('attachment:download')] }, async (req, reply) => {
+    const { id, aid } = req.params as { id: string; aid: string };
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const result = await getAttachmentDownload(req.tenant.id, id, aid, access, req.user.sub);
+    if ('error' in result) return reply.code(result.code).send({ error: result.error });
+
+    await writeAudit({
+      tenantId: req.tenant.id,
+      actorId: req.user.sub,
+      action: 'attachment.downloaded',
+      entity: 'case_attachment',
+      entityId: aid,
+      data: { case_id: id },
+    });
+
+    return reply
+      .header('Content-Type', result.mime)
+      .header('Content-Disposition', `attachment; filename="${encodeURIComponent(result.filename)}"`)
+      .send(result.data);
+  });
+
+  app.delete('/api/v1/cases/:id/attachments/:aid', { onRequest: [app.requirePermission('attachment:upload')] }, async (req, reply) => {
+    const { id, aid } = req.params as { id: string; aid: string };
+    const result = await deleteStagedAttachment(req.tenant.id, id, aid, req.user.sub);
+    if ('error' in result) return reply.code(result.code).send({ error: result.error });
+    return { ok: true };
   });
 
   app.post('/api/v1/cases/:id/actions', { onRequest: [app.authenticate] }, async (req, reply) => {

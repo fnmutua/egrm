@@ -38,7 +38,7 @@ event  →  rule(s)  →  recipients  →  template (locale, channel)  →  deli
 ### 1.3 Templates
 
 - Per template: per **locale** and per **channel** variant (SMS short form, email rich form, in-app).
-- Variables: case reference, status label (localized), jurisdiction names, dates, tracking link, actor display name, tenant branding tokens. Unknown variables fail validation at config time.
+- Variables: case reference, status label (localized), jurisdiction names, dates, tracking link, actor display name, tenant branding tokens, **action taken**, **update summary** (on status change). Unknown variables fail validation at config time.
 - **Privacy modes**: each template is marked `standard` or `privacy_safe`; sensitivity classes force `privacy_safe` variants (reference + generic status only — no names, no narrative; KUSP2 FR-NOTIF-02/FR-SENS).
 - Tracking links: signed, time-limited URLs to the public status page (no guessable numeric IDs — KISIP lesson).
 
@@ -60,3 +60,14 @@ event  →  rule(s)  →  recipients  →  template (locale, channel)  →  deli
 ## 4. Defaults shipped with the platform
 
 A default rule pack implementing the doctrine baseline: complainant ack on creation (with tracking link), status-change notices (excluding internal-only transitions), officer notices on assignment/escalation/return/referral, at-risk and breach reminders, satisfaction request on resolution, closure notice, appeal notices. Tenants edit from there.
+
+### 4.1 Alert toggles (CD-09)
+
+In addition to declarative rules, two admin toggles control high-frequency staff/complainant alerts without editing the full rule list (spec 13 §8):
+
+| Block | Event | Audience |
+|---|---|---|
+| `intake_alerts` | `case.created` | Jurisdiction officers (role + scope) |
+| `status_change_alerts` | `case.status_changed` | Jurisdiction officers; optional complainant via `notify_complainant` |
+
+Bundled templates: `case-intake-alert`, `case-status-changed-staff`. Missing templates are auto-merged on config load/save.

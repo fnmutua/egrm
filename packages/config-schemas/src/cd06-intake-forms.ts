@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import { localizedText } from './cd01-identity.js';
+import {
+  attachmentKindDef,
+  attachmentPolicy,
+  DEFAULT_ATTACHMENT_KINDS,
+  DEFAULT_ATTACHMENT_POLICY,
+  mergeDefaultAttachmentKinds,
+} from './attachment-kinds.js';
 
 /** CD-06 Intake forms & data standards (spec 02, spec 05 §3). */
 const fieldDef = z.object({
@@ -20,12 +27,19 @@ export const cd06IntakeForms = z.object({
   anonymous_allowed: z.boolean().default(true),
   consent_text: localizedText,
   fields: z.array(fieldDef).min(1),
+  attachment_kinds: z.array(attachmentKindDef).min(1).default([...DEFAULT_ATTACHMENT_KINDS]),
+  attachment_policy: attachmentPolicy.default({ ...DEFAULT_ATTACHMENT_POLICY }),
 }).superRefine((form, ctx) => {
   const keys = form.fields.map((f) => f.key);
   if (new Set(keys).size !== keys.length) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['fields'], message: 'Field keys must be unique' });
   }
+  const kindCodes = form.attachment_kinds.map((k) => k.code);
+  if (new Set(kindCodes).size !== kindCodes.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['attachment_kinds'], message: 'Document type codes must be unique' });
+  }
 });
 
 export type Cd06IntakeForms = z.infer<typeof cd06IntakeForms>;
 export type IntakeFieldDef = z.infer<typeof fieldDef>;
+export { mergeDefaultAttachmentKinds };

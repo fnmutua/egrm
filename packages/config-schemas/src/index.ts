@@ -18,6 +18,7 @@ export * from './cd03-taxonomy.js';
 export * from './cd04-workflow.js';
 export * from './cd05-sla.js';
 export * from './cd06-intake-forms.js';
+export * from './attachment-kinds.js';
 export * from './cd08-channels.js';
 export * from './cd09-notifications.js';
 export * from './party-notification-channels.js';

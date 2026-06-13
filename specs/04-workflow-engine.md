@@ -39,9 +39,12 @@ Every staff operation is a single **case action** request:
 ```
 POST /api/v1/cases/{id}/actions
 { "action": "transition", "to_status": "Resolved",
+  "action_taken": "...", "update_summary": "...",
   "note": "...", "fields": {...}, "attachments": [...],
   "assignee": ..., "idempotency_key": "..." }
 ```
+
+`action_taken` and `update_summary` are **required** for all staff-initiated transitions in the console (spec 13 §4). `action_taken` satisfies transitions that declare `requires.note`. Both are persisted on the `status_changed` event and echoed in the timeline.
 
 The engine, in **one database transaction**:
 
@@ -63,7 +66,7 @@ Configured per transition; evaluated server-side:
 | **Role** | only roles listed may execute |
 | **Level** | actor's jurisdiction scope must cover the case's `current_level`/unit (national acts anywhere; county on its subtree; etc.) |
 | **Required fields** | `resolution_summary` for Resolve; `reason` for Reject/Return |
-| **Required attachments** | attachment of kind `signed_resolution_form` for Resolve (KISIP practice, kept as config) |
+| **Required attachments** | attachment of kind `signed_resolution_form` for Resolve (KISIP practice, kept as config) — see [spec 14](14-case-attachments-and-documents.md) |
 | **Required note** | free-text justification |
 | **Case state** | no open blocking tasks; not on legal hold; appeal window state |
 | **Approval** | transition requires second-person approval when priority ≥ X or sensitivity ∈ Y (KUSP2 closure checklist / supervisory approval) |

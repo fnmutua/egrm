@@ -23,11 +23,13 @@ Derived from:
 | 10 | [10-requirements-catalogue.md](10-requirements-catalogue.md) | Traceable GEN-* requirements with priorities and source mapping |
 | 11 | [11-tenant-profiles.md](11-tenant-profiles.md) | KISIP and KUSP2 expressed as configuration — proof of genericity |
 | 12 | [12-development-plan.md](12-development-plan.md) | Development plan: Nuxt 4 + Nuxt UI v4 / Node.js stack, monorepo, 7 delivery phases, team & timeline |
+| 13 | [13-staff-console-case-handling.md](13-staff-console-case-handling.md) | Staff case detail workspace: tabs, status form, assignment, CD-09 alert toggles, API contracts, Phase 2 backlog |
+| 14 | [14-case-attachments-and-documents.md](14-case-attachments-and-documents.md) | Attachment kinds, staged upload, atomic workflow linkage, console Documents tab, security & exports |
 
 ## Reading guide
 
 - **Product/business view:** 01 → 02 → 11 → 10
-- **Engineering view:** 03 → 04 → 05 → 06 → 07 → 09
+- **Engineering view:** 03 → 04 → 05 → 06 → 07 → 09 → 13 (staff case UI) → 14 (attachments)
 - **Procurement/compliance view:** 10 (maps ~1:1 onto the KUSP2 compliance matrix) → 07 → 08
 
 ## Status

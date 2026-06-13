@@ -2,6 +2,31 @@
 const route = useRoute();
 const { api } = useApi();
 const { user, fetchMe } = useAuth();
+const caseId = computed(() => String(route.params.id));
+const { stageFile, removeStaged, downloadFile } = useCaseAttachmentUpload(caseId.value);
+
+interface AttachmentKindOption {
+  code: string;
+  label: string;
+}
+
+interface StagedAttachment {
+  id: string;
+  kind: string;
+  filename: string;
+}
+
+interface CaseAttachment {
+  id: string;
+  kind: string;
+  kind_label: string;
+  filename: string;
+  mime: string;
+  size_bytes: number;
+  visibility: string;
+  uploaded_by_name: string | null;
+  created_at: string;
+}
 
 interface CaseAssignee {
   id: string;
@@ -27,7 +52,11 @@ interface CaseDetail {
 interface AvailableTransition {
   type: 'transition';
   to_status: string;
-  requires?: { note?: boolean; fields?: string[] };
+  requires?: {
+    note?: boolean;
+    fields?: string[];
+    attachments?: { kind: string; label: string; min_count: number }[];
+  };
 }
 
 interface AvailableAssign {
@@ -181,8 +210,16 @@ function eventSummary(ev: CaseDetail['events'][number]): string | null {
 
 async function loadAssignees() {
   if (!canAssign.value) return;
-  assignees.value = (await api<{ assignees: CaseAssignee[] }>(`/api/v1/cases/${route.params.id}/assignees`).catch(() => ({ assignees: [] }))).assignees;
-  selectedAssigneeId.value = detail.value?.case.assignee?.id ?? null;
+  const res = await api<{ assignees: CaseAssignee[]; suggested_assignee_id?: string | null }>(
+    `/api/v1/cases/${route.params.id}/assignees`,
+  ).catch(() => ({ assignees: [], suggested_assignee_id: null }));
+  assignees.value = res.assignees;
+  selectedAssigneeId.value =
+    detail.value?.case.assignee?.id ?? res.suggested_assignee_id ?? null;
+}
+
+function goToTab(tab: string) {
+  activeTab.value = tab;
 }
 
 async function loadCase() {
@@ -300,7 +337,35 @@ onMounted(async () => {
             <div><dt class="text-muted text-xs">Level</dt><dd class="capitalize">{{ detail.case.level }}</dd></div>
             <div><dt class="text-muted text-xs">Location</dt><dd>{{ detail.case.unit ?? '—' }}</dd></div>
             <div><dt class="text-muted text-xs">Priority</dt><dd class="capitalize">{{ detail.case.priority }}</dd></div>
-            <div><dt class="text-muted text-xs">Assignee</dt><dd>{{ detail.case.assignee?.name ?? '—' }}</dd></div>
+            <div>
+              <dt class="text-muted text-xs">Assignee</dt>
+              <dd>
+                <button
+                  v-if="detail.case.assignee"
+                  type="button"
+                  class="text-primary hover:underline text-left"
+                  @click="goToTab('assignment')"
+                >
+                  {{ detail.case.assignee.name }}
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  class="text-primary hover:underline"
+                  @click="goToTab('assignment')"
+                >
+                  Assign officer
+                </button>
+              </dd>
+            </div>
+            <div>
+              <dt class="text-muted text-xs">Status</dt>
+              <dd>
+                <button type="button" class="text-primary hover:underline capitalize" @click="goToTab('actions')">
+                  {{ detail.case.status }}
+                </button>
+              </dd>
+            </div>
             <div><dt class="text-muted text-xs">Sensitivity</dt><dd class="capitalize">{{ detail.case.sensitivity }}</dd></div>
             <div><dt class="text-muted text-xs">Occurred</dt><dd>{{ detail.case.date_occurred ? new Date(detail.case.date_occurred).toLocaleDateString() : '—' }}</dd></div>
             <div><dt class="text-muted text-xs">Received</dt><dd>{{ new Date(detail.case.created_at).toLocaleString() }}</dd></div>
@@ -450,9 +515,13 @@ onMounted(async () => {
         <template #header><span class="font-medium">Assign officer</span></template>
         <div v-if="canAssign" class="space-y-4">
           <p class="text-xs text-muted">
-            Jurisdiction: {{ detail.case.unit ?? detail.case.level }}. The assignee is notified by email and in-app.
+            Officers assigned to {{ detail.case.unit ?? detail.case.level }} or parent jurisdictions.
+            The assignee is notified by email and in-app.
           </p>
-          <UFormField label="Officer">
+          <p v-if="!detail.case.assignee && selectedAssigneeId" class="text-xs text-muted">
+            Suggested officer for this unit pre-selected when available.
+          </p>
+          <UFormField v-if="assignees.length" label="Officer">
             <USelectMenu
               v-model="selectedAssigneeId"
               :items="assignees.map((a) => ({ value: a.id, label: `${a.name} (${a.email})` }))"
@@ -462,7 +531,11 @@ onMounted(async () => {
               class="w-full"
             />
           </UFormField>
+          <p v-else class="text-sm text-muted">
+            No officers are role-assigned to this jurisdiction. Add assignments under Admin → Users.
+          </p>
           <UButton
+            v-if="assignees.length"
             class="w-full justify-center"
             :loading="assignLoading"
             :disabled="!selectedAssigneeId || selectedAssigneeId === detail.case.assignee?.id"

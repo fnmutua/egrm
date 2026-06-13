@@ -87,6 +87,7 @@ const roleItems = computed(() =>
 const editRolesEditable = computed(() => selected.value?.roles_editable !== false);
 
 const editRoleItems = computed(() => {
+  const items = [...roleItems.value];
   for (const row of editRoles.value) {
     if (!row.role_id || items.some((i) => i.value === row.role_id)) continue;
     const fromUser = selected.value?.roles.find((r) => r.role_id === row.role_id);

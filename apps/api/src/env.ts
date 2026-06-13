@@ -21,6 +21,8 @@ const envSchema = z.object({
   SEED_ON_DEPLOY: z.string().optional(),
   /** Public portal base URL for tracking links in notifications. */
   PUBLIC_PORTAL_BASE_URL: z.string().default('http://localhost:3000'),
+  /** Local directory for case attachment blobs (spec 14). */
+  ATTACHMENTS_STORAGE_PATH: z.string().default('./data/attachments'),
   /** Log outbound messages to stdout instead of calling providers (local dev). */
   NOTIFICATIONS_DEV_LOG_ONLY: z
     .string()

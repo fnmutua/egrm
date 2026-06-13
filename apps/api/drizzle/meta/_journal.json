@@ -64,6 +64,13 @@
       "when": 1781267000000,
       "tag": "0009_party_notification_channels",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781268000000,
+      "tag": "0010_case_attachments",
+      "breakpoints": true
     }
   ]
 }
