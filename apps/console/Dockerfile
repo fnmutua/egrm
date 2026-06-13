@@ -15,6 +15,7 @@ ENV NUXT_PUBLIC_API_BASE=$NUXT_PUBLIC_API_BASE
 ENV NUXT_PUBLIC_TENANT=$NUXT_PUBLIC_TENANT
 
 RUN pnpm --filter @egrm/core build \
+ && pnpm --filter @egrm/config-schemas build \
  && pnpm --filter @egrm/console build
 
 FROM node:22-alpine AS runner
