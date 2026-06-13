@@ -4,6 +4,7 @@ import {
   ADVANTA_SMS_SENDBULK_URL,
   channelApiConfig,
   SMS_PROVIDER_PRESETS,
+  EMAIL_PROVIDER_PRESETS,
 } from './provider-api.js';
 
 export {
@@ -626,20 +627,21 @@ export function defaultNotificationPack(): Cd09Notifications {
   ];
 
   const advantaSms = SMS_PROVIDER_PRESETS.advanta!;
+  const gmailEmail = EMAIL_PROVIDER_PRESETS.gmail!;
 
   return {
     templates,
     rules,
     senders: {
       email: {
-        provider: 'smtp',
+        provider: gmailEmail.provider,
         enabled: true,
-        api_url: '',
-        request_format: 'json',
-        headers: [],
-        fields: [{ key: 'pass', value: '', secret: true }],
-        from_name: 'GRM',
-        from_address: '',
+        api_url: gmailEmail.api_url,
+        request_format: gmailEmail.request_format,
+        headers: structuredClone(gmailEmail.headers),
+        fields: structuredClone(gmailEmail.fields),
+        from_name: 'KISIP GRM',
+        from_address: 'kisip.mis@gmail.com',
       },
       sms: {
         provider: advantaSms.provider,

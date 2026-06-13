@@ -17,6 +17,9 @@ function smtpTransport(cfg: EmailSenderConfig): Transporter {
   const user = getConfiguredField(cfg.fields, 'user') || cfg.from_address?.trim();
 
   if (provider === 'gmail') {
+    if (!user?.trim() || !pass?.trim()) {
+      throw new DeliveryError('Gmail user and pass required in CD-09 senders.email', 'gmail', false);
+    }
     return nodemailer.createTransport({
       service: 'gmail',
       auth: { user, pass },

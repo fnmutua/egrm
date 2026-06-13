@@ -31,16 +31,6 @@ function parseAdvantaResponse(data: unknown): { ok: boolean; code: string } {
   return { ok, code: respCode };
 }
 
-function applySmsEnvFallbacks(body: Record<string, string>, provider: string): Record<string, string> {
-  const out = { ...body };
-  if (provider === 'advanta') {
-    if (!out.apikey?.trim()) out.apikey = process.env.SMS_API_KEY?.trim() ?? '';
-    if (!out.partnerID?.trim()) out.partnerID = process.env.SMS_PARTNER_ID?.trim() ?? '12108';
-    if (!out.shortcode?.trim()) out.shortcode = process.env.SMS_SHORTCODE?.trim() ?? 'KISIP';
-  }
-  return out;
-}
-
 export interface HttpSendOptions {
   formatPhone?: boolean;
   from?: string;
@@ -67,13 +57,12 @@ export async function sendConfiguredHttp(
 
   const url = resolveUrlTemplate(rawUrl, runtime);
   const headers = resolveProviderFields(cfg.headers ?? [], runtime);
-  let bodyFields = resolveProviderFields(cfg.fields ?? [], runtime);
-  if (opts?.formatPhone) bodyFields = applySmsEnvFallbacks(bodyFields, provider);
+  const bodyFields = resolveProviderFields(cfg.fields ?? [], runtime);
 
   const missing = (cfg.fields ?? []).filter(
     (f) => f.secret && !bodyFields[f.key]?.trim() && !headers[f.key]?.trim(),
   );
-  if (missing.length && provider !== 'advanta') {
+  if (missing.length) {
     const keys = missing.map((f) => f.key).join(', ');
     throw new DeliveryError(`Missing secret field(s): ${keys}`, provider, false);
   }

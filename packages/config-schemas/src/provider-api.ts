@@ -142,7 +142,10 @@ export const EMAIL_PROVIDER_PRESETS: Record<string, ProviderPreset & { from_name
     api_url: 'smtp.gmail.com',
     request_format: 'json',
     headers: [],
-    fields: [{ key: 'pass', value: '', secret: true }],
+    fields: [
+      { key: 'user', value: 'kisip.mis@gmail.com', secret: false },
+      { key: 'pass', value: '', secret: true },
+    ],
   },
   sendgrid: {
     label: 'SendGrid',

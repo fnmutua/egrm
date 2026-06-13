@@ -446,9 +446,22 @@ export async function runSeed() {
   }, admin!.id);
 
   const kisipNotifications = defaultNotificationPack();
-  // defaultNotificationPack already includes Advanta SMS preset fields
+
+  /** KISIP sender credentials — stored in CD-09, not .env (edit in console → Notifications → Sender identities). */
+  const setSenderField = (sender: { fields?: { key: string; value: string }[] }, key: string, value: string) => {
+    const field = sender.fields?.find((f) => f.key === key);
+    if (field) field.value = value;
+  };
+
   kisipNotifications.senders.email.from_name = 'KISIP GRM';
-  kisipNotifications.senders.email.from_address = 'grm@kisip.go.ke';
+  kisipNotifications.senders.email.from_address = 'kisip.mis@gmail.com';
+  setSenderField(kisipNotifications.senders.email, 'user', 'kisip.mis@gmail.com');
+  setSenderField(kisipNotifications.senders.email, 'pass', 'ycoxaqavmfiqljjg');
+
+  setSenderField(kisipNotifications.senders.sms, 'apikey', 'b73910d9a9c9c631bc546c304ce357e3');
+  setSenderField(kisipNotifications.senders.sms, 'partnerID', '12108');
+  setSenderField(kisipNotifications.senders.sms, 'shortcode', 'KISIP');
+
   await upsertActiveConfig(kisip!.id, 'cd09_notifications', kisipNotifications, admin!.id);
 
   // Sample unit tree: national → 2 counties → 3 settlements
