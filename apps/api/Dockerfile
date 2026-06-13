@@ -10,6 +10,7 @@ COPY apps/api apps/api
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @egrm/core build \
  && pnpm --filter @egrm/config-schemas build \
+ && pnpm --filter @egrm/notifications build \
  && pnpm --filter @egrm/api build
 
 FROM base AS runner

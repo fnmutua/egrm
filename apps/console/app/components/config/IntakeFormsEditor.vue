@@ -156,7 +156,7 @@ function moveField(section: FieldSection, from: number, to: number) {
 function addPreset(section: FieldSection, key: string) {
   const preset = FIELD_PRESETS.find((p) => p.key === key);
   if (!preset || usedKeys.value.has(key)) return;
-  const f: IntakeField = { ...structuredClone(preset), enabled: true };
+  const f: IntakeField = { ...preset, enabled: true };
   ensureField(f);
   props.payload.fields.push(f);
   expanded.value = new Set([...expanded.value, f]);
