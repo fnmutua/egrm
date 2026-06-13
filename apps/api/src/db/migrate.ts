@@ -36,7 +36,9 @@ if (isCliEntry()) {
     }
     await runMigrations();
   } catch (err) {
-    console.error('[migrate] failed:', err instanceof Error ? err.message : err);
+    const message = err instanceof Error ? err.message : String(err);
+    const cause = err instanceof Error && err.cause instanceof Error ? `\n  cause: ${err.cause.message}` : '';
+    console.error(`[migrate] failed: ${message}${cause}`);
     process.exit(1);
   }
 }

@@ -1,5 +1,10 @@
-import 'dotenv/config';
+import { config as loadDotenv } from 'dotenv';
 import { z } from 'zod';
+
+// Railway CLI injects env before the process starts — do not load local apps/api/.env on top.
+if (!process.env.RAILWAY_PROJECT_ID) {
+  loadDotenv();
+}
 import { resolveDatabaseUrl } from './db/resolve-database-url.js';
 
 const envSchema = z.object({
