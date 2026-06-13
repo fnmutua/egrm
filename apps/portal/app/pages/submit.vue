@@ -7,10 +7,49 @@ const locale = computed(() => meta.value?.locales.default ?? 'en');
 const anonymous = ref(false);
 const consent = ref(false);
 const values = reactive<Record<string, unknown>>({});
+const notificationChannels = ref<string[]>([]);
 const step = ref(0);
 const error = ref('');
 const submitting = ref(false);
 const result = ref<{ reference: string; tracking_pin?: string } | null>(null);
+
+const configuredChannels = computed(() => meta.value?.notification_channels ?? []);
+
+function channelLabel(ch: { label: Record<string, string>; value: string }) {
+  return ch.label[locale.value] ?? ch.label.en ?? ch.value;
+}
+
+function channelDisabled(ch: { requires: 'phone' | 'email' }): boolean {
+  if (ch.requires === 'phone') return !String(values.phone ?? '').trim();
+  return !String(values.email ?? '').trim();
+}
+
+function toggleChannel(value: string, on: boolean) {
+  if (on) {
+    if (!notificationChannels.value.includes(value)) {
+      notificationChannels.value = [...notificationChannels.value, value];
+    }
+  } else {
+    notificationChannels.value = notificationChannels.value.filter((v) => v !== value);
+  }
+}
+
+function validateNotificationChannels(): boolean {
+  if (anonymous.value || configuredChannels.value.length === 0) return true;
+  if (notificationChannels.value.length > 0) return true;
+  error.value = 'Please choose at least one way to receive updates.';
+  return false;
+}
+
+watch(
+  () => [values.phone, values.email, anonymous.value] as const,
+  () => {
+    notificationChannels.value = notificationChannels.value.filter((picked) => {
+      const ch = configuredChannels.value.find((c) => c.value === picked);
+      return ch && !channelDisabled(ch);
+    });
+  },
+);
 
 const sections = computed(() => {
   const all = [
@@ -41,8 +80,38 @@ function next() {
   if (validateStep()) step.value++;
 }
 
+function submitErrorMessage(e: unknown): string {
+  const err = e as {
+    data?: { error?: string; message?: string; details?: { fields?: string[] } };
+    statusMessage?: string;
+    message?: string;
+  };
+  const code = err.data?.error;
+  const messages: Record<string, string> = {
+    notification_channels_required: 'Please choose at least one way to receive updates.',
+    notification_channel_requires_phone: 'SMS/WhatsApp requires a phone number.',
+    notification_channel_requires_email: 'Email notifications require an email address.',
+    invalid_notification_channel: 'One of the selected notification channels is invalid.',
+    notification_channel_not_configured: 'A selected notification channel is not available.',
+    unit_not_at_intake_level: 'That location cannot accept grievances. Choose a different settlement or county.',
+    unknown_unit: 'The selected location is not valid. Choose again from the list.',
+    missing_required_fields: `Please complete: ${(err.data?.details?.fields ?? []).join(', ') || 'required fields'}.`,
+    consent_required: 'Consent is required to process your personal data.',
+    anonymous_not_allowed: 'Anonymous submissions are not allowed for this programme.',
+    tenant_not_configured: 'This programme is not fully configured yet. Try again later.',
+  };
+  if (code && messages[code]) return messages[code];
+  if (err.data?.message) return err.data.message;
+  if (err.statusMessage) return err.statusMessage;
+  if (err.message?.includes('fetch') || err.message?.includes('Failed to fetch')) {
+    return 'Cannot reach the server. Check your connection or try again shortly.';
+  }
+  return err.message ?? 'Submission failed. Please check your entries and try again.';
+}
+
 async function doSubmit() {
   if (!validateStep()) return;
+  if (!validateNotificationChannels()) return;
   const needsConsent = !anonymous.value;
   if (needsConsent && !consent.value) {
     error.value = 'Consent is required to process your personal data.';
@@ -51,9 +120,16 @@ async function doSubmit() {
   submitting.value = true;
   error.value = '';
   try {
-    result.value = await submit({ anonymous: anonymous.value, consent: consent.value, values });
+    result.value = await submit({
+      anonymous: anonymous.value,
+      consent: consent.value,
+      values: {
+        ...values,
+        notification_channels: anonymous.value ? [] : notificationChannels.value,
+      },
+    });
   } catch (e: unknown) {
-    error.value = 'Submission failed. Please check your entries and try again.';
+    error.value = submitErrorMessage(e);
   } finally {
     submitting.value = false;
   }
@@ -119,9 +195,34 @@ async function doSubmit() {
             :options="fieldOptions(f, locale)"
           />
 
-          <!-- Consent on final step -->
-          <div v-if="step === sections.length - 1 && !anonymous" class="pt-2 border-t border-default">
+          <!-- Consent + notification channels on final step -->
+          <div v-if="step === sections.length - 1 && !anonymous" class="pt-2 border-t border-default space-y-3">
             <UCheckbox v-model="consent" :label="meta?.consent_text[locale] ?? meta?.consent_text.en" />
+
+            <div v-if="configuredChannels.length > 0" class="space-y-2">
+              <div class="text-sm font-medium">How should we notify you?</div>
+              <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
+                <label
+                  v-for="ch in configuredChannels"
+                  :key="ch.value"
+                  class="inline-flex items-center gap-2"
+                  :class="channelDisabled(ch) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'"
+                >
+                  <UCheckbox
+                    :model-value="notificationChannels.includes(ch.value)"
+                    :disabled="channelDisabled(ch)"
+                    @update:model-value="(on: boolean | 'indeterminate') => toggleChannel(ch.value, on === true)"
+                  />
+                  <span class="text-sm">{{ channelLabel(ch) }}</span>
+                </label>
+              </div>
+              <p
+                v-if="configuredChannels.some(channelDisabled)"
+                class="text-xs text-muted"
+              >
+                Add your phone or email above to enable SMS, WhatsApp, or email notifications.
+              </p>
+            </div>
           </div>
 
           <UAlert v-if="error" color="error" :title="error" />

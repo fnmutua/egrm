@@ -12,6 +12,8 @@ export interface DomainMeta {
 }
 
 export const CD09_SUBSECTIONS = [
+  { id: 'sec-intake-alerts', label: 'Intake alerts' },
+  { id: 'sec-status-change-alerts', label: 'Status change alerts' },
   { id: 'sec-rules', label: 'Rules' },
   { id: 'sec-templates', label: 'Templates' },
   { id: 'sec-senders', label: 'Sender identities' },

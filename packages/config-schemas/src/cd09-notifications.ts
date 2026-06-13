@@ -140,6 +140,139 @@ export const notificationRule = z.object({
   enabled: z.boolean().default(true),
 });
 
+/** Auto-alert designated role when a grievance is reported at a jurisdiction unit. */
+export const intakeAlerts = z.object({
+  enabled: z.boolean().default(true),
+  /** Role name from CD-10 (e.g. grm_officer) — users assigned to the case unit. */
+  role: z.string().min(1).default('grm_officer'),
+  /** case_unit = officers at the grievance's unit; unit_and_above includes parent jurisdictions. */
+  scope: z.enum(['case_unit', 'unit_and_above', 'level', 'tenant']).default('case_unit'),
+  channels: channelList.default(['email', 'in_app']),
+  template: z.string().min(1).default('case-intake-alert'),
+});
+
+export type IntakeAlerts = z.infer<typeof intakeAlerts>;
+
+export const DEFAULT_INTAKE_ALERTS: IntakeAlerts = {
+  enabled: true,
+  role: 'grm_officer',
+  scope: 'case_unit',
+  channels: ['email', 'in_app'],
+  template: 'case-intake-alert',
+};
+
+/** Alert jurisdiction officers when case status changes. Complainant uses the status-change rule. */
+export const statusChangeAlerts = z.object({
+  enabled: z.boolean().default(true),
+  role: z.string().min(1).default('grm_officer'),
+  scope: z.enum(['case_unit', 'unit_and_above', 'level', 'tenant']).default('case_unit'),
+  channels: channelList.default(['email', 'in_app']),
+  template: z.string().min(1).default('case-status-changed-staff'),
+  /** When true, complainant receives status-update via the status-change-complainant rule. */
+  notify_complainant: z.boolean().default(true),
+});
+
+export type StatusChangeAlerts = z.infer<typeof statusChangeAlerts>;
+
+export const DEFAULT_STATUS_CHANGE_ALERTS: StatusChangeAlerts = {
+  enabled: true,
+  role: 'grm_officer',
+  scope: 'case_unit',
+  channels: ['email', 'in_app'],
+  template: 'case-status-changed-staff',
+  notify_complainant: true,
+};
+
+/** Bundled with the platform — auto-merged when intake_alerts references it. */
+export const CASE_INTAKE_ALERT_TEMPLATE = {
+  id: 'case-intake-alert',
+  label: 'New grievance — staff alert',
+  privacy_mode: 'standard' as const,
+  variants: {
+    en: {
+      email: {
+        subject: 'New grievance {{case.reference}} — {{case.unit_name}}',
+        body:
+          'A new grievance has been reported in your jurisdiction.\n\nReference: {{case.reference}}\nLocation: {{case.unit_name}}\nStatus: {{case.status_label}}\n\nPlease review the case in the console.',
+      },
+      in_app: {
+        body: 'New grievance {{case.reference}} at {{case.unit_name}} ({{case.status_label}}).',
+      },
+      sms: {
+        body: '{{tenant.name}}: new grievance {{case.reference}} at {{case.unit_name}}.',
+      },
+    },
+    sw: {
+      email: {
+        subject: 'Malalamiko mapya {{case.reference}} — {{case.unit_name}}',
+        body:
+          'Malalamiko mapya yameripotiwa katika eneo lako.\n\nNambari: {{case.reference}}\nEneo: {{case.unit_name}}\nHali: {{case.status_label}}\n\nTafadhali yakague kwenye mfumo.',
+      },
+      in_app: {
+        body: 'Malalamiko mapya {{case.reference}} — {{case.unit_name}} ({{case.status_label}}).',
+      },
+      sms: {
+        body: '{{tenant.name}}: malalamiko mapya {{case.reference}} — {{case.unit_name}}.',
+      },
+    },
+  },
+};
+
+export const CASE_STATUS_CHANGED_STAFF_TEMPLATE = {
+  id: 'case-status-changed-staff',
+  label: 'Status changed — staff alert',
+  privacy_mode: 'standard' as const,
+  variants: {
+    en: {
+      email: {
+        subject: 'Status update {{case.reference}} — {{case.status_label}}',
+        body:
+          'Case {{case.reference}} at {{case.unit_name}} moved to {{case.status_label}}.\n\nReview the case in the console.',
+      },
+      in_app: {
+        body: '{{case.reference}} at {{case.unit_name}} → {{case.status_label}}',
+      },
+      sms: {
+        body: '{{tenant.name}}: {{case.reference}} status {{case.status_label}} ({{case.unit_name}}).',
+      },
+    },
+    sw: {
+      email: {
+        subject: 'Hali imesasishwa {{case.reference}} — {{case.status_label}}',
+        body:
+          'Kesi {{case.reference}} katika {{case.unit_name}} sasa ni {{case.status_label}}.\n\nTafadhali ikague kwenye mfumo.',
+      },
+      in_app: {
+        body: '{{case.reference}} — {{case.unit_name}} → {{case.status_label}}',
+      },
+      sms: {
+        body: '{{tenant.name}}: {{case.reference}} hali {{case.status_label}} ({{case.unit_name}}).',
+      },
+    },
+  },
+};
+
+const BUNDLED_NOTIFICATION_TEMPLATES: Record<string, typeof CASE_INTAKE_ALERT_TEMPLATE> = {
+  'case-intake-alert': CASE_INTAKE_ALERT_TEMPLATE,
+  'case-status-changed-staff': CASE_STATUS_CHANGED_STAFF_TEMPLATE,
+};
+
+function appendBundledTemplates(
+  templates: Array<Record<string, unknown>> | undefined,
+  referencedIds: string[],
+): Array<Record<string, unknown>> {
+  const out = [...(templates ?? [])];
+  const ids = new Set(out.map((t) => String(t.id ?? '')));
+  for (const id of referencedIds) {
+    const bundled = BUNDLED_NOTIFICATION_TEMPLATES[id];
+    if (bundled && !ids.has(id)) {
+      out.push({ ...bundled });
+      ids.add(id);
+    }
+  }
+  return out;
+}
+
 const templateChannelBody = z.object({
   subject: z.string().optional(),
   body: z.string().min(1),
@@ -223,10 +356,56 @@ export const whatsappSenderIdentity = channelApiConfig.extend({
 export const cd09Notifications = z
   .preprocess((raw) => {
     if (!raw || typeof raw !== 'object') return raw;
-    const data = raw as { templates?: { variants: TemplateVariants }[] };
-    if (!Array.isArray(data.templates)) return raw;
-    return { ...data, templates: stripEmptyTemplateVariants(data.templates) };
+    const data = { ...(raw as Record<string, unknown>) } as {
+      templates?: Array<{ id?: string; variants?: TemplateVariants } & Record<string, unknown>>;
+      rules?: NotificationRule[];
+      intake_alerts?: IntakeAlerts;
+      status_change_alerts?: StatusChangeAlerts;
+    };
+    if (Array.isArray(data.templates)) {
+      data.templates = stripEmptyTemplateVariants(
+        data.templates as { variants: TemplateVariants }[],
+      ) as typeof data.templates;
+    }
+
+    if (!data.intake_alerts) {
+      const ack = data.rules?.find((r) => r.id === 'ack-on-create');
+      const staffTarget = ack?.to?.find((t) => 'role' in t);
+      data.intake_alerts = {
+        ...DEFAULT_INTAKE_ALERTS,
+        enabled: Boolean(staffTarget ?? DEFAULT_INTAKE_ALERTS.enabled),
+        role: staffTarget && 'role' in staffTarget ? staffTarget.role : DEFAULT_INTAKE_ALERTS.role,
+        scope:
+          staffTarget && 'role' in staffTarget
+            ? (staffTarget.scope ?? 'unit_and_above')
+            : DEFAULT_INTAKE_ALERTS.scope,
+      };
+      if (ack && staffTarget) {
+        data.rules = data.rules!.map((r) =>
+          r.id === 'ack-on-create'
+            ? {
+                ...r,
+                to: r.to.filter((t) => !('role' in t)),
+                channels: Array.isArray(r.channels) ? r.channels : { party: r.channels?.party ?? ['sms', 'email', 'whatsapp'] },
+              }
+            : r,
+        );
+      }
+    }
+
+    const intakeTemplate = data.intake_alerts?.template ?? DEFAULT_INTAKE_ALERTS.template;
+    const statusTemplate = data.status_change_alerts?.template ?? DEFAULT_STATUS_CHANGE_ALERTS.template;
+    const ruleTemplates = (data.rules ?? []).flatMap((r) => [r.template, r.privacy_template].filter(Boolean) as string[]);
+    data.templates = appendBundledTemplates(data.templates, [intakeTemplate, statusTemplate, ...ruleTemplates]) as typeof data.templates;
+
+    if (!data.status_change_alerts) {
+      data.status_change_alerts = { ...DEFAULT_STATUS_CHANGE_ALERTS };
+    }
+
+    return data;
   }, z.object({
+    intake_alerts: intakeAlerts.default(DEFAULT_INTAKE_ALERTS),
+    status_change_alerts: statusChangeAlerts.default(DEFAULT_STATUS_CHANGE_ALERTS),
     rules: z.array(notificationRule).default([]),
     templates: z.array(notificationTemplate).min(1),
     senders: z
@@ -312,15 +491,64 @@ export const cd09Notifications = z
         });
       }
     });
+
+    if (cfg.intake_alerts.enabled && !templateIds.has(cfg.intake_alerts.template)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['intake_alerts', 'template'],
+        message: `Unknown template "${cfg.intake_alerts.template}"`,
+      });
+    }
+    if (cfg.status_change_alerts.enabled && !templateIds.has(cfg.status_change_alerts.template)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['status_change_alerts', 'template'],
+        message: `Unknown template "${cfg.status_change_alerts.template}"`,
+      });
+    }
   });
 
 export type Cd09Notifications = z.infer<typeof cd09Notifications>;
 export type NotificationRule = z.infer<typeof notificationRule>;
 export type NotificationTemplate = z.infer<typeof notificationTemplate>;
 
+/** Synthetic rule for intake_alerts — merged at dispatch time on case.created. */
+export function buildIntakeAlertRule(cfg: { intake_alerts?: IntakeAlerts }): NotificationRule | null {
+  const ia = cfg.intake_alerts ?? DEFAULT_INTAKE_ALERTS;
+  if (!ia.enabled) return null;
+  return {
+    id: 'intake-alert-staff',
+    name: 'New grievance — alert jurisdiction officers',
+    on: 'case.created',
+    to: [{ role: ia.role, scope: ia.scope }],
+    channels: ia.channels,
+    template: ia.template,
+    enabled: true,
+  };
+}
+
+/** Synthetic rule for status_change_alerts — jurisdiction staff on case.status_changed. */
+export function buildStatusChangeStaffRule(cfg: {
+  status_change_alerts?: StatusChangeAlerts;
+}): NotificationRule | null {
+  const sc = cfg.status_change_alerts ?? DEFAULT_STATUS_CHANGE_ALERTS;
+  if (!sc.enabled) return null;
+  return {
+    id: 'status-change-alert-staff',
+    name: 'Status change — alert jurisdiction officers',
+    on: 'case.status_changed',
+    to: [{ role: sc.role, scope: sc.scope }],
+    channels: sc.channels,
+    template: sc.template,
+    enabled: true,
+  };
+}
+
 /** Platform default rule pack (spec 06 §4). Tenants edit from here. */
 export function defaultNotificationPack(): Cd09Notifications {
   const templates: NotificationTemplate[] = [
+    { ...CASE_INTAKE_ALERT_TEMPLATE },
+    { ...CASE_STATUS_CHANGED_STAFF_TEMPLATE },
     {
       id: 'case-registered',
       label: 'Case registered acknowledgement',
@@ -586,8 +814,8 @@ export function defaultNotificationPack(): Cd09Notifications {
       id: 'ack-on-create',
       name: 'Acknowledge complainant on creation',
       on: 'case.created',
-      to: [{ party: 'complainant' }, { role: 'grm_officer', scope: 'unit_and_above' }],
-      channels: { party: ['sms', 'email', 'whatsapp'], staff: ['email', 'in_app'] },
+      to: [{ party: 'complainant' }],
+      channels: { party: ['sms', 'email', 'whatsapp'] },
       template: 'case-registered',
       privacy_template: 'case-registered-privacy',
       enabled: true,
@@ -673,6 +901,8 @@ export function defaultNotificationPack(): Cd09Notifications {
   const metaWhatsapp = WHATSAPP_PROVIDER_PRESETS.meta!;
 
   return {
+    intake_alerts: { ...DEFAULT_INTAKE_ALERTS },
+    status_change_alerts: { ...DEFAULT_STATUS_CHANGE_ALERTS },
     templates,
     rules,
     senders: {

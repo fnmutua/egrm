@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { and, eq, gte } from 'drizzle-orm';
-import type { Cd02Hierarchy, Cd04Workflow, Cd06IntakeForms, Cd07Numbering } from '@egrm/config-schemas';
+import type { Cd02Hierarchy, Cd04Workflow, Cd06IntakeForms, Cd07Numbering, Cd09Notifications } from '@egrm/config-schemas';
+import { configuredPartyNotificationChannels, normalizePartyNotificationChannels, type PartyNotificationChannel } from '@egrm/config-schemas';
 import { intakeLevels as hierarchyIntakeLevels } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
 import { encryptPII, piiLookupHash } from './crypto.js';
@@ -8,6 +9,7 @@ import { getActiveConfig } from './config.js';
 import { allocateReference } from './reference.js';
 import { enqueueNotifications } from './notifications.js';
 import { scheduleOutboxDispatch } from './notification-queue.js';
+import { coerceIntakeString, coerceIntakeStringArray } from './intake-values.js';
 
 export interface IntakeInput {
   tenantId: string;
@@ -40,11 +42,12 @@ export interface IntakeError {
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
 export async function createCase(input: IntakeInput): Promise<IntakeResult | IntakeError> {
-  const [form, workflow, hierarchy, numbering] = await Promise.all([
+  const [form, workflow, hierarchy, numbering, notifications] = await Promise.all([
     getActiveConfig<Cd06IntakeForms>(input.tenantId, 'cd06_intake_forms'),
     getActiveConfig<Cd04Workflow>(input.tenantId, 'cd04_workflow'),
     getActiveConfig<Cd02Hierarchy>(input.tenantId, 'cd02_hierarchy'),
     getActiveConfig<Cd07Numbering>(input.tenantId, 'cd07_numbering'),
+    getActiveConfig<Cd09Notifications>(input.tenantId, 'cd09_notifications'),
   ]);
   if (!form || !workflow || !hierarchy || !numbering) {
     return { ok: false, code: 503, error: 'tenant_not_configured' };
@@ -59,19 +62,36 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
   for (const field of form.fields) {
     if (!field.enabled || !field.required) continue;
     if (input.anonymous && field.section === 'complainant') continue;
-    const v = input.values[field.key];
-    if (v == null || v === '' || (Array.isArray(v) && v.length === 0)) missing.push(field.key);
+    const raw = input.values[field.key];
+    if (field.type === 'multiselect') {
+      if (coerceIntakeStringArray(raw).length === 0) missing.push(field.key);
+    } else if (!coerceIntakeString(raw)) {
+      missing.push(field.key);
+    }
   }
   if (missing.length > 0) {
     return { ok: false, code: 422, error: 'missing_required_fields', details: { fields: missing } };
   }
 
-  const name = str(input.values.name);
-  const phone = str(input.values.phone);
-  const email = str(input.values.email);
+  const name = coerceIntakeString(input.values.name);
+  const phone = coerceIntakeString(input.values.phone);
+  const email = coerceIntakeString(input.values.email);
   const hasPII = !input.anonymous && Boolean(name || phone || email);
   if (hasPII && !input.consent) {
     return { ok: false, code: 422, error: 'consent_required' };
+  }
+
+  let partyNotificationChannels: PartyNotificationChannel[] = [];
+  if (!input.anonymous && notifications) {
+    const channelResult = normalizePartyNotificationChannels(
+      input.values.notification_channels,
+      notifications,
+      { phone, email },
+    );
+    if (!channelResult.ok) {
+      return { ok: false, code: 422, error: channelResult.error };
+    }
+    partyNotificationChannels = channelResult.channels;
   }
 
   // Initial status & level from config (CD-04 / CD-02).
@@ -81,7 +101,7 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
   const fallbackIntakeLevel = intakeLevels[0]!;
 
   // Resolve unit if provided.
-  const unitId = str(input.values.unit_id);
+  const unitId = coerceIntakeString(input.values.unit_id);
   let unitRow = null;
   if (unitId) {
     [unitRow] = await db
@@ -145,12 +165,13 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
           gender: str(input.values.gender),
           ageBand: str(input.values.age_band),
           preferredLanguage: str(input.values.preferred_language),
+          notificationChannels: partyNotificationChannels,
         })
         .returning({ id: schema.party.id });
       partyId = p!.id;
     }
 
-    const categories = Array.isArray(input.values.categories) ? (input.values.categories as string[]) : [];
+    const categories = coerceIntakeStringArray(input.values.categories);
     const [c] = await tx
       .insert(schema.grmCase)
       .values({
@@ -201,6 +222,7 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
           unitId: unitRow?.id ?? null,
           assigneeId: null,
           partyId,
+          partyNotificationChannels,
         },
         locale: str(input.values.preferred_language) ?? undefined,
       },

@@ -10,8 +10,14 @@ interface AuthUser {
 
 export function useAuth() {
   const config = useRuntimeConfig();
-  const token = useCookie<string | null>('egrm_token', { sameSite: 'strict' });
-  const refreshToken = useCookie<string | null>('egrm_refresh', { sameSite: 'strict' });
+  const token = useCookie<string | null>('egrm_token', {
+    sameSite: 'lax',
+    secure: !import.meta.dev,
+  });
+  const refreshToken = useCookie<string | null>('egrm_refresh', {
+    sameSite: 'lax',
+    secure: !import.meta.dev,
+  });
   const user = useState<AuthUser | null>('auth_user', () => null);
 
   async function login(email: string, password: string) {

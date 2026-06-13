@@ -6,7 +6,8 @@ import { db, schema } from '../db/client.js';
 import { decryptPII } from '../services/crypto.js';
 import { createCase } from '../services/intake.js';
 import { writeAudit } from '../services/audit.js';
-import { canAccessCase, caseVisibilityFilter, sensitivityListFilter } from '../services/access.js';
+import { canAccessCase, caseVisibilityFilter, loadUserAccess, sensitivityListFilter } from '../services/access.js';
+import { applyCaseAction, getAvailableCaseActions } from '../services/case-workflow.js';
 
 const listQuery = z.object({
   status: z.string().optional(),
@@ -20,6 +21,16 @@ const assistedBody = z.object({
   consent: z.boolean().default(false),
   source_channel: z.string().min(1),
   values: z.record(z.string(), z.unknown()),
+});
+
+const caseActionBody = z.object({
+  action: z.enum(['transition', 'assign']),
+  to_status: z.string().min(1).optional(),
+  assignee_id: z.string().uuid().optional(),
+  note: z.string().optional(),
+  action_taken: z.string().optional(),
+  update_summary: z.string().optional(),
+  fields: z.record(z.string(), z.unknown()).optional(),
 });
 
 /** Staff case endpoints with jurisdiction-subtree scoping (spec 07 §2.2). */
@@ -119,6 +130,16 @@ export default async function caseRoutes(app: FastifyInstance) {
       unitName = u?.name ?? null;
     }
 
+    let assignee: { id: string; name: string; email: string } | null = null;
+    if (c.assigneeId) {
+      const [u] = await db
+        .select({ id: schema.appUser.id, name: schema.appUser.displayName, email: schema.appUser.email })
+        .from(schema.appUser)
+        .where(eq(schema.appUser.id, c.assigneeId))
+        .limit(1);
+      if (u) assignee = { id: u.id, name: u.name, email: u.email };
+    }
+
     return {
       case: {
         id: c.id,
@@ -128,6 +149,7 @@ export default async function caseRoutes(app: FastifyInstance) {
         status_tag: c.statusTag,
         level: c.levelCode,
         unit: unitName,
+        assignee,
         anonymous: c.anonymous,
         channel: c.channel,
         categories: c.categories,
@@ -141,7 +163,14 @@ export default async function caseRoutes(app: FastifyInstance) {
         created_at: c.createdAt,
       },
       complainant,
-      events,
+      events: events.map((e) => ({
+        id: e.id,
+        kind: e.kind,
+        actorType: e.actorType,
+        visibility: e.visibility,
+        data: (e.data ?? {}) as Record<string, unknown>,
+        createdAt: e.createdAt,
+      })),
     };
   });
 
@@ -203,6 +232,68 @@ export default async function caseRoutes(app: FastifyInstance) {
         updated_at: r.updatedAt,
       })),
     };
+  });
+
+  app.get('/api/v1/cases/:id/available-actions', { onRequest: [app.requirePermission('case:read')] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const result = await getAvailableCaseActions(req.tenant.id, id, access, req.user.sub);
+    if ('error' in result) return reply.code(result.code).send({ error: result.error });
+    return { actions: result };
+  });
+
+  app.get('/api/v1/cases/:id/assignees', { onRequest: [app.requirePermission('case:assign')] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const [c] = await db
+      .select({ unitId: schema.grmCase.unitId, assigneeId: schema.grmCase.assigneeId, sensitivity: schema.grmCase.sensitivity })
+      .from(schema.grmCase)
+      .where(and(eq(schema.grmCase.tenantId, req.tenant.id), eq(schema.grmCase.id, id)))
+      .limit(1);
+    if (!c) return reply.code(404).send({ error: 'not_found' });
+
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const allowed = await canAccessCase(req.tenant.id, access, req.user.sub, c);
+    if (!allowed) return reply.code(404).send({ error: 'not_found' });
+
+    const users = await db
+      .select({
+        id: schema.appUser.id,
+        name: schema.appUser.displayName,
+        email: schema.appUser.email,
+      })
+      .from(schema.appUser)
+      .where(and(eq(schema.appUser.tenantId, req.tenant.id), eq(schema.appUser.active, true)))
+      .orderBy(schema.appUser.displayName);
+
+    return { assignees: users.map((u) => ({ id: u.id, name: u.name, email: u.email })) };
+  });
+
+  app.post('/api/v1/cases/:id/actions', { onRequest: [app.authenticate] }, async (req, reply) => {
+    const parsed = caseActionBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+
+    const perm = parsed.data.action === 'assign' ? 'case:assign' : 'case:transition';
+    if (!hasPermission(req.user.permissions, perm)) {
+      return reply.code(403).send({ error: 'forbidden', required: perm });
+    }
+
+    const { id } = req.params as { id: string };
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const result = await applyCaseAction(req.tenant.id, id, req.user.sub, access, parsed.data);
+    if (!result.ok) {
+      return reply.code(result.code).send({ error: result.error, message: result.message });
+    }
+
+    await writeAudit({
+      tenantId: req.tenant.id,
+      actorId: req.user.sub,
+      action: parsed.data.action === 'assign' ? 'case.assigned' : 'case.transitioned',
+      entity: 'grm_case',
+      entityId: id,
+      data: { to_status: parsed.data.to_status, assignee_id: parsed.data.assignee_id },
+    });
+
+    return result;
   });
 
   app.post('/api/v1/cases', { onRequest: [app.requirePermission('case:create_assisted')] }, async (req, reply) => {

@@ -3,6 +3,8 @@ import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import type { Cd01Identity, Cd02Hierarchy, Cd03Taxonomy, Cd06IntakeForms } from '../types.js';
+import type { Cd09Notifications } from '@egrm/config-schemas';
+import { configuredPartyNotificationChannels } from '@egrm/config-schemas';
 import type { Cd10OrgAccess } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
 import { getActiveConfig } from '../services/config.js';
@@ -51,11 +53,12 @@ export default async function publicRoutes(app: FastifyInstance) {
 
   // Everything the portal needs to render the configured intake form.
   app.get('/api/v1/public/intake-meta', { config: rateLimit }, async (req, reply) => {
-    const [identity, form, hierarchy, taxonomy] = await Promise.all([
+    const [identity, form, hierarchy, taxonomy, notifications] = await Promise.all([
       getActiveConfig<Cd01Identity>(req.tenant.id, 'cd01_identity'),
       getActiveConfig<Cd06IntakeForms>(req.tenant.id, 'cd06_intake_forms'),
       getActiveConfig<Cd02Hierarchy>(req.tenant.id, 'cd02_hierarchy'),
       getActiveConfig<Cd03Taxonomy>(req.tenant.id, 'cd03_taxonomy'),
+      getActiveConfig<Cd09Notifications>(req.tenant.id, 'cd09_notifications'),
     ]);
     if (!form || !hierarchy) return reply.code(503).send({ error: 'tenant_not_configured' });
 
@@ -78,6 +81,7 @@ export default async function publicRoutes(app: FastifyInstance) {
       categories: (taxonomy?.categories ?? []).filter((c) => c.active !== false),
       levels: hierarchy.levels,
       units,
+      notification_channels: notifications ? configuredPartyNotificationChannels(notifications) : [],
     };
   });
 

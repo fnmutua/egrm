@@ -5,7 +5,7 @@ const { user, fetchMe, logout } = useAuth();
 
 onMounted(async () => {
   const me = await fetchMe();
-  if (!me) await navigateTo('/login');
+  if (!me) await navigateTo({ path: '/login', query: { reason: 'session_expired' } });
 });
 
 const nav = computed(() => {

@@ -1,4 +1,5 @@
-import type { Cd09Notifications, NotificationEvent, NotificationRule } from '@egrm/config-schemas';
+import type { Cd09Notifications, NotificationEvent, NotificationRule, PartyNotificationChannel } from '@egrm/config-schemas';
+import { buildIntakeAlertRule, buildStatusChangeStaffRule, filterChannelsForPartyPreference } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
 import { getActiveConfig } from './config.js';
 import { piiLookupHash } from './crypto.js';
@@ -20,6 +21,8 @@ export interface NotificationEventContext {
     unitId: string | null;
     assigneeId: string | null;
     partyId: string | null;
+    /** Complainant opt-in from intake; filters party-targeted outbound channels when set. */
+    partyNotificationChannels?: PartyNotificationChannel[];
   };
   data?: Record<string, unknown>;
   locale?: string;
@@ -105,7 +108,20 @@ export async function enqueueNotifications(
   if (!cfg) return { count: 0, outboxId: null };
 
   const locale = ctx.locale ?? 'en';
-  const matching = cfg.rules.filter((r) => ruleMatches(r, ctx));
+  let matching = cfg.rules.filter((r) => ruleMatches(r, ctx));
+  if (ctx.event === 'case.created') {
+    const intakeRule = buildIntakeAlertRule(cfg);
+    if (intakeRule) matching.push(intakeRule);
+  }
+  if (ctx.event === 'case.status_changed') {
+    const staffRule = buildStatusChangeStaffRule(cfg);
+    if (staffRule) matching.push(staffRule);
+    if (cfg.status_change_alerts?.notify_complainant === false) {
+      matching = matching.filter(
+        (r) => !r.to.some((t) => 'party' in t && t.party === 'complainant'),
+      );
+    }
+  }
   if (matching.length === 0) return { count: 0, outboxId: null };
 
   const vars: Record<string, string> = {
@@ -137,7 +153,8 @@ export async function enqueueNotifications(
     const selectors = rule.to.length > 0 ? rule.to : [{ party: 'complainant' as const }];
 
     for (const selector of selectors) {
-      const channels = expandPartyChannels(channelsForRule(rule, selector), selector, cfg);
+      let channels = expandPartyChannels(channelsForRule(rule, selector), selector, cfg);
+      channels = filterChannelsForPartyPreference(channels, selector, ctx.case.partyNotificationChannels);
       for (const channel of new Set(channels)) {
         const killReason = isChannelKilled(cfg, channel);
         const { body } = renderTemplateBody(cfg, templateId, locale, channel, vars);

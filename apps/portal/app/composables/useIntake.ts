@@ -1,3 +1,5 @@
+import { normalizeIntakeValues } from '../utils/intake-values';
+
 export interface IntakeField {
   key: string;
   type: 'text' | 'textarea' | 'select' | 'multiselect' | 'date' | 'phone' | 'email' | 'number';
@@ -9,6 +11,12 @@ export interface IntakeField {
   options_ref?: string;
 }
 
+export interface IntakeNotificationChannel {
+  value: 'sms' | 'email' | 'whatsapp';
+  label: Record<string, string>;
+  requires: 'phone' | 'email';
+}
+
 export interface IntakeMeta {
   locales: { default: string; enabled: string[] };
   anonymous_allowed: boolean;
@@ -17,6 +25,8 @@ export interface IntakeMeta {
   categories: { code: string; label: Record<string, string> }[];
   levels: { code: string; label: string; allows_intake?: boolean; is_intake_default?: boolean }[];
   units: IntakeUnit[];
+  /** CD-09 configured outbound channels the complainant may opt into. */
+  notification_channels: IntakeNotificationChannel[];
 }
 
 export interface IntakeUnit {
@@ -161,7 +171,10 @@ export function useIntake() {
       baseURL: config.public.apiBase,
       method: 'POST',
       headers,
-      body: payload,
+      body: {
+        ...payload,
+        values: normalizeIntakeValues(payload.values),
+      },
     });
   }
 

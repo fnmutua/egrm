@@ -136,6 +136,8 @@ export const party = pgTable('party', {
   ageBand: text('age_band'),
   vulnerabilityTags: text('vulnerability_tags').array(),
   preferredLanguage: text('preferred_language'),
+  /** Complainant opt-in channels from intake (sms, email, whatsapp). Empty = no preference filter. */
+  notificationChannels: text('notification_channels').array().notNull().default([]),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

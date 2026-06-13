@@ -7,6 +7,10 @@ import {
   NOTIFICATION_CHANNELS,
   TEMPLATE_VARIABLES,
   defaultNotificationPack,
+  DEFAULT_INTAKE_ALERTS,
+  DEFAULT_STATUS_CHANGE_ALERTS,
+  CASE_INTAKE_ALERT_TEMPLATE,
+  CASE_STATUS_CHANGED_STAFF_TEMPLATE,
   stripEmptyTemplateVariants,
   ADVANTA_SMS_SENDOTP_URL,
   ADVANTA_SMS_SENDBULK_URL,
@@ -222,6 +226,29 @@ function ensure() {
   };
   p.kill_switches ??= [];
   p.throttling ??= { dedupe_window_minutes: 60 };
+  p.intake_alerts ??= { ...DEFAULT_INTAKE_ALERTS };
+  p.intake_alerts.enabled ??= DEFAULT_INTAKE_ALERTS.enabled;
+  p.intake_alerts.role ??= DEFAULT_INTAKE_ALERTS.role;
+  p.intake_alerts.scope ??= DEFAULT_INTAKE_ALERTS.scope;
+  p.intake_alerts.channels ??= [...DEFAULT_INTAKE_ALERTS.channels];
+  p.intake_alerts.template ??= DEFAULT_INTAKE_ALERTS.template;
+  p.status_change_alerts ??= { ...DEFAULT_STATUS_CHANGE_ALERTS };
+  p.status_change_alerts.enabled ??= DEFAULT_STATUS_CHANGE_ALERTS.enabled;
+  p.status_change_alerts.role ??= DEFAULT_STATUS_CHANGE_ALERTS.role;
+  p.status_change_alerts.scope ??= DEFAULT_STATUS_CHANGE_ALERTS.scope;
+  p.status_change_alerts.channels ??= [...DEFAULT_STATUS_CHANGE_ALERTS.channels];
+  p.status_change_alerts.template ??= DEFAULT_STATUS_CHANGE_ALERTS.template;
+  p.status_change_alerts.notify_complainant ??= DEFAULT_STATUS_CHANGE_ALERTS.notify_complainant;
+
+  if (Array.isArray(p.templates)) {
+    const ids = new Set(p.templates.map((t: { id: string }) => t.id));
+    if (!ids.has(p.intake_alerts.template) && p.intake_alerts.template === CASE_INTAKE_ALERT_TEMPLATE.id) {
+      p.templates.push(structuredClone(CASE_INTAKE_ALERT_TEMPLATE));
+    }
+    if (!ids.has(p.status_change_alerts.template) && p.status_change_alerts.template === CASE_STATUS_CHANGED_STAFF_TEMPLATE.id) {
+      p.templates.push(structuredClone(CASE_STATUS_CHANGED_STAFF_TEMPLATE));
+    }
+  }
 
   for (const rule of p.rules) {
     rule.enabled ??= true;
@@ -432,6 +459,122 @@ function varToken(name: string) {
 
 <template>
   <div class="space-y-6">
+    <section v-if="show('sec-intake-alerts')" id="sec-intake-alerts" class="space-y-4">
+      <div>
+        <h2 class="text-sm font-semibold">Intake alerts</h2>
+        <p class="text-xs text-muted mt-0.5">
+          When a grievance is submitted for a jurisdiction unit, notify staff in the designated role assigned to that unit.
+          Officers must be assigned to the unit under Users (role × jurisdiction scope).
+        </p>
+      </div>
+
+      <UCard>
+        <div class="space-y-4">
+          <UFormField
+            label="Alert officers on new grievance"
+            help="Complainant acknowledgement is separate (Rules). This controls staff alerts only."
+          >
+            <USwitch v-model="payload.intake_alerts.enabled" />
+          </UFormField>
+
+          <template v-if="payload.intake_alerts.enabled">
+            <div class="grid sm:grid-cols-2 gap-3">
+              <UFormField label="Officer role" help="Role from Org &amp; access (e.g. grm_officer).">
+                <USelectMenu v-model="payload.intake_alerts.role" :items="roleNames" class="w-full" />
+              </UFormField>
+              <UFormField
+                label="Jurisdiction scope"
+                help="Case unit = officers at the grievance settlement only. Unit &amp; above includes parent counties."
+              >
+                <USelectMenu
+                  v-model="payload.intake_alerts.scope"
+                  :items="ROLE_SCOPES"
+                  value-key="value"
+                  label-key="label"
+                  class="w-full"
+                />
+              </UFormField>
+            </div>
+
+            <div class="grid sm:grid-cols-2 gap-3">
+              <UFormField label="Channels">
+                <USelectMenu
+                  v-model="payload.intake_alerts.channels"
+                  :items="CHANNEL_ITEMS.filter((c) => c.value !== 'whatsapp')"
+                  value-key="value"
+                  label-key="label"
+                  multiple
+                  class="w-full"
+                />
+              </UFormField>
+              <UFormField label="Template">
+                <USelectMenu v-model="payload.intake_alerts.template" :items="templateIds" class="w-full" />
+              </UFormField>
+            </div>
+          </template>
+        </div>
+      </UCard>
+    </section>
+
+    <section v-if="show('sec-status-change-alerts')" id="sec-status-change-alerts" class="space-y-4">
+      <div>
+        <h2 class="text-sm font-semibold">Status change alerts</h2>
+        <p class="text-xs text-muted mt-0.5">
+          When an officer updates case status, notify jurisdiction staff and (optionally) the complainant.
+        </p>
+      </div>
+
+      <UCard>
+        <div class="space-y-4">
+          <UFormField
+            label="Alert jurisdiction officers on status change"
+            help="Staff in the designated role at the case unit receive email/in-app alerts."
+          >
+            <USwitch v-model="payload.status_change_alerts.enabled" />
+          </UFormField>
+
+          <UFormField
+            label="Notify complainant on status change"
+            help="Uses the status-change-complainant rule template (SMS/email/WhatsApp per their intake preferences)."
+          >
+            <USwitch v-model="payload.status_change_alerts.notify_complainant" />
+          </UFormField>
+
+          <template v-if="payload.status_change_alerts.enabled">
+            <div class="grid sm:grid-cols-2 gap-3">
+              <UFormField label="Officer role">
+                <USelectMenu v-model="payload.status_change_alerts.role" :items="roleNames" class="w-full" />
+              </UFormField>
+              <UFormField label="Jurisdiction scope">
+                <USelectMenu
+                  v-model="payload.status_change_alerts.scope"
+                  :items="ROLE_SCOPES"
+                  value-key="value"
+                  label-key="label"
+                  class="w-full"
+                />
+              </UFormField>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-3">
+              <UFormField label="Staff channels">
+                <USelectMenu
+                  v-model="payload.status_change_alerts.channels"
+                  :items="CHANNEL_ITEMS.filter((c) => c.value !== 'whatsapp')"
+                  value-key="value"
+                  label-key="label"
+                  multiple
+                  class="w-full"
+                />
+              </UFormField>
+              <UFormField label="Staff template">
+                <USelectMenu v-model="payload.status_change_alerts.template" :items="templateIds" class="w-full" />
+              </UFormField>
+            </div>
+          </template>
+        </div>
+      </UCard>
+    </section>
+
     <section v-if="show('sec-rules')" id="sec-rules" class="space-y-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>

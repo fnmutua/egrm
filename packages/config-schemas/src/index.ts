@@ -20,6 +20,7 @@ export * from './cd05-sla.js';
 export * from './cd06-intake-forms.js';
 export * from './cd08-channels.js';
 export * from './cd09-notifications.js';
+export * from './party-notification-channels.js';
 export * from './provider-api.js';
 export * from './cd07-numbering.js';
 export * from './cd14-features.js';
