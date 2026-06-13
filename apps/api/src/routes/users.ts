@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -17,7 +17,20 @@ import {
   canReviewRegistrations,
 } from '../services/user-model.js';
 import { loadUserAccess } from '../services/access.js';
-import { getRoleCatalog, validateAssignableRoles } from '../services/role-hierarchy.js';
+import {
+  buildStaffUserManagerContext,
+  canAccessStaffUserManagement,
+  getRoleCatalog,
+  targetUserIsManageable,
+  validateAssignableRoles,
+  type StaffUserManagerContext,
+} from '../services/role-hierarchy.js';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    staffUserManager?: StaffUserManagerContext;
+  }
+}
 
 const roleAssignmentBody = z.object({
   role_id: z.string().uuid(),
@@ -162,32 +175,79 @@ async function replaceUserRoles(
   );
 }
 
+async function assertTargetUserManageable(
+  ctx: StaffUserManagerContext,
+  tenantId: string,
+  userId: string,
+  opts?: { pendingNoRoles?: boolean },
+): Promise<string | null> {
+  if (ctx.fullAdmin) return null;
+  const [catalog, roles] = await Promise.all([getRoleCatalog(tenantId), loadUserRoles(userId, tenantId)]);
+  const roleNames = roles.map((r) => r.roleName);
+  if (targetUserIsManageable(ctx, roleNames, catalog, opts)) return null;
+  return 'You may not manage this user — their role(s) are outside your hierarchy';
+}
+
 export default async function userRoutes(app: FastifyInstance) {
-  app.get('/api/v1/users/field-schema', { onRequest: [app.requirePermission('admin:users')] }, async (req) => {
+  const requireStaffUserManager = async (req: FastifyRequest, reply: FastifyReply) => {
+    await app.authenticate(req, reply);
+    if (reply.sent) return;
+    const [ctx, catalog] = await Promise.all([
+      buildStaffUserManagerContext(req.user.sub, req.tenant.id),
+      getRoleCatalog(req.tenant.id),
+    ]);
+    if (!canAccessStaffUserManagement(ctx, catalog)) {
+      return reply.code(403).send({ error: 'forbidden', message: 'No staff user management scope' });
+    }
+    req.staffUserManager = ctx;
+  };
+
+  app.get('/api/v1/users/field-schema', { onRequest: [requireStaffUserManager] }, async (req) => {
     const model = await getUserModel(req.tenant.id);
     return userFieldSchema(model);
   });
 
-  app.get('/api/v1/users', { onRequest: [app.requirePermission('admin:users')] }, async (req) => {
+  app.get('/api/v1/users', { onRequest: [requireStaffUserManager] }, async (req) => {
+    const ctx = req.staffUserManager!;
     const q = req.query as { registration_status?: string };
     const conditions = [eq(schema.appUser.tenantId, req.tenant.id)];
     if (q.registration_status === 'pending' || q.registration_status === 'approved' || q.registration_status === 'rejected') {
       conditions.push(eq(schema.appUser.registrationStatus, q.registration_status));
     }
 
-    const users = await db
-      .select()
-      .from(schema.appUser)
-      .where(and(...conditions))
-      .orderBy(schema.appUser.displayName);
+    const [users, catalog, userModel] = await Promise.all([
+      db
+        .select()
+        .from(schema.appUser)
+        .where(and(...conditions))
+        .orderBy(schema.appUser.displayName),
+      getRoleCatalog(req.tenant.id),
+      getUserModel(req.tenant.id),
+    ]);
+    const canReview = canReviewRegistrations(userModel, ctx.permissions, ctx.holderRoleNames);
 
-    const result = await Promise.all(
-      users.map(async (u) => publicUser(u, await loadUserRoles(u.id, req.tenant.id))),
-    );
+    const result = (
+      await Promise.all(
+        users.map(async (u) => {
+          const roles = await loadUserRoles(u.id, req.tenant.id);
+          const roleNames = roles.map((r) => r.roleName);
+          if (
+            !targetUserIsManageable(ctx, roleNames, catalog, {
+              pendingNoRoles: u.registrationStatus === 'pending' && (canReview || ctx.manageableRoleNames.size > 0),
+            })
+          ) {
+            return null;
+          }
+          return publicUser(u, roles);
+        }),
+      )
+    ).filter((u): u is NonNullable<typeof u> => u != null);
+
     return { users: result };
   });
 
-  app.get('/api/v1/users/:id', { onRequest: [app.requirePermission('admin:users')] }, async (req, reply) => {
+  app.get('/api/v1/users/:id', { onRequest: [requireStaffUserManager] }, async (req, reply) => {
+    const ctx = req.staffUserManager!;
     const { id } = req.params as { id: string };
     const [user] = await db
       .select()
@@ -195,10 +255,18 @@ export default async function userRoutes(app: FastifyInstance) {
       .where(and(eq(schema.appUser.tenantId, req.tenant.id), eq(schema.appUser.id, id)))
       .limit(1);
     if (!user) return reply.code(404).send({ error: 'not_found' });
+
+    const userModel = await getUserModel(req.tenant.id);
+    const canReview = canReviewRegistrations(userModel, ctx.permissions, ctx.holderRoleNames);
+    const manageError = await assertTargetUserManageable(ctx, req.tenant.id, id, {
+      pendingNoRoles: user.registrationStatus === 'pending' && (canReview || ctx.manageableRoleNames.size > 0),
+    });
+    if (manageError) return reply.code(403).send({ error: 'user_not_manageable', message: manageError });
+
     return { user: publicUser(user, await loadUserRoles(user.id, req.tenant.id)) };
   });
 
-  app.post('/api/v1/users', { onRequest: [app.requirePermission('admin:users')] }, async (req, reply) => {
+  app.post('/api/v1/users', { onRequest: [requireStaffUserManager] }, async (req, reply) => {
     const parsed = createUserBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
 
@@ -266,7 +334,8 @@ export default async function userRoutes(app: FastifyInstance) {
     return reply.code(201).send({ user: publicUser(user!, await loadUserRoles(user!.id, req.tenant.id)) });
   });
 
-  app.patch('/api/v1/users/:id', { onRequest: [app.requirePermission('admin:users')] }, async (req, reply) => {
+  app.patch('/api/v1/users/:id', { onRequest: [requireStaffUserManager] }, async (req, reply) => {
+    const ctx = req.staffUserManager!;
     const { id } = req.params as { id: string };
     const parsed = updateUserBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
@@ -277,6 +346,9 @@ export default async function userRoutes(app: FastifyInstance) {
       .where(and(eq(schema.appUser.tenantId, req.tenant.id), eq(schema.appUser.id, id)))
       .limit(1);
     if (!user) return reply.code(404).send({ error: 'not_found' });
+
+    const manageError = await assertTargetUserManageable(ctx, req.tenant.id, id);
+    if (manageError) return reply.code(403).send({ error: 'user_not_manageable', message: manageError });
 
     const userModel = await getUserModel(req.tenant.id);
     const patch: Partial<typeof schema.appUser.$inferInsert> = {};
@@ -311,7 +383,8 @@ export default async function userRoutes(app: FastifyInstance) {
     return { user: publicUser(updated!, await loadUserRoles(id, req.tenant.id)) };
   });
 
-  app.put('/api/v1/users/:id/roles', { onRequest: [app.requirePermission('admin:users')] }, async (req, reply) => {
+  app.put('/api/v1/users/:id/roles', { onRequest: [requireStaffUserManager] }, async (req, reply) => {
+    const ctx = req.staffUserManager!;
     const { id } = req.params as { id: string };
     const parsed = setRolesBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
@@ -322,6 +395,9 @@ export default async function userRoutes(app: FastifyInstance) {
       .where(and(eq(schema.appUser.tenantId, req.tenant.id), eq(schema.appUser.id, id)))
       .limit(1);
     if (!user) return reply.code(404).send({ error: 'not_found' });
+
+    const manageError = await assertTargetUserManageable(ctx, req.tenant.id, id);
+    if (manageError) return reply.code(403).send({ error: 'user_not_manageable', message: manageError });
 
     const userModel = await getUserModel(req.tenant.id);
     const assignError = validateRoleAssignments(userModel, parsed.data.roles);
@@ -360,8 +436,14 @@ export default async function userRoutes(app: FastifyInstance) {
     const userModel = await getUserModel(req.tenant.id);
     const access = await loadUserAccess(req.user.sub, req.tenant.id);
     const reviewerRoles = access.assignments.map((a) => a.roleName);
-    if (!canReviewRegistrations(userModel, access.permissions, reviewerRoles)) {
-      return reply.code(403).send({ error: 'forbidden', message: 'Not an registration approver' });
+    const [mgrCtx, catalog] = await Promise.all([
+      buildStaffUserManagerContext(req.user.sub, req.tenant.id),
+      getRoleCatalog(req.tenant.id),
+    ]);
+    const canReview = canReviewRegistrations(userModel, access.permissions, reviewerRoles);
+    const canManage = canAccessStaffUserManagement(mgrCtx, catalog);
+    if (!canReview && !canManage) {
+      return reply.code(403).send({ error: 'forbidden', message: 'Not a registration approver or hierarchy manager' });
     }
 
     const [user] = await db
@@ -430,8 +512,14 @@ export default async function userRoutes(app: FastifyInstance) {
     const userModel = await getUserModel(req.tenant.id);
     const access = await loadUserAccess(req.user.sub, req.tenant.id);
     const reviewerRoles = access.assignments.map((a) => a.roleName);
-    if (!canReviewRegistrations(userModel, access.permissions, reviewerRoles)) {
-      return reply.code(403).send({ error: 'forbidden', message: 'Not an registration approver' });
+    const [mgrCtx, catalog] = await Promise.all([
+      buildStaffUserManagerContext(req.user.sub, req.tenant.id),
+      getRoleCatalog(req.tenant.id),
+    ]);
+    const canReview = canReviewRegistrations(userModel, access.permissions, reviewerRoles);
+    const canManage = canAccessStaffUserManagement(mgrCtx, catalog);
+    if (!canReview && !canManage) {
+      return reply.code(403).send({ error: 'forbidden', message: 'Not a registration approver or hierarchy manager' });
     }
 
     const [user] = await db

@@ -18,7 +18,7 @@ const nav = computed(() => {
   if (perms.some((p) => p.startsWith('admin:'))) {
     items.push({ label: 'Configs', icon: 'i-lucide-settings', to: '/admin' });
   }
-  if (hasPermission(perms, 'admin:users') || perms.includes('admin:*')) {
+  if (user.value?.manages_staff_users || hasPermission(perms, 'admin:users') || perms.includes('admin:*')) {
     items.push({
       label: 'Admin',
       icon: 'i-lucide-user-cog',

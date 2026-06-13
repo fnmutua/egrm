@@ -39,7 +39,7 @@ export default async function roleRoutes(app: FastifyInstance) {
       let manageable: Set<string> | null = null;
       if (q.manageable === '1' || q.manageable === 'true') {
         const access = await loadUserAccess(req.user.sub, req.tenant.id);
-        if (access.permissions.includes('admin:*')) {
+        if (access.permissions.includes('admin:*') || access.permissions.includes('admin:users')) {
           manageable = new Set(rows.map((r) => r.name));
         } else {
           manageable = manageableRoleNames(

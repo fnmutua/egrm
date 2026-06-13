@@ -3,6 +3,9 @@ interface AuthUser {
   email: string;
   name: string;
   permissions: string[];
+  manages_staff_users?: boolean;
+  staff_user_management_full?: boolean;
+  manageable_role_names?: string[];
 }
 
 export function useAuth() {

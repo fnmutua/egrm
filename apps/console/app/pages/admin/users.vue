@@ -68,6 +68,8 @@ const editForm = reactive({
   phone: '',
 });
 
+const editRoles = ref<{ role_id: string; unit_id: string | null }[]>([{ role_id: '', unit_id: null }]);
+
 const approveRoles = ref<{ role_id: string; unit_id: string | null }[]>([{ role_id: '', unit_id: null }]);
 const rejectReason = ref('');
 
@@ -80,6 +82,18 @@ const statusColor: Record<string, 'warning' | 'success' | 'error' | 'neutral'> =
 const roleItems = computed(() =>
   roles.value.map((r) => ({ value: r.id, label: r.label || r.name })),
 );
+
+const editRoleItems = computed(() => {
+  const items = [...roleItems.value];
+  for (const row of editRoles.value) {
+    if (!row.role_id || items.some((i) => i.value === row.role_id)) continue;
+    const fromUser = selected.value?.roles.find((r) => r.role_id === row.role_id);
+    if (fromUser) {
+      items.push({ value: fromUser.role_id, label: fromUser.role_name });
+    }
+  }
+  return items;
+});
 
 const unitItems = computed(() => [
   { value: null, label: '(no jurisdiction)' },
@@ -152,6 +166,9 @@ function openEdit(row: StaffUser) {
   editForm.active = row.active;
   editForm.password = '';
   editForm.phone = row.profile?.phone ?? '';
+  editRoles.value = row.roles.length
+    ? row.roles.map((r) => ({ role_id: r.role_id, unit_id: r.unit_id }))
+    : [{ role_id: roles.value[0]?.id ?? '', unit_id: null }];
   editOpen.value = true;
 }
 
@@ -207,6 +224,15 @@ async function saveEdit() {
     };
     if (editForm.password) body.password = editForm.password;
     await api(`/api/v1/users/${selected.value.id}`, { method: 'PATCH', body });
+
+    const rolesBody = editRoles.value
+      .filter((r) => r.role_id)
+      .map((r) => ({ role_id: r.role_id, unit_id: r.unit_id }));
+    await api(`/api/v1/users/${selected.value.id}/roles`, {
+      method: 'PUT',
+      body: { roles: rolesBody },
+    });
+
     toast.add({ title: 'User updated', color: 'success' });
     editOpen.value = false;
     await reload();
@@ -440,6 +466,34 @@ function rowActions(row: StaffUser) {
           <UFormField label="New password" help="Leave blank to keep current password">
             <PasswordInput v-model="editForm.password" autocomplete="new-password" />
           </UFormField>
+          <div class="space-y-3 pt-1">
+            <p class="text-sm font-medium">Role assignments</p>
+            <div
+              v-for="(row, i) in editRoles"
+              :key="i"
+              class="grid sm:grid-cols-2 gap-3"
+            >
+              <UFormField label="Role">
+                <USelectMenu
+                  v-model="row.role_id"
+                  :items="editRoleItems"
+                  value-key="value"
+                  label-key="label"
+                  class="w-full"
+                  placeholder="Select role…"
+                />
+              </UFormField>
+              <UFormField label="Jurisdiction">
+                <USelectMenu
+                  v-model="row.unit_id"
+                  :items="unitItems"
+                  value-key="value"
+                  label-key="label"
+                  class="w-full"
+                />
+              </UFormField>
+            </div>
+          </div>
           <label class="flex items-center gap-2 text-sm">
             <UCheckbox v-model="editForm.active" />
             Account active

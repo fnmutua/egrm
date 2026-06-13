@@ -28,7 +28,11 @@ export function canAccessAdminConsole(granted: readonly string[]): boolean {
 }
 
 /** Standalone admin pages outside the config registry. */
-export function canAccessAdminPage(granted: readonly string[], path: string): boolean {
+export function canAccessAdminPage(
+  granted: readonly string[],
+  path: string,
+  opts?: { managesStaffUsers?: boolean },
+): boolean {
   if (path === '/admin/units') {
     return (
       hasPermission(granted, 'admin:hierarchy') ||
@@ -37,7 +41,11 @@ export function canAccessAdminPage(granted: readonly string[], path: string): bo
     );
   }
   if (path === '/admin/users') {
-    return hasPermission(granted, 'admin:users') || granted.includes('admin:*');
+    return (
+      hasPermission(granted, 'admin:users') ||
+      granted.includes('admin:*') ||
+      opts?.managesStaffUsers === true
+    );
   }
   return canAccessAdminConsole(granted);
 }

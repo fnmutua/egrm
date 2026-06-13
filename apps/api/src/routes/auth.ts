@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db, schema } from '../db/client.js';
 import { writeAudit } from '../services/audit.js';
 import { loadUserAccess } from '../services/access.js';
+import { buildStaffUserManagerContext, canAccessStaffUserManagement, getRoleCatalog } from '../services/role-hierarchy.js';
 import {
   getAuthPolicy,
   isConsoleIpAllowed,
@@ -193,7 +194,12 @@ export default async function authRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/v1/me', { onRequest: [app.authenticate] }, async (req) => {
-    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const [access, mgrCtx, catalog] = await Promise.all([
+      loadUserAccess(req.user.sub, req.tenant.id),
+      buildStaffUserManagerContext(req.user.sub, req.tenant.id),
+      getRoleCatalog(req.tenant.id),
+    ]);
+    const managesStaffUsers = canAccessStaffUserManagement(mgrCtx, catalog);
     return {
       user: {
         ...req.user,
@@ -205,6 +211,9 @@ export default async function authRoutes(app: FastifyInstance) {
           role_name: a.roleName,
           unit_id: a.unitId,
         })),
+        manages_staff_users: managesStaffUsers,
+        staff_user_management_full: mgrCtx.fullAdmin,
+        manageable_role_names: managesStaffUsers ? [...mgrCtx.manageableRoleNames] : [],
       },
       tenant: req.tenant,
     };

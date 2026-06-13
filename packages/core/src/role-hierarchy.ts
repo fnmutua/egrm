@@ -52,8 +52,32 @@ export function canManageTargetRole(
   targetRoleName: string,
   roles: RoleHierarchyNode[],
 ): boolean {
-  if (holderPermissions.includes('admin:*')) return true;
+  if (holderPermissions.includes('admin:*') || holderPermissions.includes('admin:users')) return true;
   return manageableRoleNames(holderRoleNames, roles).has(targetRoleName);
+}
+
+/** Full admin or holder of a role with descendants in the hierarchy. */
+export function hasStaffUserManagementScope(
+  holderRoleNames: readonly string[],
+  holderPermissions: readonly string[],
+  roles: RoleHierarchyNode[],
+): boolean {
+  if (holderPermissions.includes('admin:*') || holderPermissions.includes('admin:users')) return true;
+  return manageableRoleNames(holderRoleNames, roles).size > 0;
+}
+
+/** Whether every role on the target user sits below the holder in the hierarchy. */
+export function userRolesAreManageable(
+  holderRoleNames: readonly string[],
+  holderPermissions: readonly string[],
+  targetRoleNames: readonly string[],
+  roles: RoleHierarchyNode[],
+  opts?: { pendingNoRoles?: boolean },
+): boolean {
+  if (holderPermissions.includes('admin:*') || holderPermissions.includes('admin:users')) return true;
+  if (targetRoleNames.length === 0) return opts?.pendingNoRoles === true;
+  const manageable = manageableRoleNames(holderRoleNames, roles);
+  return targetRoleNames.every((n) => manageable.has(n));
 }
 
 /** Returns an error message when the hierarchy has a cycle, else null. */

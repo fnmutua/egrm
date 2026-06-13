@@ -9,6 +9,7 @@ export function usePermissions() {
   const { user } = useAuth();
 
   const permissions = computed(() => user.value?.permissions ?? []);
+  const managesStaffUsers = computed(() => user.value?.manages_staff_users === true);
 
   function canConfig(domain: string) {
     return canAccessConfigDomain(permissions.value, domain as ConfigDomain);
@@ -19,8 +20,10 @@ export function usePermissions() {
   }
 
   function canPage(path: string) {
-    return canAccessAdminPage(permissions.value, path);
+    return canAccessAdminPage(permissions.value, path, {
+      managesStaffUsers: managesStaffUsers.value,
+    });
   }
 
-  return { permissions, canConfig, canAdmin, canPage };
+  return { permissions, managesStaffUsers, canConfig, canAdmin, canPage };
 }
