@@ -1,4 +1,6 @@
 /** Seed the dev database with the KISIP reference tenant (tenant profile, doc 11). */
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import bcrypt from 'bcryptjs';
 import { and, eq } from 'drizzle-orm';
 import type { ConfigDomain } from '@egrm/core';
@@ -213,7 +215,7 @@ export const kisipIdentity = {
   },
 };
 
-async function main() {
+export async function runSeed() {
   const extraHostnames = (process.env.SEED_TENANT_HOSTNAMES ?? '')
     .split(',')
     .map((h) => h.trim().toLowerCase())
@@ -476,9 +478,17 @@ async function main() {
   console.log(`  Login:  ${adminEmail} / ChangeMe!2026`);
 }
 
-main()
-  .catch((err) => {
-    console.error(err);
-    process.exitCode = 1;
-  })
-  .finally(() => pool.end());
+function isCliEntry(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  return import.meta.url === pathToFileURL(path.resolve(entry)).href;
+}
+
+if (isCliEntry()) {
+  runSeed()
+    .catch((err) => {
+      console.error(err instanceof Error ? err.message : err);
+      process.exitCode = 1;
+    })
+    .finally(() => pool.end());
+}

@@ -19,7 +19,8 @@
     "start": "node dist/db/migrate.js && node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:setup": "tsx src/db/setup.ts",
+    "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {

@@ -14,6 +14,7 @@
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "db:setup": "pnpm --filter @egrm/api db:setup",
     "db:migrate": "pnpm --filter @egrm/api db:migrate",
     "db:seed": "pnpm --filter @egrm/api db:seed"
   },

@@ -17,13 +17,11 @@ Prerequisites: Node 22+, pnpm 9+, a local PostgreSQL 16 server on `localhost:543
 
 ```bash
 pnpm install
-# create the dev database once:  createdb -U postgres egrm
-cp .env.example apps/api/.env          # set your local Postgres password in DATABASE_URL
-pnpm --filter @egrm/api db:generate    # first time / after schema changes
-pnpm db:migrate
-pnpm db:seed                           # KISIP reference tenant + admin user
-pnpm dev                               # api :4100, console :3100, portal :3200
+pnpm db:setup    # creates apps/api/.env on first run; set DATABASE_URL password and re-run if prompted
+pnpm dev         # api :4100, console :3100, portal :3200
 ```
+
+`pnpm db:setup` creates the `egrm` database if missing, applies all migrations, and seeds the reference tenant. After schema changes, use `pnpm db:migrate` (and `pnpm db:seed` to refresh seed data).
 
 Seeded login (console): `admin@kisip.local` / `ChangeMe!2026`.
 
