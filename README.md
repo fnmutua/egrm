@@ -7,7 +7,7 @@ Generic, multi-tenant electronic Grievance Redress Mechanism. Specifications liv
 - **apps/portal** — public portal (Nuxt 4 + Nuxt UI, SSR)
 - **apps/console** — staff & admin console (Nuxt 4 + Nuxt UI, SPA)
 - **apps/api** — REST API (Fastify + Drizzle + PostgreSQL): tenancy, auth, config registry, workflow engine
-- **apps/worker** — background jobs (BullMQ + Redis): outbox, SLA scheduler, retention
+- **apps/worker** — background jobs (Phase 2+): SLA scheduler, retention
 - **packages/core** — semantic tags, permission catalogue, shared types
 - **packages/config-schemas** — zod schemas for the CD-01…CD-16 config domains
 
@@ -25,7 +25,7 @@ pnpm dev         # api :4100, console :3100, portal :3200
 
 Seeded login (console): `admin@kisip.local` / `ChangeMe!2026`.
 
-The worker (`pnpm dev:worker`) is excluded from `pnpm dev` until Phase 2 — it needs a Redis-compatible server (e.g. Memurai on Windows).
+The worker (`pnpm dev:worker`) is excluded from `pnpm dev` until Phase 2 — notifications currently dispatch inline in the API.
 
 ## Deploy to Railway
 

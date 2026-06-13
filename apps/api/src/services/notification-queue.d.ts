@@ -1,4 +1,2 @@
-export declare const NOTIFICATION_OUTBOX_QUEUE = "notification-outbox";
-/** Enqueue async delivery, or run inline when sync/dev mode is on. */
+/** Dispatch notification outbox inline in the API process (no BullMQ/Redis queue). */
 export declare function scheduleOutboxDispatch(outboxId: string): Promise<void>;
-//# sourceMappingURL=notification-queue.d.ts.map
