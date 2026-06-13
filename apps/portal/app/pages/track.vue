@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { buildThreadTree } from '@egrm/core';
+
 const { track, reply, loadMeta, meta } = useIntake();
 
 const reference = ref('');
@@ -13,6 +15,15 @@ const replyKind = ref('evidence');
 const replyLoading = ref(false);
 const replyError = ref('');
 const replyInput = ref<HTMLInputElement | null>(null);
+
+const messageTree = computed(() => {
+  const messages = result.value?.messages ?? [];
+  return buildThreadTree(messages);
+});
+
+const messageById = computed(() =>
+  Object.fromEntries((result.value?.messages ?? []).map((m) => [m.id, m])),
+);
 
 onMounted(() => loadMeta().catch(() => {}));
 
@@ -150,23 +161,7 @@ async function doReply() {
 
           <div v-if="result.messages?.length">
             <div class="text-sm font-medium mb-2">Messages</div>
-            <ol class="space-y-3">
-              <li
-                v-for="msg in result.messages"
-                :key="msg.id"
-                class="rounded-lg border border-default p-3 text-sm"
-                :class="msg.direction === 'inbound' ? 'bg-primary/5' : ''"
-              >
-                <div class="flex items-center justify-between gap-2 mb-1">
-                  <span class="font-medium">{{ msg.author_name ?? (msg.direction === 'inbound' ? 'You' : 'GRM office') }}</span>
-                  <time class="text-xs text-muted">{{ new Date(msg.created_at).toLocaleString() }}</time>
-                </div>
-                <p class="whitespace-pre-wrap">{{ msg.body }}</p>
-                <ul v-if="msg.attachments?.length" class="mt-2 text-xs text-muted">
-                  <li v-for="att in msg.attachments" :key="att.id">{{ att.kind_label }}: {{ att.filename }}</li>
-                </ul>
-              </li>
-            </ol>
+            <PortalThreadTree :nodes="messageTree" :entry-by-id="messageById" />
           </div>
 
           <div>

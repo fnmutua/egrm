@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { kindsForChannel } from '@egrm/config-schemas';
-import { hasPermission } from '@egrm/core';
+import { kindsForChannel, threadChannelLabel } from '@egrm/config-schemas';
+import { buildThreadTree, hasPermission } from '@egrm/core';
 
 const route = useRoute();
 const { api } = useApi();
@@ -46,6 +46,7 @@ interface ThreadEntry {
   body_display: string;
   visibility: string;
   author_name: string | null;
+  in_reply_to_id?: string | null;
   attachments: { id: string; filename: string; kind: string; kind_label: string }[];
   created_at: string;
 }
@@ -61,6 +62,7 @@ interface CaseDetail {
   complainant: {
     name: string | null; phone: string | null; email: string | null;
     gender: string | null; age_band: string | null; preferred_language: string | null;
+    notification_channels?: string[];
   } | null;
   events: { id: string; kind: string; actorType: string; visibility: string; data: Record<string, unknown>; createdAt: string }[];
 }
@@ -129,14 +131,22 @@ const docFileInput = ref<HTMLInputElement | null>(null);
 const threadEntries = ref<ThreadEntry[]>([]);
 const threadLoading = ref(false);
 const threadLoaded = ref(false);
+
+const threadEntryById = computed(() =>
+  Object.fromEntries(threadEntries.value.map((e) => [e.id, e])),
+);
+
+const threadTree = computed(() => buildThreadTree(threadEntries.value));
 const composeMode = ref<'outbound' | 'logged_contact' | 'internal'>('outbound');
 const composeBody = ref('');
 const composeKind = ref('free_text');
+const composeOutboundChannel = ref('portal');
 const composeChannel = ref('phone');
 const composeSending = ref(false);
 const composeError = ref('');
 const composeStaged = ref<StagedAttachment[]>([]);
 const composeFileInput = ref<HTMLInputElement | null>(null);
+const composeReplyTo = ref<ThreadEntry | null>(null);
 
 const canReadThread = computed(() => hasPermission(user.value?.permissions ?? [], 'thread:read'));
 const canReplyExternal = computed(() => hasPermission(user.value?.permissions ?? [], 'thread:reply_external'));
@@ -161,12 +171,63 @@ const outboundKindItems = [
 ];
 
 const contactChannelItems = [
-  { value: 'phone', label: 'Phone' },
-  { value: 'visit', label: 'Visit' },
-  { value: 'letter', label: 'Letter' },
-  { value: 'sms', label: 'SMS' },
+  { value: 'phone', label: 'Phone call' },
+  { value: 'in_person', label: 'In person / field visit' },
   { value: 'email', label: 'Email' },
+  { value: 'sms', label: 'SMS' },
 ];
+
+const outboundDeliveryChannelItems = computed(() => {
+  const c = detail.value?.complainant;
+  return [
+    {
+      value: 'portal',
+      label: 'Track portal only',
+      description: 'Posted on the tracking page — no SMS/email alert',
+      disabled: false,
+    },
+    {
+      value: 'sms',
+      label: 'SMS + track portal',
+      description: c?.phone ? `Send pointer SMS to ${c.phone}` : 'No phone on file',
+      disabled: !c?.phone,
+    },
+    {
+      value: 'email',
+      label: 'Email + track portal',
+      description: c?.email ? `Send pointer email to ${c.email}` : 'No email on file',
+      disabled: !c?.email,
+    },
+    {
+      value: 'whatsapp',
+      label: 'WhatsApp + track portal',
+      description: c?.phone ? `Send pointer WhatsApp to ${c.phone}` : 'No phone on file',
+      disabled: !c?.phone,
+    },
+  ];
+});
+
+const complainantChannelSummary = computed(() => {
+  const channels = detail.value?.complainant?.notification_channels ?? [];
+  if (!channels.length) return null;
+  return channels.map((ch) => threadChannelLabel(ch)).join(', ');
+});
+
+function defaultOutboundChannel(): string {
+  const c = detail.value?.complainant;
+  const prefs = c?.notification_channels ?? [];
+  for (const ch of prefs) {
+    if ((ch === 'sms' || ch === 'whatsapp') && c?.phone) return ch;
+    if (ch === 'email' && c?.email) return 'email';
+  }
+  if (c?.phone) return 'sms';
+  if (c?.email) return 'email';
+  return 'portal';
+}
+
+function formatThreadChannel(channel: string): string {
+  return threadChannelLabel(channel);
+}
 
 const tabItems = computed(() => {
   const items = [
@@ -225,6 +286,8 @@ function workflowErrorMessage(code: string, fallback?: string): string {
     attachment_policy_violation: 'File upload violates attachment policy.',
     unknown_attachment_kind: 'Unknown document type.',
     duplicate_attachment: 'This file was already uploaded.',
+    party_channel_unavailable: 'The complainant does not have contact details for that delivery channel.',
+    invalid_thread_channel: 'That delivery channel is not allowed.',
   };
   return messages[code] ?? fallback ?? code.replaceAll('_', ' ');
 }
@@ -431,6 +494,7 @@ function goToTab(tab: string) {
 
 async function loadCase() {
   detail.value = await api<CaseDetail>(`/api/v1/cases/${route.params.id}`);
+  composeOutboundChannel.value = defaultOutboundChannel();
   const actionsRes = await api<{ actions: AvailableAction[] }>(`/api/v1/cases/${route.params.id}/available-actions`);
   actions.value = actionsRes.actions;
   if (actionsRes.actions.some((a) => a.type === 'assign')) await loadAssignees();
@@ -504,25 +568,28 @@ async function loadThread() {
   }
 }
 
-function threadDirectionLabel(entry: ThreadEntry): string {
-  if (entry.direction === 'inbound') return 'Complainant';
-  if (entry.direction === 'internal_note') return 'Internal note';
-  if (entry.message_kind === 'logged_contact') return `Logged (${entry.channel})`;
-  return 'Staff';
-}
-
-function threadDirectionColor(entry: ThreadEntry): string {
-  if (entry.direction === 'inbound') return 'info';
-  if (entry.direction === 'internal_note') return 'warning';
-  if (entry.message_kind === 'logged_contact') return 'neutral';
-  return 'primary';
-}
 
 function resetCompose() {
   composeBody.value = '';
   composeStaged.value = [];
   composeError.value = '';
+  composeReplyTo.value = null;
   if (composeModeItems.value.length) composeMode.value = composeModeItems.value[0]!.value;
+}
+
+function startReply(entry?: ThreadEntry) {
+  if (!canReplyExternal.value) return;
+  composeMode.value = 'outbound';
+  composeOutboundChannel.value = defaultOutboundChannel();
+  composeReplyTo.value = entry ?? [...threadEntries.value].reverse().find((e) => e.direction === 'inbound') ?? null;
+  composeError.value = '';
+  nextTick(() => {
+    document.getElementById('compose-correspondence')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+function cancelReply() {
+  composeReplyTo.value = null;
 }
 
 async function onComposeFileChange(event: Event) {
@@ -551,9 +618,15 @@ async function sendThreadMessage() {
         body: composeBody.value.trim(),
         internal,
         message_kind: composeMode.value === 'logged_contact' ? 'logged_contact' : internal ? 'free_text' : composeKind.value,
-        channel: composeMode.value === 'logged_contact' ? composeChannel.value : 'console',
+        channel:
+          composeMode.value === 'logged_contact'
+            ? composeChannel.value
+            : internal
+              ? 'console'
+              : composeOutboundChannel.value,
         visibility: internal ? 'staff' : 'public',
         attachment_ids: composeStaged.value.length ? composeStaged.value.map((a) => a.id) : undefined,
+        in_reply_to_id: composeReplyTo.value?.id,
       },
     });
     resetCompose();
@@ -700,6 +773,10 @@ onMounted(async () => {
             <div><dt class="text-muted text-xs">Phone</dt><dd>{{ detail.complainant.phone ?? '—' }}</dd></div>
             <div><dt class="text-muted text-xs">Email</dt><dd>{{ detail.complainant.email ?? '—' }}</dd></div>
             <div><dt class="text-muted text-xs">Gender</dt><dd class="capitalize">{{ detail.complainant.gender ?? '—' }}</dd></div>
+            <div v-if="complainantChannelSummary" class="sm:col-span-2">
+              <dt class="text-muted text-xs">Notification channels (intake)</dt>
+              <dd>{{ complainantChannelSummary }}</dd>
+            </div>
           </dl>
           <div v-else class="text-sm text-muted pt-3">No party record.</div>
           <p v-if="!detail.case.anonymous" class="text-xs text-muted mt-3 pt-3 border-t border-default">PII access is logged in the audit trail.</p>
@@ -885,9 +962,44 @@ onMounted(async () => {
     </div>
 
     <div v-else-if="activeTab === 'correspondence'" class="space-y-6">
-      <UCard v-if="canComposeThread">
-        <template #header><span class="font-medium">Compose</span></template>
+      <UAlert
+        v-if="complainantChannelSummary"
+        color="info"
+        variant="subtle"
+        icon="i-lucide-bell"
+        title="Complainant notification preferences"
+        :description="`Opted in at intake: ${complainantChannelSummary}. Choose the delivery channel when sending outbound messages.`"
+      />
+
+      <UCard v-if="canComposeThread" id="compose-correspondence">
+        <template #header>
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-medium">{{ composeReplyTo ? 'Reply' : 'Compose' }}</span>
+            <UButton
+              v-if="!composeReplyTo && canReplyExternal && threadEntries.some((e) => e.direction === 'inbound')"
+              size="sm"
+              variant="soft"
+              icon="i-lucide-reply"
+              @click="startReply()"
+            >
+              Reply to latest
+            </UButton>
+          </div>
+        </template>
         <div class="space-y-4">
+          <div
+            v-if="composeReplyTo"
+            class="rounded-md border border-primary/25 bg-primary/5 px-3 py-2 text-sm"
+          >
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <span class="font-medium">Replying to {{ composeReplyTo.author_name ?? 'complainant' }}</span>
+                <span class="text-muted"> · {{ formatThreadChannel(composeReplyTo.channel) }} · {{ new Date(composeReplyTo.created_at).toLocaleString() }}</span>
+              </div>
+              <UButton size="xs" variant="ghost" color="neutral" @click="cancelReply">Cancel</UButton>
+            </div>
+            <p class="text-muted line-clamp-3 whitespace-pre-wrap mt-1">{{ composeReplyTo.body_display }}</p>
+          </div>
           <UFormField v-if="composeModeItems.length > 1" label="Type">
             <USelectMenu
               v-model="composeMode"
@@ -906,6 +1018,21 @@ onMounted(async () => {
                 label-key="label"
                 class="w-full"
               />
+            </UFormField>
+            <UFormField
+              label="Delivery channel"
+              help="Where the complainant is alerted. Full message always appears on the track portal."
+            >
+              <USelectMenu
+                v-model="composeOutboundChannel"
+                :items="outboundDeliveryChannelItems"
+                value-key="value"
+                label-key="label"
+                class="w-full"
+              />
+              <p v-if="outboundDeliveryChannelItems.find((i) => i.value === composeOutboundChannel)?.description" class="text-xs text-muted mt-1">
+                {{ outboundDeliveryChannelItems.find((i) => i.value === composeOutboundChannel)?.description }}
+              </p>
             </UFormField>
           </div>
           <UFormField v-if="composeMode === 'logged_contact'" label="Contact channel">
@@ -937,41 +1064,36 @@ onMounted(async () => {
           </div>
           <UAlert v-if="composeError" color="error" :title="composeError" />
           <UButton :loading="composeSending" :disabled="!composeBody.trim()" icon="i-lucide-send" @click="sendThreadMessage">
-            Send
+            {{ composeReplyTo ? 'Send reply' : 'Send' }}
           </UButton>
         </div>
       </UCard>
 
       <UCard>
-        <template #header><span class="font-medium">Thread</span></template>
+        <template #header>
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-medium">Thread</span>
+            <UButton
+              v-if="canReplyExternal"
+              size="sm"
+              variant="outline"
+              icon="i-lucide-reply"
+              @click="startReply()"
+            >
+              Reply
+            </UButton>
+          </div>
+        </template>
         <div v-if="threadLoading" class="text-sm text-muted py-4">Loading…</div>
         <div v-else-if="threadEntries.length === 0" class="text-sm text-muted py-4">No messages yet.</div>
-        <ol v-else class="space-y-4">
-          <li
-            v-for="entry in threadEntries"
-            :key="entry.id"
-            class="rounded-lg border border-default p-4"
-            :class="entry.direction === 'internal_note' ? 'bg-warning/5' : ''"
-          >
-            <div class="flex items-center justify-between gap-2 mb-2 flex-wrap">
-              <div class="flex items-center gap-2">
-                <UBadge :color="(threadDirectionColor(entry) as any)" variant="subtle" size="sm">
-                  {{ threadDirectionLabel(entry) }}
-                </UBadge>
-                <span class="text-sm font-medium">{{ entry.author_name ?? '—' }}</span>
-              </div>
-              <time class="text-xs text-muted">{{ new Date(entry.created_at).toLocaleString() }}</time>
-            </div>
-            <p class="text-sm whitespace-pre-wrap">{{ entry.body_display }}</p>
-            <ul v-if="entry.attachments.length" class="mt-2 text-xs text-muted space-y-1">
-              <li v-for="att in entry.attachments" :key="att.id">
-                <button type="button" class="text-primary hover:underline" @click="downloadFile(att.id, att.filename)">
-                  {{ att.kind_label }}: {{ att.filename }}
-                </button>
-              </li>
-            </ul>
-          </li>
-        </ol>
+        <CaseThreadTree
+          v-else
+          :nodes="threadTree"
+          :entry-by-id="threadEntryById"
+          :can-reply="canReplyExternal"
+          @reply="startReply"
+          @download="downloadFile"
+        />
       </UCard>
     </div>
 

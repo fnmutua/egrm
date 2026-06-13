@@ -181,6 +181,10 @@ export async function enqueueNotifications(
     for (const selector of selectors) {
       let channels = expandPartyChannels(channelsForRule(rule, selector), selector, cfg);
       channels = filterChannelsForPartyPreference(channels, selector, ctx.case.partyNotificationChannels);
+      const notifyChannel = typeof ctx.data?.notify_channel === 'string' ? ctx.data.notify_channel : null;
+      if (notifyChannel && ('party' in selector || 'address' in selector)) {
+        channels = channels.filter((ch) => ch === notifyChannel);
+      }
       for (const channel of new Set(channels)) {
         const killReason = isChannelKilled(cfg, channel);
         const { body } = renderTemplateBody(cfg, templateId, locale, channel, vars);

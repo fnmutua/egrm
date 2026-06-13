@@ -5,7 +5,7 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
   devtools: { enabled: false },
   build: {
-    transpile: ['@egrm/config-schemas'],
+    transpile: ['@egrm/config-schemas', '@egrm/core'],
   },
   runtimeConfig: {
     public: {

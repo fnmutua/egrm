@@ -242,6 +242,7 @@ export function useIntake() {
         message_kind: string;
         body: string;
         author_name: string | null;
+        in_reply_to_id?: string | null;
         attachments: { id: string; filename: string; kind: string; kind_label: string }[];
         created_at: string;
       }[];

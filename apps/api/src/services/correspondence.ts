@@ -1,6 +1,10 @@
 import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { Cd01Identity, Cd17Correspondence } from '@egrm/config-schemas';
-import { DEFAULT_CORRESPONDENCE_POLICY } from '@egrm/config-schemas';
+import {
+  DEFAULT_CORRESPONDENCE_POLICY,
+  THREAD_LOGGED_CONTACT_CHANNELS,
+  THREAD_OUTBOUND_CHANNELS,
+} from '@egrm/config-schemas';
 import { hasPermission } from '@egrm/core';
 import { db, schema } from '../db/client.js';
 import { getActiveConfig } from './config.js';
@@ -28,6 +32,7 @@ export interface ThreadEntryRow {
   body_display: string;
   visibility: string;
   author_name: string | null;
+  in_reply_to_id: string | null;
   attachments: { id: string; filename: string; kind: string; kind_label: string }[];
   created_at: string;
 }
@@ -139,6 +144,7 @@ export async function listCaseThread(
       bodyRedacted: schema.threadEntry.bodyRedacted,
       visibility: schema.threadEntry.visibility,
       authorUserId: schema.threadEntry.authorUserId,
+      inReplyToId: schema.threadEntry.inReplyToId,
       createdAt: schema.threadEntry.createdAt,
       authorName: schema.appUser.displayName,
     })
@@ -172,6 +178,7 @@ export async function listCaseThread(
     ),
     visibility: r.visibility,
     author_name: r.direction === 'inbound' ? 'Complainant' : r.authorName,
+    in_reply_to_id: r.inReplyToId,
     attachments: attMap.get(r.id) ?? [],
     created_at: r.createdAt.toISOString(),
   }));
@@ -188,6 +195,7 @@ export async function createStaffThreadMessage(input: {
   channel?: string;
   visibility?: 'public' | 'staff';
   attachmentIds?: string[];
+  inReplyToId?: string;
 }): Promise<{ id: string } | { error: string; code: number; message?: string }> {
   const cfg = await loadCorrespondenceConfig(input.tenantId);
   const policy = cfg.correspondence_policy;
@@ -232,8 +240,71 @@ export async function createStaffThreadMessage(input: {
 
   const direction = internal ? 'internal_note' : 'outbound';
   const visibility = internal ? 'staff' : (input.visibility ?? 'public');
-  const channel = input.channel ?? 'console';
+  let channel = input.channel ?? (internal ? 'console' : policy.staff.default_outbound_channel);
+  if (internal) {
+    channel = 'console';
+  } else if (messageKind === 'logged_contact') {
+    if (!THREAD_LOGGED_CONTACT_CHANNELS.includes(channel as (typeof THREAD_LOGGED_CONTACT_CHANNELS)[number])) {
+      return { error: 'invalid_thread_channel', code: 422, message: 'Invalid logged-contact channel' };
+    }
+  } else {
+    if (!THREAD_OUTBOUND_CHANNELS.includes(channel as (typeof THREAD_OUTBOUND_CHANNELS)[number])) {
+      return { error: 'invalid_thread_channel', code: 422, message: 'Invalid outbound delivery channel' };
+    }
+    if (channel !== 'portal' && caseRow.partyId) {
+      const [party] = await db
+        .select({
+          phoneEnc: schema.party.phoneEnc,
+          emailEnc: schema.party.emailEnc,
+        })
+        .from(schema.party)
+        .where(eq(schema.party.id, caseRow.partyId))
+        .limit(1);
+      const { decryptPII } = await import('./crypto.js');
+      const hasPhone = Boolean(party?.phoneEnc && decryptPII(party.phoneEnc));
+      const hasEmail = Boolean(party?.emailEnc && decryptPII(party.emailEnc));
+      if ((channel === 'sms' || channel === 'whatsapp') && !hasPhone) {
+        return { error: 'party_channel_unavailable', code: 422, message: 'Complainant has no phone on file for SMS/WhatsApp' };
+      }
+      if (channel === 'email' && !hasEmail) {
+        return { error: 'party_channel_unavailable', code: 422, message: 'Complainant has no email on file' };
+      }
+    }
+  }
   const attachmentIds = input.attachmentIds ?? [];
+
+  let inReplyToId = input.inReplyToId ?? null;
+  if (inReplyToId) {
+    const [parent] = await db
+      .select({ id: schema.threadEntry.id, direction: schema.threadEntry.direction })
+      .from(schema.threadEntry)
+      .where(
+        and(
+          eq(schema.threadEntry.tenantId, input.tenantId),
+          eq(schema.threadEntry.caseId, input.caseId),
+          eq(schema.threadEntry.id, inReplyToId),
+        ),
+      )
+      .limit(1);
+    if (!parent) return { error: 'reply_target_not_found', code: 422 };
+    if (parent.direction !== 'inbound') {
+      return { error: 'reply_target_not_inbound', code: 422, message: 'Can only reply to complainant messages' };
+    }
+  } else if (!internal && messageKind !== 'logged_contact') {
+    const [latestInbound] = await db
+      .select({ id: schema.threadEntry.id })
+      .from(schema.threadEntry)
+      .where(
+        and(
+          eq(schema.threadEntry.tenantId, input.tenantId),
+          eq(schema.threadEntry.caseId, input.caseId),
+          eq(schema.threadEntry.direction, 'inbound'),
+        ),
+      )
+      .orderBy(desc(schema.threadEntry.createdAt))
+      .limit(1);
+    inReplyToId = latestInbound?.id ?? null;
+  }
 
   const identity = await getActiveConfig<Cd01Identity>(input.tenantId, 'cd01_identity');
   const locale = identity?.locales?.default ?? 'en';
@@ -280,6 +351,7 @@ export async function createStaffThreadMessage(input: {
       bodyRedacted,
       visibility,
       authorUserId: input.actorId,
+      inReplyToId,
     });
 
     if (attachmentIds.length) {
@@ -287,7 +359,7 @@ export async function createStaffThreadMessage(input: {
       await linkPromotedAttachments(tx, attachmentIds, { threadEntryId: threadId, caseEventId: ev!.id });
     }
 
-    if (!internal && policy.notify.on_outbound_message) {
+    if (!internal && policy.notify.on_outbound_message && channel !== 'portal') {
       const [party] = caseRow.partyId
         ? await tx.select({ notificationChannels: schema.party.notificationChannels }).from(schema.party).where(eq(schema.party.id, caseRow.partyId)).limit(1)
         : [undefined];
@@ -310,7 +382,7 @@ export async function createStaffThreadMessage(input: {
             partyId: caseRow.partyId,
             partyNotificationChannels: party?.notificationChannels as never,
           },
-          data: { preview: body.slice(0, 120) },
+          data: { preview: body.slice(0, 120), notify_channel: channel },
         },
         tx,
       );
@@ -379,6 +451,7 @@ export async function listPublicThread(
     body_display: partyDisplayBody(r, sensitivity, policy, locale),
     visibility: r.visibility,
     author_name: r.direction === 'inbound' ? 'You' : 'GRM office',
+    in_reply_to_id: r.inReplyToId,
     attachments: attMap.get(r.id) ?? [],
     created_at: r.createdAt.toISOString(),
   }));
@@ -461,6 +534,21 @@ export async function createComplainantReply(input: {
   let pendingOutboxId: string | null = null;
   const threadId = crypto.randomUUID();
 
+  const [latestOutbound] = await db
+    .select({ id: schema.threadEntry.id })
+    .from(schema.threadEntry)
+    .where(
+      and(
+        eq(schema.threadEntry.tenantId, input.tenantId),
+        eq(schema.threadEntry.caseId, input.caseId),
+        eq(schema.threadEntry.direction, 'outbound'),
+        eq(schema.threadEntry.visibility, 'public'),
+      ),
+    )
+    .orderBy(desc(schema.threadEntry.createdAt))
+    .limit(1);
+  const inReplyToId = latestOutbound?.id ?? null;
+
   await db.transaction(async (tx) => {
     const [ev] = await tx
       .insert(schema.caseEvent)
@@ -486,6 +574,7 @@ export async function createComplainantReply(input: {
       body,
       visibility: 'public',
       authorPartyId: input.partyId,
+      inReplyToId,
     });
 
     if (files.length) {

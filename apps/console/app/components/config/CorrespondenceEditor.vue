@@ -157,6 +157,20 @@ const staffKindsText = computed({
       <UFormField label="Mirror status updates into thread">
         <USwitch v-model="staff.mirror_status_updates" />
       </UFormField>
+      <UFormField label="Default outbound delivery channel">
+        <USelectMenu
+          v-model="staff.default_outbound_channel"
+          :items="[
+            { value: 'portal', label: 'Track portal only' },
+            { value: 'sms', label: 'SMS + track portal' },
+            { value: 'email', label: 'Email + track portal' },
+            { value: 'whatsapp', label: 'WhatsApp + track portal' },
+          ]"
+          value-key="value"
+          label-key="label"
+          class="w-full max-w-md"
+        />
+      </UFormField>
       <div class="grid sm:grid-cols-2 gap-4">
         <UFormField label="Max staff message length">
           <UInput v-model.number="staff.max_body_length" type="number" min="100" class="w-full" />

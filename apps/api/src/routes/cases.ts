@@ -65,6 +65,7 @@ const threadBody = z.object({
   channel: z.string().optional(),
   visibility: z.enum(['public', 'staff']).optional(),
   attachment_ids: z.array(z.string().uuid()).optional(),
+  in_reply_to_id: z.string().uuid().optional(),
 });
 
 /** Staff case endpoints with jurisdiction-subtree scoping (spec 07 §2.2). */
@@ -187,6 +188,7 @@ export default async function caseRoutes(app: FastifyInstance) {
           gender: p.gender,
           age_band: p.ageBand,
           preferred_language: p.preferredLanguage,
+          notification_channels: p.notificationChannels ?? [],
         };
         await writeAudit({
           tenantId: req.tenant.id,
@@ -595,6 +597,7 @@ export default async function caseRoutes(app: FastifyInstance) {
       channel: parsed.data.channel,
       visibility: parsed.data.visibility,
       attachmentIds: parsed.data.attachment_ids,
+      inReplyToId: parsed.data.in_reply_to_id,
     });
     if ('error' in result) return reply.code(result.code).send({ error: result.error, message: result.message });
 

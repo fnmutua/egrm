@@ -9,6 +9,31 @@ export const THREAD_MESSAGE_KINDS = [
   'logged_contact',
 ] as const;
 
+/** How staff delivered an outbound message or logged offline contact (spec 15 §4.2). */
+export const THREAD_OUTBOUND_CHANNELS = ['portal', 'sms', 'email', 'whatsapp'] as const;
+export const THREAD_LOGGED_CONTACT_CHANNELS = ['phone', 'in_person', 'email', 'sms'] as const;
+
+export type ThreadOutboundChannel = (typeof THREAD_OUTBOUND_CHANNELS)[number];
+export type ThreadLoggedContactChannel = (typeof THREAD_LOGGED_CONTACT_CHANNELS)[number];
+
+const THREAD_CHANNEL_LABELS: Record<string, string> = {
+  portal: 'Track portal',
+  console: 'Staff console',
+  sms: 'SMS',
+  email: 'Email',
+  whatsapp: 'WhatsApp',
+  phone: 'Phone call',
+  in_person: 'In person',
+  letter: 'Letter',
+  visit: 'Field visit',
+  migration: 'Imported',
+};
+
+/** Human-readable label for a thread_entry.channel code. */
+export function threadChannelLabel(channel: string): string {
+  return THREAD_CHANNEL_LABELS[channel] ?? channel.replaceAll('_', ' ');
+}
+
 export const THREAD_DIRECTIONS = ['inbound', 'outbound', 'internal_note'] as const;
 
 export const correspondencePolicy = z.object({
@@ -29,6 +54,7 @@ export const correspondencePolicy = z.object({
       allow_logged_contact: z.boolean().default(true),
       max_body_length: z.number().int().positive().default(8000),
       default_outbound_kind: z.enum(THREAD_MESSAGE_KINDS).default('free_text'),
+      default_outbound_channel: z.enum(THREAD_OUTBOUND_CHANNELS).default('portal'),
       mirror_status_updates: z.boolean().default(false),
     })
     .default({}),
@@ -87,6 +113,7 @@ export const DEFAULT_CORRESPONDENCE_POLICY: CorrespondencePolicy = {
     allow_logged_contact: true,
     max_body_length: 8000,
     default_outbound_kind: 'free_text',
+    default_outbound_channel: 'portal',
     mirror_status_updates: false,
   },
   attachments: {

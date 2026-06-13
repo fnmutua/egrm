@@ -3,3 +3,4 @@ export * from './permissions.js';
 export * from './config-domains.js';
 export * from './config-domain-permissions.js';
 export * from './role-hierarchy.js';
+export * from './thread-tree.js';

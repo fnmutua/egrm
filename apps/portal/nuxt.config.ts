@@ -4,6 +4,9 @@ export default defineNuxtConfig({
   modules: ['@nuxt/ui'],
   css: ['~/assets/css/main.css'],
   devtools: { enabled: false },
+  build: {
+    transpile: ['@egrm/core'],
+  },
   runtimeConfig: {
     public: {
       apiBase: (process.env.NUXT_PUBLIC_API_BASE ?? '').trim() || 'http://localhost:4100',
