@@ -58,7 +58,7 @@ function buildTemplatePayload(cfg: WhatsAppSenderConfig, message: OutboundWhatsA
   return template;
 }
 
-/** Send a WhatsApp template message via Meta Cloud API (CD-09 senders.whatsapp). */
+/** Send a WhatsApp message via Meta Cloud API (CD-09 senders.whatsapp). */
 async function sendMetaWhatsApp(
   cfg: WhatsAppSenderConfig,
   message: OutboundWhatsApp,
@@ -66,18 +66,33 @@ async function sendMetaWhatsApp(
   const to = formatMobileNumber(message.to);
   if (!to) throw new DeliveryError('Invalid WhatsApp recipient phone', 'meta', false);
 
+  const isLive = (cfg.mode ?? 'test') === 'live';
+  const bodyText = message.body?.trim();
+  if (isLive && !bodyText) {
+    throw new DeliveryError('Empty WhatsApp body for live text message', 'meta', false);
+  }
+
+  const payload = isLive
+    ? {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'text',
+        text: { body: bodyText },
+      }
+    : {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'template',
+        template: buildTemplatePayload(cfg, message),
+      };
+
   const res = await fetch(apiUrl(cfg), {
     method: 'POST',
     headers: {
       Authorization: authHeader(cfg),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      to,
-      type: 'template',
-      template: buildTemplatePayload(cfg, message),
-    }),
+    body: JSON.stringify(payload),
   });
 
   const text = await res.text();

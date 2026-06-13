@@ -34,7 +34,7 @@ export type ChannelApiConfig = z.infer<typeof channelApiConfig>;
 
 export const ADVANTA_SMS_SENDOTP_URL = 'https://quicksms.advantasms.com/api/services/sendotp/';
 export const ADVANTA_SMS_SENDBULK_URL = 'https://quicksms.advantasms.com/api/services/sendbulk/';
-export const META_WHATSAPP_API_VERSION = 'v25.0';
+export const META_WHATSAPP_API_VERSION = 'v23.0';
 
 export interface ProviderRuntimeContext {
   to?: string;

@@ -13,6 +13,7 @@ import {
   SMS_PROVIDER_PRESETS,
   EMAIL_PROVIDER_PRESETS,
   WHATSAPP_PROVIDER_PRESETS,
+  META_WHATSAPP_API_VERSION,
   PROVIDER_FIELD_PLACEHOLDERS,
   applyProviderPreset,
   ensureChannelApiConfig,
@@ -155,6 +156,9 @@ function loadWhatsappPreset(sender: Record<string, unknown>) {
   const key = String(sender.provider ?? 'meta').toLowerCase();
   const preset = WHATSAPP_PROVIDER_PRESETS[key] ?? WHATSAPP_PROVIDER_PRESETS.custom;
   applyProviderPreset(sender, preset, { keepSecrets: true });
+  if (key === 'meta' && !String(sender.api_url ?? '').trim()) {
+    sender.api_url = `https://graph.facebook.com/${META_WHATSAPP_API_VERSION}/{{phone_number_id}}/messages`;
+  }
 }
 
 watch(
@@ -980,7 +984,7 @@ function varToken(name: string) {
         <div v-if="payload.senders.whatsapp.enabled" class="space-y-3">
           <UFormField
             label="Environment"
-            help="Test uses Meta sandbox (hello_world template; recipients must be on your sandbox To list). Live uses your production number and approved templates."
+            help="Test uses Meta sandbox (hello_world template; recipients must be on your sandbox To list). Live sends plain text via the Graph API URL below."
           >
             <USelectMenu
               v-model="payload.senders.whatsapp.mode"
@@ -1049,7 +1053,7 @@ function varToken(name: string) {
               />
             </UFormField>
             <UFormField label="API URL" help="Graph API or gateway URL." class="sm:col-span-2">
-              <UInput v-model="payload.senders.whatsapp.api_url" class="w-full" placeholder="https://graph.facebook.com/…" />
+              <UInput v-model="payload.senders.whatsapp.api_url" class="w-full" placeholder="https://graph.facebook.com/v23.0/{{phone_number_id}}/messages" />
             </UFormField>
           </div>
           <div class="space-y-2">
