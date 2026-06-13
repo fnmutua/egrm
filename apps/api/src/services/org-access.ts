@@ -21,6 +21,7 @@ export async function syncRolesFromOrgAccess(tenantId: string, payload: Cd10OrgA
           permissions: roleDef.permissions,
           sensitiveClasses: roleDef.sensitive_classes ?? [],
           mfaRequired: roleDef.mfa_required ?? false,
+          parentRoleName: roleDef.parent_role ?? null,
         })
         .where(eq(schema.role.id, existing.id));
     } else {
@@ -31,6 +32,7 @@ export async function syncRolesFromOrgAccess(tenantId: string, payload: Cd10OrgA
         permissions: roleDef.permissions,
         sensitiveClasses: roleDef.sensitive_classes ?? [],
         mfaRequired: roleDef.mfa_required ?? false,
+        parentRoleName: roleDef.parent_role ?? null,
       });
     }
   }

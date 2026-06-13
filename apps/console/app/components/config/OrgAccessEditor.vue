@@ -3,7 +3,7 @@
  * CD-10 Org & access: role definitions (permission sets), departments, auth policy.
  * Roles sync to the database when this config version is activated.
  */
-import { PERMISSION_GROUPS, PERMISSION_WILDCARDS } from '@egrm/core';
+import { PERMISSION_GROUPS, PERMISSION_WILDCARDS, canGrantPermission, roleDescendants, trimPermissionsToParent } from '@egrm/core';
 import {
   defaultStaffProfileFields,
   STAFF_IDENTITY_FIELD_META,
@@ -18,6 +18,7 @@ interface RoleDef {
   permissions: string[];
   sensitive_classes: string[];
   mfa_required: boolean;
+  parent_role?: string;
 }
 
 interface Department {
@@ -236,6 +237,74 @@ function toggle(role: RoleDef) {
   expanded.value = new Set(expanded.value);
 }
 
+function parentOptionsFor(role: RoleDef) {
+  const blocked = new Set<string>();
+  if (role.name) {
+    blocked.add(role.name);
+    for (const name of roleDescendants(role.name, roles.value)) blocked.add(name);
+  }
+  return [
+    { value: null, label: '(root — no parent)' },
+    ...roles.value
+      .filter((r) => r.name && !blocked.has(r.name))
+      .map((r) => ({ value: r.name, label: r.label || r.name })),
+  ];
+}
+
+function normalizeParentSelect(val: unknown): string | null {
+  if (val == null) return null;
+  if (typeof val === 'string') return val.trim() || null;
+  if (typeof val === 'object' && 'value' in val) {
+    const v = (val as { value: string | null }).value;
+    return typeof v === 'string' ? v.trim() || null : null;
+  }
+  return null;
+}
+
+/** After a role's permissions shrink, descendants must stay within their direct parent. */
+function cascadeTrimDescendants(roleName: string) {
+  if (!roleName) return;
+  const parent = roles.value.find((r) => r.name === roleName);
+  if (!parent) return;
+  for (const child of roles.value.filter((r) => r.parent_role === roleName && r.name)) {
+    child.permissions = trimPermissionsToParent(parent.permissions, child.permissions);
+    cascadeTrimDescendants(child.name);
+  }
+}
+
+function parentRole(role: RoleDef): RoleDef | undefined {
+  if (!role.parent_role) return undefined;
+  return roles.value.find((r) => r.name === role.parent_role);
+}
+
+function permissionAllowedForRole(role: RoleDef, perm: string): boolean {
+  const parent = parentRole(role);
+  if (!parent) return true;
+  return canGrantPermission(parent.permissions, perm);
+}
+
+function wildcardAllowedForRole(role: RoleDef, wildcard: string): boolean {
+  const parent = parentRole(role);
+  if (!parent) return true;
+  return canGrantPermission(parent.permissions, wildcard);
+}
+
+function onParentRoleChange(role: RoleDef, raw: unknown) {
+  const parentName = normalizeParentSelect(raw);
+  const previousParent = role.parent_role;
+  role.parent_role = parentName || undefined;
+
+  const parent = parentRole(role);
+  if (parent) {
+    role.permissions = trimPermissionsToParent(parent.permissions, role.permissions);
+  }
+
+  // Parent became stricter or was repointed — descendants are bounded by this role, not its ancestors.
+  if (role.name && (parentName !== previousParent || parent)) {
+    cascadeTrimDescendants(role.name);
+  }
+}
+
 function addRole() {
   props.payload.roles.push({
     name: '',
@@ -243,10 +312,22 @@ function addRole() {
     permissions: ['case:read'],
     sensitive_classes: [],
     mfa_required: false,
+    parent_role: undefined,
   });
 }
 function removeRole(role: RoleDef) {
   if (roles.value.length <= 1) return;
+  const promoteTo = role.parent_role;
+  for (const child of roles.value) {
+    if (child.parent_role === role.name) {
+      child.parent_role = promoteTo;
+      const newParent = promoteTo ? roles.value.find((r) => r.name === promoteTo) : undefined;
+      if (newParent) {
+        child.permissions = trimPermissionsToParent(newParent.permissions, child.permissions);
+      }
+      if (child.name) cascadeTrimDescendants(child.name);
+    }
+  }
   props.payload.roles = roles.value.filter((r) => r !== role);
 }
 
@@ -257,17 +338,21 @@ function hasWildcard(role: RoleDef, wildcard: string) {
   return role.permissions.includes(wildcard);
 }
 function togglePermission(role: RoleDef, perm: string, on: boolean) {
+  if (on && !permissionAllowedForRole(role, perm)) return;
   const set = new Set(role.permissions);
   if (on) set.add(perm);
   else set.delete(perm);
   role.permissions = [...set];
+  if (!on && role.name) cascadeTrimDescendants(role.name);
 }
 function toggleWildcard(role: RoleDef, wildcard: string, on: boolean) {
+  if (on && !wildcardAllowedForRole(role, wildcard)) return;
   const family = wildcard.slice(0, -1);
   const set = new Set(role.permissions.filter((p) => !p.startsWith(family) || p === wildcard));
   if (on) set.add(wildcard);
   else set.delete(wildcard);
   role.permissions = [...set];
+  if (!on && role.name) cascadeTrimDescendants(role.name);
 }
 
 function addDepartment() {
@@ -294,7 +379,8 @@ const roleNameItems = computed(() => roles.value.map((r) => ({ value: r.name, la
     <section v-if="show('sec-roles')" id="sec-roles" class="space-y-3">
       <h2 class="text-sm font-semibold">Roles</h2>
       <p class="text-xs text-muted">
-        Named permission sets from the platform catalogue (spec 07). Workflow and SLA rules reference these role names.
+        Named permission sets from the platform catalogue (spec 07). Set a parent role to form an administration hierarchy:
+        holders of a role may manage users with descendant roles only, and child permissions must stay within the parent's rights.
       </p>
 
       <div class="space-y-2">
@@ -306,6 +392,7 @@ const roleNameItems = computed(() => roles.value.map((r) => ({ value: r.name, la
           <div class="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none" @click="toggle(role)">
             <span class="font-medium truncate">{{ role.label || '(unnamed role)' }}</span>
             <UBadge v-if="role.name" size="sm" variant="subtle" color="neutral" class="font-mono">{{ role.name }}</UBadge>
+            <UBadge v-if="role.parent_role" size="sm" variant="subtle" color="info" class="font-mono">↑ {{ role.parent_role }}</UBadge>
             <UBadge v-if="role.mfa_required" size="sm" variant="subtle" color="warning">MFA</UBadge>
             <UBadge size="sm" variant="subtle" color="primary">{{ role.permissions.length }} perms</UBadge>
             <div class="ml-auto flex items-center gap-0.5 shrink-0">
@@ -330,6 +417,29 @@ const roleNameItems = computed(() => roles.value.map((r) => ({ value: r.name, la
             <UFormField label="Description">
               <UTextarea v-model="role.description" class="w-full" :rows="2" />
             </UFormField>
+
+            <UFormField
+              label="Parent role"
+              help="Managers with this role can administer descendant roles (user assignment). Child permissions must be a subset of the parent's."
+            >
+              <USelectMenu
+                :model-value="role.parent_role ?? null"
+                :items="parentOptionsFor(role)"
+                value-key="value"
+                label-key="label"
+                class="w-full max-w-md"
+                @update:model-value="onParentRoleChange(role, $event)"
+              />
+            </UFormField>
+
+            <UAlert
+              v-if="parentRole(role)"
+              color="info"
+              variant="subtle"
+              size="sm"
+              :title="`Rights bounded by ${parentRole(role)!.label}`"
+              description="Permissions not held by the parent role are disabled below."
+            />
 
             <div class="flex flex-wrap items-center gap-4">
               <div class="flex items-center gap-2 text-sm">
@@ -359,6 +469,7 @@ const roleNameItems = computed(() => roles.value.map((r) => ({ value: r.name, la
                 >
                   <UCheckbox
                     :model-value="hasWildcard(role, wc)"
+                    :disabled="!wildcardAllowedForRole(role, wc)"
                     @update:model-value="toggleWildcard(role, wc, $event as boolean)"
                   />
                   {{ wc }}
@@ -376,10 +487,16 @@ const roleNameItems = computed(() => roles.value.map((r) => ({ value: r.name, la
                 >
                   <UCheckbox
                     :model-value="hasPermission(role, perm)"
-                    :disabled="hasWildcard(role, perm.split(':')[0] + ':*')"
+                    :disabled="hasWildcard(role, perm.split(':')[0] + ':*') || !permissionAllowedForRole(role, perm)"
                     @update:model-value="togglePermission(role, perm, $event as boolean)"
                   />
-                  <span :class="hasWildcard(role, perm.split(':')[0] + ':*') ? 'text-muted line-through' : ''">{{ perm }}</span>
+                  <span
+                    :class="[
+                      hasWildcard(role, perm.split(':')[0] + ':*') || !permissionAllowedForRole(role, perm)
+                        ? 'text-muted line-through'
+                        : '',
+                    ]"
+                  >{{ perm }}</span>
                 </label>
               </div>
             </div>

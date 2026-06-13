@@ -23,6 +23,7 @@ export const kisipOrgAccess = {
       name: 'grm_officer',
       label: 'GRM officer',
       description: 'Settlement/county grievance handling at assigned jurisdiction.',
+      parent_role: 'grm_officer_national',
       permissions: [
         'case:read', 'case:create_assisted', 'case:transition', 'case:assign',
         'thread:reply_external', 'thread:note_internal', 'thread:read',
@@ -35,6 +36,7 @@ export const kisipOrgAccess = {
       name: 'grm_officer_national',
       label: 'National GRM officer',
       description: 'Escalated cases, closure confirmation, sensitive routing.',
+      parent_role: 'administrator',
       permissions: ['case:*', 'thread:*', 'attachment:*', 'report:view', 'sensitive:read', 'sensitive:handle', 'task:manage'],
       sensitive_classes: [],
       mfa_required: false,
@@ -43,6 +45,7 @@ export const kisipOrgAccess = {
       name: 'gbv_officer',
       label: 'GBV / SEAH focal',
       description: 'Designated handler for GBV/SEAH sensitivity class.',
+      parent_role: 'administrator',
       permissions: [
         'case:read', 'case:transition', 'case:assign', 'thread:*', 'attachment:*',
         'sensitive:read', 'sensitive:handle', 'task:manage',
@@ -54,6 +57,7 @@ export const kisipOrgAccess = {
       name: 'me_analyst',
       label: 'M&E analyst',
       description: 'Read-only operational and aggregate reporting.',
+      parent_role: 'administrator',
       permissions: ['report:view', 'report:export'],
       sensitive_classes: [],
       mfa_required: false,

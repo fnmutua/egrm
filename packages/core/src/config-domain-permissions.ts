@@ -36,5 +36,8 @@ export function canAccessAdminPage(granted: readonly string[], path: string): bo
       granted.includes('admin:*')
     );
   }
+  if (path === '/admin/users') {
+    return hasPermission(granted, 'admin:users') || granted.includes('admin:*');
+  }
   return canAccessAdminConsole(granted);
 }

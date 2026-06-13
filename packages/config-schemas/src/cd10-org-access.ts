@@ -1,4 +1,4 @@
-import { isValidPermissionPattern } from '@egrm/core';
+import { isValidPermissionPattern, detectRoleHierarchyCycle, permissionsCoveredBy } from '@egrm/core';
 import { z } from 'zod';
 import { localizedText } from './cd01-identity.js';
 
@@ -18,6 +18,11 @@ const roleDef = z.object({
   sensitive_classes: z.array(z.string()).default([]),
   /** MFA mandatory for users with this role (spec 07 §1). */
   mfa_required: z.boolean().default(false),
+  /**
+   * Parent role in the administration hierarchy. Holders of a role may manage
+   * descendant roles (user assignment, rights bounded by parent's permissions).
+   */
+  parent_role: z.string().optional(),
 });
 
 const department = z.object({
@@ -295,6 +300,41 @@ export const cd10OrgAccess = z
         message: `Role "${approval.default_role_name}" is not defined in roles[]`,
       });
     }
+
+    const cycle = detectRoleHierarchyCycle(cfg.roles);
+    if (cycle) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['roles'], message: cycle });
+    }
+
+    const byName = new Map(cfg.roles.map((r) => [r.name, r]));
+    cfg.roles.forEach((role, i) => {
+      const parentName = role.parent_role?.trim();
+      if (!parentName) return;
+      if (parentName === role.name) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['roles', i, 'parent_role'],
+          message: 'A role cannot be its own parent',
+        });
+        return;
+      }
+      const parent = byName.get(parentName);
+      if (!parent) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['roles', i, 'parent_role'],
+          message: `Parent role "${parentName}" is not defined`,
+        });
+        return;
+      }
+      if (!permissionsCoveredBy(parent.permissions, role.permissions)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['roles', i, 'permissions'],
+          message: `Permissions must be a subset of parent role "${parentName}"`,
+        });
+      }
+    });
   });
 
 export type Cd10OrgAccess = z.infer<typeof cd10OrgAccess>;

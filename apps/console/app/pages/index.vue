@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { hasPermission } from '@egrm/core';
+
 const { user, fetchMe, logout } = useAuth();
 
 onMounted(async () => {
@@ -7,13 +9,21 @@ onMounted(async () => {
 });
 
 const nav = computed(() => {
-  const items = [
+  const perms = user.value?.permissions ?? [];
+  const items: Record<string, unknown>[] = [
     { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
     { label: 'Cases', icon: 'i-lucide-inbox', to: '/cases' },
     { label: 'Reports', icon: 'i-lucide-bar-chart-3', to: '/', disabled: true, badge: 'Phase 4' },
   ];
-  if (user.value?.permissions.some((p) => p.startsWith('admin:'))) {
-    items.push({ label: 'Administration', icon: 'i-lucide-settings', to: '/admin' });
+  if (perms.some((p) => p.startsWith('admin:'))) {
+    items.push({ label: 'Configs', icon: 'i-lucide-settings', to: '/admin' });
+  }
+  if (hasPermission(perms, 'admin:users') || perms.includes('admin:*')) {
+    items.push({
+      label: 'Admin',
+      icon: 'i-lucide-user-cog',
+      children: [{ label: 'Users', icon: 'i-lucide-users', to: '/admin/users' }],
+    });
   }
   return [items];
 });

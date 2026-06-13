@@ -17,6 +17,7 @@ import {
   canReviewRegistrations,
 } from '../services/user-model.js';
 import { loadUserAccess } from '../services/access.js';
+import { getRoleCatalog, validateAssignableRoles } from '../services/role-hierarchy.js';
 
 const roleAssignmentBody = z.object({
   role_id: z.string().uuid(),
@@ -58,6 +59,28 @@ const rejectBody = z.object({
 function parseDate(v: string | null | undefined): Date | null {
   if (!v) return null;
   return new Date(v);
+}
+
+async function roleIdNameMap(tenantId: string): Promise<Map<string, string>> {
+  const rows = await db
+    .select({ id: schema.role.id, name: schema.role.name })
+    .from(schema.role)
+    .where(eq(schema.role.tenantId, tenantId));
+  return new Map(rows.map((r) => [r.id, r.name]));
+}
+
+async function assertCanAssignRoles(
+  req: { tenant: { id: string }; user: { sub: string } },
+  assignments: { role_id: string }[],
+): Promise<string | null> {
+  if (assignments.length === 0) return null;
+  const [access, catalog, idMap] = await Promise.all([
+    loadUserAccess(req.user.sub, req.tenant.id),
+    getRoleCatalog(req.tenant.id),
+    roleIdNameMap(req.tenant.id),
+  ]);
+  const holderRoles = access.assignments.map((a) => a.roleName);
+  return validateAssignableRoles(holderRoles, access.permissions, assignments, catalog, idMap);
 }
 
 async function departmentCodes(tenantId: string): Promise<string[]> {
@@ -191,6 +214,9 @@ export default async function userRoutes(app: FastifyInstance) {
     const assignError = validateRoleAssignments(userModel, parsed.data.roles);
     if (assignError) return reply.code(400).send({ error: 'invalid_assignments', message: assignError });
 
+    const hierarchyError = await assertCanAssignRoles(req, parsed.data.roles);
+    if (hierarchyError) return reply.code(403).send({ error: 'role_not_manageable', message: hierarchyError });
+
     const deptCodes = await departmentCodes(req.tenant.id);
     const profileError = validateProfile(userModel, parsed.data.profile, deptCodes);
     if (profileError) return reply.code(400).send({ error: 'invalid_profile', message: profileError });
@@ -301,6 +327,9 @@ export default async function userRoutes(app: FastifyInstance) {
     const assignError = validateRoleAssignments(userModel, parsed.data.roles);
     if (assignError) return reply.code(400).send({ error: 'invalid_assignments', message: assignError });
 
+    const hierarchyError = await assertCanAssignRoles(req, parsed.data.roles);
+    if (hierarchyError) return reply.code(403).send({ error: 'role_not_manageable', message: hierarchyError });
+
     try {
       await replaceUserRoles(req.tenant.id, id, parsed.data.roles);
     } catch (e) {
@@ -362,6 +391,9 @@ export default async function userRoutes(app: FastifyInstance) {
 
     const assignError = validateRoleAssignments(userModel, roles);
     if (assignError) return reply.code(400).send({ error: 'invalid_assignments', message: assignError });
+
+    const hierarchyError = await assertCanAssignRoles(req, roles);
+    if (hierarchyError) return reply.code(403).send({ error: 'role_not_manageable', message: hierarchyError });
 
     try {
       await replaceUserRoles(req.tenant.id, id, roles);

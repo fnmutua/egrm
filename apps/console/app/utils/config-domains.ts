@@ -129,6 +129,19 @@ export const ADMIN_SECTIONS: { label: string; icon?: string; entries: AdminEntry
       { type: 'domain', domain: 'cd16_ai' },
     ],
   },
+  {
+    label: 'Admin',
+    icon: 'i-lucide-user-cog',
+    entries: [
+      {
+        type: 'page',
+        label: 'Users',
+        icon: 'i-lucide-users',
+        to: '/admin/users',
+        description: 'Staff accounts, role assignments, and pending self-registrations.',
+      },
+    ],
+  },
 ];
 
 export const DOMAIN_CATALOGUE: DomainMeta[] = [

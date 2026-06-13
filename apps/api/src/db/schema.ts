@@ -55,6 +55,8 @@ export const role = pgTable(
     /** Sensitivity class codes this role may read/handle (from CD-10). */
     sensitiveClasses: text('sensitive_classes').array().notNull().default([]),
     mfaRequired: boolean('mfa_required').notNull().default(false),
+    /** Parent role name from CD-10 hierarchy (synced on config activation). */
+    parentRoleName: text('parent_role_name'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('role_tenant_name').on(t.tenantId, t.name)],

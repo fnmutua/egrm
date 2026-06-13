@@ -11,13 +11,13 @@ watch(() => route.fullPath, () => (drawerOpen.value = false));
     <div class="lg:hidden flex items-center justify-between border-b border-default px-4 py-2.5 shrink-0">
       <div class="flex items-center gap-2 min-w-0">
         <UIcon name="i-lucide-settings" class="text-primary shrink-0" />
-        <span class="font-semibold truncate">Administration</span>
+        <span class="font-semibold truncate">Configs</span>
       </div>
       <UButton icon="i-lucide-menu" variant="ghost" color="neutral" aria-label="Open menu" @click="drawerOpen = true" />
     </div>
 
     <!-- Mobile drawer -->
-    <USlideover v-model:open="drawerOpen" side="left" title="Administration">
+    <USlideover v-model:open="drawerOpen" side="left" title="Configs">
       <template #body>
         <NuxtLink to="/" class="flex items-center gap-1.5 text-xs text-muted hover:text-highlighted transition mb-3">
           <UIcon name="i-lucide-arrow-left" />
@@ -36,7 +36,7 @@ watch(() => route.fullPath, () => (drawerOpen.value = false));
         </NuxtLink>
         <div class="flex items-center gap-2 mt-2">
           <UIcon name="i-lucide-settings" class="text-primary" />
-          <h2 class="font-semibold">Administration</h2>
+          <h2 class="font-semibold">Configs</h2>
         </div>
       </div>
       <div class="flex-1 overflow-y-auto p-3">
