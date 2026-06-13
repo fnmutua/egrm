@@ -11,6 +11,8 @@ const envSchema = z.object({
   DEFAULT_TENANT: z.string().default('kisip'),
   /** Comma-separated hostnames added to the seeded tenant (Railway public URLs). */
   SEED_TENANT_HOSTNAMES: z.string().optional(),
+  /** Run seed during deploy bootstrap: 1=always, 0=never, unset=only when DB has no tenants. */
+  SEED_ON_DEPLOY: z.string().optional(),
   /** Public portal base URL for tracking links in notifications. */
   PUBLIC_PORTAL_BASE_URL: z.string().default('http://localhost:3000'),
   /** Log outbound messages to stdout instead of calling providers (local dev). */

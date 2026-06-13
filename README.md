@@ -21,7 +21,7 @@ pnpm db:setup    # creates apps/api/.env on first run; set DATABASE_URL password
 pnpm dev         # api :4100, console :3100, portal :3200
 ```
 
-`pnpm db:setup` creates the `egrm` database if missing, applies all migrations, and seeds the reference tenant. After schema changes, use `pnpm db:migrate` (and `pnpm db:seed` to refresh seed data).
+`pnpm db:setup` creates the `egrm` database if missing, applies all migrations, and seeds the reference tenant. After schema changes, use `pnpm db:migrate` (and `pnpm db:seed` to refresh seed data). Production/Railway uses `db:bootstrap` (migrate + conditional seed) automatically on API deploy.
 
 Seeded login (console): `admin@kisip.local` / `ChangeMe!2026`.
 

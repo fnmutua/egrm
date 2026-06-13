@@ -282,8 +282,15 @@ export async function runSeed() {
       .returning();
   }
 
-  // Roles from CD-10 catalogue (synced to role table)
-  await syncRolesFromOrgAccess(kisip!.id, kisipOrgAccess);
+  // Roles from CD-10 catalogue (synced to role table on first seed only)
+  const [existingRole] = await db
+    .select({ id: schema.role.id })
+    .from(schema.role)
+    .where(eq(schema.role.tenantId, kisip!.id))
+    .limit(1);
+  if (!existingRole || process.env.SEED_FORCE_SYNC_ROLES === '1') {
+    await syncRolesFromOrgAccess(kisip!.id, kisipOrgAccess);
+  }
   const roleRows = await db
     .select({ id: schema.role.id, name: schema.role.name })
     .from(schema.role)

@@ -36,24 +36,42 @@ PostgreSQL is required. Redis + worker are optional (not needed for core testing
    | `NODE_ENV` | `production` |
 
 4. **Settings → Networking** → **Generate Domain** (e.g. `egrm-api-production.up.railway.app`).
-5. Deploy. On first boot the API runs DB migrations automatically, then starts.
+5. Deploy. Before each deployment Railway runs **`preDeployCommand`**: migrations, then seed on first deploy (empty database).
 
-### Seed the database (once)
+Optional variables:
 
-After the API is healthy (`GET /health` → `{ "status": "ok" }`):
+| Variable | Value |
+|----------|-------|
+| `SEED_TENANT_HOSTNAMES` | `your-portal.up.railway.app,your-console.up.railway.app` (merged into tenant on seed) |
+| `SEED_ON_DEPLOY` | `1` to force seed every deploy; `0` to never seed on deploy (default: seed only when no tenants exist) |
+| `PUBLIC_PORTAL_BASE_URL` | `https://your-portal.up.railway.app` (tracking links in notifications) |
 
-```bash
-# Install Railway CLI: https://docs.railway.app/develop/cli
-railway login
-railway link          # pick your project + the **api** service
+### Seed behaviour on deploy
 
-# Add your Railway public hostnames so tenant resolution works without x-tenant header
-railway variables set SEED_TENANT_HOSTNAMES="your-portal.up.railway.app,your-console.up.railway.app"
-
-railway run pnpm db:seed
-```
+| Deploy | What runs |
+|--------|-----------|
+| **First** (empty Postgres) | `migrate` → `seed` (KISIP tenant, admin user, config packs) |
+| **Later** (data exists) | `migrate` only |
+| **Force re-seed** | Set `SEED_ON_DEPLOY=1` and redeploy, or run manually (below) |
 
 Seeded login: `admin@kisip.local` / `ChangeMe!2026`
+
+### Manual seed (hostnames, force refresh)
+
+After portal/console domains exist, merge hostnames without a full redeploy:
+
+```bash
+railway login
+railway link          # pick project + **api** service
+railway variables set SEED_TENANT_HOSTNAMES="your-portal.up.railway.app,your-console.up.railway.app"
+railway run -- node dist/db/seed.js
+```
+
+Or from repo root via pnpm (uses tsx — local / dev only):
+
+```bash
+railway run pnpm db:seed
+```
 
 ---
 
@@ -91,13 +109,15 @@ Seeded login: `admin@kisip.local` / `ChangeMe!2026`
 
 ## 5. Finish tenant hostnames
 
-If you seeded before generating portal/console domains, re-run seed with updated hostnames:
+If you deployed before generating portal/console domains, set hostnames and re-seed:
 
 ```bash
 railway link   # api service
 railway variables set SEED_TENANT_HOSTNAMES="portal-xxx.up.railway.app,console-xxx.up.railway.app"
-railway run pnpm db:seed
+railway run -- node dist/db/seed.js
 ```
+
+Or set `SEED_ON_DEPLOY=1`, redeploy the API once, then set `SEED_ON_DEPLOY=0` (or remove it) so later deploys only migrate.
 
 The Nuxt apps always send `x-tenant: kisip`, so API calls work even without hostname mapping — hostnames matter for direct API access and future hostname-based routing.
 
@@ -125,7 +145,8 @@ The Nuxt apps always send `x-tenant: kisip`, so API calls work even without host
 | `PII_SECRET` | yes | PII encryption — **never change after data exists** |
 | `DEFAULT_TENANT` | no | Fallback tenant code (default `kisip`) |
 | `PORT` | auto | Injected by Railway — do not set manually |
-| `SEED_TENANT_HOSTNAMES` | seed only | Comma-separated Railway domains |
+| `SEED_TENANT_HOSTNAMES` | no | Comma-separated Railway domains (merged on seed) |
+| `SEED_ON_DEPLOY` | no | `1` = seed every deploy; `0` = never; unset = seed only when DB empty |
 | `REDIS_URL` | no | Only needed when worker is deployed |
 
 ### Portal / Console
@@ -150,7 +171,8 @@ Check **Deploy logs** (not build logs) for `[migrate] failed:` or `[server] star
 
 - `DATABASE_URL` not linked — use `${{Postgres.DATABASE_URL}}` on the API service.
 - `JWT_SECRET` / `PII_SECRET` missing — set both before deploy.
-- Migration error — fix SQL/DB state, then redeploy (migrations run in `preDeployCommand`).
+- Migration error — fix SQL/DB state, then redeploy (migrations run in `preDeployCommand` via `dist/db/bootstrap.js`).
+- Seed skipped on redeploy — expected; set `SEED_ON_DEPLOY=1` once or `railway run -- node dist/db/seed.js`.
 
 **Database connection errors**  
 Use `${{Postgres.DATABASE_URL}}` reference (internal network). If using an external URL, append `?sslmode=require`.

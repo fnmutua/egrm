@@ -16,7 +16,8 @@
     "test": "turbo run test",
     "db:setup": "pnpm --filter @egrm/api db:setup",
     "db:migrate": "pnpm --filter @egrm/api db:migrate",
-    "db:seed": "pnpm --filter @egrm/api db:seed"
+    "db:seed": "pnpm --filter @egrm/api db:seed",
+    "db:bootstrap": "pnpm --filter @egrm/api db:bootstrap"
   },
   "devDependencies": {
     "turbo": "^2.3.0",

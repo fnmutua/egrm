@@ -29,4 +29,4 @@ COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
 WORKDIR /app/apps/api
 ENV HOST=0.0.0.0
 EXPOSE 4100
-CMD ["node", "dist/server.js"]
+CMD ["sh", "-c", "node dist/db/bootstrap.js && node dist/server.js"]
