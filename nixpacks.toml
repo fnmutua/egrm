@@ -8,4 +8,4 @@ cmds = ["corepack enable pnpm", "pnpm install --frozen-lockfile"]
 cmds = ["pnpm build"]
 
 [phases.start]
-cmd = "pnpm --filter @egrm/portal dev"
+cmd = "pnpm --filter @egrm/api start"
