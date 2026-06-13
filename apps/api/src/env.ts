@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { z } from 'zod';
+import { resolveDatabaseUrl } from './db/resolve-database-url.js';
 
 const envSchema = z.object({
   DATABASE_URL: z.string().default('postgres://postgres:postgres@localhost:5432/egrm'),
@@ -26,6 +27,7 @@ const parsed = envSchema.parse(process.env);
 
 export const env = {
   ...parsed,
+  DATABASE_URL: resolveDatabaseUrl(parsed.DATABASE_URL),
   API_PORT: parsed.PORT ?? parsed.API_PORT ?? 4100,
   NOTIFICATIONS_DEV_LOG_ONLY: parsed.NOTIFICATIONS_DEV_LOG_ONLY ?? false,
 };

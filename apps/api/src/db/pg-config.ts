@@ -22,6 +22,10 @@ function isCloudPgHost(host: string): boolean {
   return CLOUD_PG_HOSTS.some((marker) => host.includes(marker));
 }
 
+export function isManagedPostgresUrl(connectionString: string): boolean {
+  return isCloudPgHost(hostFromUrl(connectionString));
+}
+
 /** Shared pg connection options for local dev and managed Postgres (Railway, etc.). */
 export function pgPoolConfig(connectionString: string): PoolConfig {
   const sslmode = sslModeFromUrl(connectionString);

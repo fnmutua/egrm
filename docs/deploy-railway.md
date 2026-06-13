@@ -30,6 +30,7 @@ PostgreSQL is required. Redis + worker are optional (not needed for core testing
    | Variable | Value |
    |----------|-------|
    | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (reference from Postgres plugin) |
+   | `DATABASE_PUBLIC_URL` | `${{Postgres.DATABASE_PUBLIC_URL}}` (required for `railway run` db commands from your PC) |
    | `JWT_SECRET` | long random string (32+ chars) |
    | `PII_SECRET` | different long random string (32+ chars) |
    | `DEFAULT_TENANT` | `kisip` |
@@ -62,14 +63,25 @@ After portal/console domains exist, merge hostnames without a full redeploy:
 
 ```bash
 railway login
-railway link          # pick project + **api** service
-railway variables set SEED_TENANT_HOSTNAMES="your-portal.up.railway.app,your-console.up.railway.app"
-railway run -- node dist/db/seed.js
+railway link          # pick project + **api** service (not console)
+railway run pnpm db:bootstrap   # migrate + seed when DB empty
+# or:
+railway run pnpm db:migrate
+railway run pnpm db:seed
 ```
 
-Or from repo root via pnpm (uses tsx — local / dev only):
+Compiled API image (no tsx on the host):
 
 ```bash
+railway run -- node dist/db/bootstrap.js
+```
+
+`railway run` executes on your machine with API env vars injected. The API auto-uses `DATABASE_PUBLIC_URL` when the internal `postgres.railway.internal` host is unreachable. Link both Postgres variables on the API service (see table above).
+
+To merge portal/console hostnames into the seeded tenant:
+
+```bash
+railway variables set SEED_TENANT_HOSTNAMES="your-portal.up.railway.app,your-console.up.railway.app"
 railway run pnpm db:seed
 ```
 
@@ -175,7 +187,10 @@ Check **Deploy logs** (not build logs) for `[migrate] failed:` or `[server] star
 - Seed skipped on redeploy — expected; set `SEED_ON_DEPLOY=1` once or `railway run -- node dist/db/seed.js`.
 
 **Database connection errors**  
-Use `${{Postgres.DATABASE_URL}}` reference (internal network). If using an external URL, append `?sslmode=require`.
+On the API service, link both `${{Postgres.DATABASE_URL}}` (deploy / internal) and `${{Postgres.DATABASE_PUBLIC_URL}}` (for `railway run` from your PC). Deployed containers use the internal URL automatically; local `railway run` falls back to the public proxy. If using an external URL, append `?sslmode=require`.
+
+**`Cannot resolve PostgreSQL host (postgres.railway.internal)`**  
+You ran a db command locally without `DATABASE_PUBLIC_URL` on the API service, or linked the **console** service instead of **api**. Fix: add `DATABASE_PUBLIC_URL=${{Postgres.DATABASE_PUBLIC_URL}}` on the API service, `railway link` to **api**, then `railway run pnpm db:migrate`. Or use `railway shell` (runs inside Railway's network).
 
 **CORS**  
 API allows all origins in dev/test (`origin: true`). Tighten in production when domains are final.

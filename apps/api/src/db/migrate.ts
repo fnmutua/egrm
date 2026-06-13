@@ -6,13 +6,13 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { env } from '../env.js';
 import { ensureDatabase } from './ensure-database.js';
-import { pgPoolConfig } from './pg-config.js';
+import { isManagedPostgresUrl, pgPoolConfig } from './pg-config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsFolder = path.resolve(__dirname, '../../drizzle');
 
 export async function runMigrations(): Promise<void> {
-  const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
+  const pool = new pg.Pool(pgPoolConfig(env.DATABASE_URL));
   const db = drizzle(pool);
   try {
     await migrate(db, { migrationsFolder });
@@ -31,7 +31,7 @@ function isCliEntry(): boolean {
 if (isCliEntry()) {
   try {
     // Managed Postgres (Railway, etc.) provisions the database; only create locally.
-    if (process.env.NODE_ENV !== 'production') {
+    if (process.env.NODE_ENV !== 'production' && !isManagedPostgresUrl(env.DATABASE_URL)) {
       await ensureDatabase(env.DATABASE_URL);
     }
     await runMigrations();

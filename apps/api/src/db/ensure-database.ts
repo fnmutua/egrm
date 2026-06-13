@@ -34,7 +34,10 @@ export function formatDatabaseError(err: unknown, connectionString: string): str
     return `Cannot connect to PostgreSQL at ${host}. Ensure the server is running.`;
   }
   if (pgErr.code === 'ENOTFOUND') {
-    return `Cannot resolve PostgreSQL host (${host}). Check DATABASE_URL in apps/api/.env.`;
+    const railwayHint = host.includes('railway.internal')
+      ? '\nFor Railway: link DATABASE_PUBLIC_URL on the API service, or run inside Railway with `railway shell`.'
+      : '';
+    return `Cannot resolve PostgreSQL host (${host}). Check DATABASE_URL in apps/api/.env.${railwayHint}`;
   }
   if (pgErr instanceof Error) return pgErr.message;
   return String(err);
