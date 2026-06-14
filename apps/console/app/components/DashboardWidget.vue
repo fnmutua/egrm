@@ -269,6 +269,74 @@ const chartType = computed(() => {
   return 'bar';
 });
 
+const isApexChart = computed(() => isBar.value || isLine.value || isArea.value || isPie.value || isDonut.value);
+
+const chartRef = ref<{ chart?: { dataURI: (opts?: { scale?: number }) => Promise<{ imgURI: string }> }; $el?: HTMLElement } | null>(null);
+
+function exportFileBase() {
+  const base = props.widget.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
+  return base || 'chart';
+}
+
+function triggerDownload(href: string, filename: string) {
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filename;
+  a.click();
+}
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  triggerDownload(url, filename);
+  URL.revokeObjectURL(url);
+}
+
+async function exportChartPng() {
+  await nextTick();
+  const chart = chartRef.value?.chart;
+  if (!chart?.dataURI) return;
+  const { imgURI } = await chart.dataURI({ scale: 2 });
+  triggerDownload(imgURI, `${exportFileBase()}.png`);
+}
+
+async function exportChartSvg() {
+  await nextTick();
+  const root = chartRef.value?.$el;
+  const svgEl = root?.querySelector('.apexcharts-svg');
+  if (!svgEl) return;
+  const svg = new XMLSerializer().serializeToString(svgEl);
+  triggerBlobDownload(
+    new Blob([`<?xml version="1.0" encoding="UTF-8"?>\n${svg}`], { type: 'image/svg+xml' }),
+    `${exportFileBase()}.svg`,
+  );
+}
+
+function exportTableCsv() {
+  const header = [tableCategoryLabel.value, tableValueLabel.value];
+  const csvRows = rows.value.map((r) =>
+    [`"${String(r.label).replace(/"/g, '""')}"`, r.value].join(','),
+  );
+  const csv = [header.join(','), ...csvRows].join('\r\n');
+  triggerBlobDownload(
+    new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }),
+    `${exportFileBase()}.csv`,
+  );
+}
+
+const exportMenuItems = computed(() => {
+  if (loading.value || !hasData.value) return [];
+  const items: { label: string; icon: string; onSelect: () => void }[] = [];
+  if (isApexChart.value) {
+    items.push(
+      { label: 'Download PNG', icon: 'i-lucide-image-down', onSelect: () => { void exportChartPng(); } },
+      { label: 'Download SVG', icon: 'i-lucide-file-image', onSelect: () => { void exportChartSvg(); } },
+    );
+  } else if (isTable.value) {
+    items.push({ label: 'Download CSV', icon: 'i-lucide-sheet', onSelect: exportTableCsv });
+  }
+  return items;
+});
+
 const widgetIcon = computed(() => props.widget.icon || 'i-lucide-hash');
 </script>
 
@@ -310,9 +378,15 @@ const widgetIcon = computed(() => props.widget.icon || 'i-lucide-hash');
           <UIcon v-if="widget.icon" :name="widget.icon" class="size-4 text-primary shrink-0" />
           <span class="text-sm font-medium truncate">{{ widget.title }}</span>
         </div>
-        <UBadge size="xs" color="neutral" variant="subtle" class="font-mono shrink-0">
-          {{ widget.chart_kind }}
-        </UBadge>
+        <UDropdownMenu v-if="exportMenuItems.length" :items="exportMenuItems">
+          <UButton
+            size="xs"
+            variant="ghost"
+            color="neutral"
+            icon="i-lucide-download"
+            aria-label="Download chart"
+          />
+        </UDropdownMenu>
       </div>
     </template>
 
@@ -331,6 +405,7 @@ const widgetIcon = computed(() => props.widget.icon || 'i-lucide-hash');
       <!-- ApexCharts: bar, stacked bar, line, area, pie, donut -->
       <ClientOnly v-if="isBar || isLine || isArea || isPie || isDonut">
         <ApexChart
+          ref="chartRef"
           width="100%"
           :height="chartHeight"
           :type="chartType"
