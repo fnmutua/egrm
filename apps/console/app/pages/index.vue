@@ -18,6 +18,7 @@ function widgetGridClass(widget: Widget, layout?: string) {
   if (layout === 'single_col') return '';
   const size = widget.size ?? 'standard';
   if (size === 'full') return 'col-span-full';
+  if (size === '3col') return 'col-span-full sm:col-span-2 xl:col-span-3 2xl:col-span-3';
   if (size === 'wide') return 'sm:col-span-2';
   return '';
 }

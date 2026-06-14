@@ -107,6 +107,7 @@ const chartHeight = computed(() => {
   switch (widgetSize.value) {
     case 'compact': return 150;
     case 'wide': return 280;
+    case '3col': return 310;
     case 'full': return 340;
     default: return 220;
   }

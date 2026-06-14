@@ -20,7 +20,7 @@ interface Widget {
   group_by: string[]; time_dimension?: string; bucket?: string;
   filters: FilterDef[]; target?: number | null;
   thresholds: Threshold[];
-  size?: 'compact' | 'standard' | 'wide' | 'full';
+  size?: 'compact' | 'standard' | 'wide' | '3col' | 'full';
   unit_level?: string;
   icon?: string;
   sparkline_period?: '7d' | '14d' | '30d' | '8w' | '6m' | null;
@@ -130,6 +130,7 @@ const WIDGET_SIZES = [
   { value: 'compact', label: 'Compact', help: 'Fits small grid cells — shorter chart, tighter labels.' },
   { value: 'standard', label: 'Standard', help: 'Default single-column tile.' },
   { value: 'wide', label: 'Wide (2 cols)', help: 'Best for line, stacked, and multi-series charts.' },
+  { value: '3col', label: '3 cols', help: 'Spans three grid columns on large screens.' },
   { value: 'full', label: 'Full width', help: 'Spans the entire row — use for busy charts.' },
 ];
 const THRESHOLD_COLORS = [{ value: 'success', label: 'Green' }, { value: 'warning', label: 'Amber' }, { value: 'error', label: 'Red' }];

@@ -31,8 +31,8 @@ export interface Widget {
   filters?: FilterDef[];
   target?: number | null;
   thresholds?: Threshold[];
-  /** Grid footprint + chart density: compact | standard | wide | full */
-  size?: 'compact' | 'standard' | 'wide' | 'full';
+  /** Grid footprint + chart density: compact | standard | wide | 3col | full */
+  size?: 'compact' | 'standard' | 'wide' | '3col' | 'full';
   /** Admin hierarchy level for geographic breakdown — sets group_by to unit_level:{code} */
   unit_level?: string;
   /** KPI mini trend: last 7/14/30 days, 8 weeks, or 6 months. */
