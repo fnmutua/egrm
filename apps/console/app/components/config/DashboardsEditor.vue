@@ -24,6 +24,8 @@ interface Widget {
   unit_level?: string;
   icon?: string;
   sparkline_period?: '7d' | '14d' | '30d' | '8w' | '6m' | null;
+  gauge_variant?: 'basic' | 'custom_label' | 'needle' | 'semi';
+  gauge_label?: string | null;
 }
 
 interface Section {
@@ -138,6 +140,12 @@ const SPARKLINE_PERIODS = [
   { value: '8w', label: 'Last 8 weeks' },
   { value: '6m', label: 'Last 6 months' },
 ];
+const GAUGE_VARIANTS = [
+  { value: 'basic', label: 'Basic' },
+  { value: 'custom_label', label: 'Custom label' },
+  { value: 'needle', label: 'Needle' },
+  { value: 'semi', label: 'Semi-circle' },
+] as const;
 const CATEGORY_MODES = [
   { value: 'field', label: 'Case field' },
   { value: 'unit_level', label: 'Admin unit level' },
@@ -426,7 +434,7 @@ const CHART_PROFILES: Record<string, ChartProfile> = {
     filters: true, kpiDisplay: false,
   },
   gauge: {
-    hint: 'Radial gauge showing actual as a percentage of a numeric target.',
+    hint: 'Radial gauge — pick a style variant; % = actual ÷ target × 100.',
     measure: true, aggregation: true,
     categories: { show: false, label: '', required: false, help: '' },
     series: { show: false, label: '', required: false, help: '' },
@@ -617,6 +625,11 @@ function normalizeWidgetForChart(w: Widget, kind: string) {
     w.size = 'compact';
   }
 
+  if (kind === 'gauge') {
+    w.gauge_variant ??= 'basic';
+    if (w.gauge_variant !== 'custom_label') delete w.gauge_label;
+  }
+
   if (kind === 'map') {
     const level = w.unit_level ?? defaultWidgetUnitLevel();
     if (level) {
@@ -637,6 +650,13 @@ function onChartKindChange(w: Widget, kind: string) {
   w.chart_kind = kind;
   if (kind === 'kpi_spark' && !w.sparkline_period) w.sparkline_period = '7d';
   if (kind === 'kpi_card') delete w.sparkline_period;
+  if (kind === 'gauge') {
+    w.gauge_variant ??= 'basic';
+    if (w.gauge_variant !== 'custom_label') delete w.gauge_label;
+  } else {
+    delete w.gauge_variant;
+    delete w.gauge_label;
+  }
   normalizeWidgetForChart(w, kind);
 }
 
@@ -662,7 +682,7 @@ function buildSeedWidget(
   label: string,
   filters: FilterDef[] = [],
   icon?: string,
-  opts?: { sparkline_period?: Widget['sparkline_period']; target?: number },
+  opts?: { sparkline_period?: Widget['sparkline_period']; target?: number; gauge_variant?: Widget['gauge_variant'] },
 ): Widget {
   const w: Widget = {
     id: `w-${uid()}`,
@@ -689,6 +709,7 @@ function buildSeedWidget(
     w.sparkline_period = opts?.sparkline_period ?? '7d';
   } else if (kind === 'gauge') {
     w.target = opts?.target ?? 100;
+    w.gauge_variant = opts?.gauge_variant ?? 'basic';
     w.size = 'standard';
   } else if (['bar', 'pie', 'donut', 'table', 'treemap', 'pyramid'].includes(kind)) {
     w.group_by = ['status'];
@@ -1388,6 +1409,27 @@ const dashTabClass = (id: string) => [
                     :help="widget.chart_kind === 'gauge' ? 'Denominator for the gauge percentage (actual ÷ target × 100).' : 'Numeric goal shown as progress.'"
                   >
                     <UInput v-model.number="widget.target" type="number" min="1" class="w-full" placeholder="e.g. 100" />
+                  </UFormField>
+                  <UFormField
+                    v-if="widget.chart_kind === 'gauge'"
+                    label="Gauge style"
+                    help="Visual variant — all use the same % of target calculation."
+                  >
+                    <USelectMenu
+                      v-model="widget.gauge_variant"
+                      :items="[...GAUGE_VARIANTS]"
+                      value-key="value"
+                      label-key="label"
+                      placeholder="Basic"
+                      class="w-full"
+                    />
+                  </UFormField>
+                  <UFormField
+                    v-if="widget.chart_kind === 'gauge' && (widget.gauge_variant ?? 'basic') === 'custom_label'"
+                    label="Center label"
+                    help="Shown in the middle of the gauge (defaults to widget title)."
+                  >
+                    <UInput v-model="widget.gauge_label" class="w-full" :placeholder="widget.title" />
                   </UFormField>
                   <UFormField
                     v-if="widget.chart_kind === 'kpi_spark'"

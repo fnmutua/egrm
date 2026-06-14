@@ -34,8 +34,13 @@ export interface Widget {
   /** Grid footprint + chart density: compact | standard | wide | full */
   size?: 'compact' | 'standard' | 'wide' | 'full';
   /** Admin hierarchy level for geographic breakdown — sets group_by to unit_level:{code} */
+  unit_level?: string;
   /** KPI mini trend: last 7/14/30 days, 8 weeks, or 6 months. */
   sparkline_period?: '7d' | '14d' | '30d' | '8w' | '6m' | null;
+  /** Gauge visual style (chart_kind === 'gauge' only). */
+  gauge_variant?: 'basic' | 'custom_label' | 'needle' | 'semi';
+  /** Center label for custom_label gauge variant. */
+  gauge_label?: string | null;
 }
 
 export interface Section {

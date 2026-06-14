@@ -214,6 +214,19 @@ const gaugeColor = computed(() => {
   return THRESHOLD_COLORS.default;
 });
 
+const gaugeVariant = computed(() => props.widget.gauge_variant ?? 'basic');
+const gaugeIsSemiArc = computed(() => gaugeVariant.value === 'semi' || gaugeVariant.value === 'needle');
+const gaugeIsNeedle = computed(() => gaugeVariant.value === 'needle');
+const gaugeCenterLabel = computed(() => {
+  if (gaugeVariant.value !== 'custom_label') return props.widget.title;
+  return props.widget.gauge_label?.trim() || props.widget.title;
+});
+
+const needleRotation = computed(() => {
+  const pct = gaugePercent.value ?? 0;
+  return -90 + (pct / 100) * 180;
+});
+
 // ── ApexCharts config ──────────────────────────────────────────
 const isDark = computed(() => colorMode.value === 'dark');
 
@@ -342,6 +355,35 @@ const chartOptions = computed(() => {
   if (isGauge.value) {
     const pct = gaugePercent.value ?? 0;
     const target = props.widget.target ?? 0;
+    const variant = gaugeVariant.value;
+    const semi = gaugeIsSemiArc.value;
+    const muted = isDark.value ? '#94a3b8' : '#64748b';
+    const valueColor = isDark.value ? '#f1f5f9' : '#0f172a';
+
+    const dataLabels = {
+      name: {
+        show: variant === 'custom_label',
+        offsetY: semi ? -4 : -6,
+        color: muted,
+        fontSize: isCompact.value ? '10px' : '12px',
+      },
+      value: {
+        show: variant !== 'needle',
+        offsetY: semi ? 8 : 4,
+        fontSize: isCompact.value ? '20px' : '28px',
+        fontWeight: 700,
+        color: valueColor,
+        formatter: (val: number) => `${Math.round(val)}%`,
+      },
+      total: {
+        show: variant === 'custom_label' || (variant === 'semi' && !isCompact.value),
+        label: variant === 'custom_label' ? 'Actual' : '',
+        fontSize: '11px',
+        color: muted,
+        formatter: () => `${total.value.toLocaleString()} / ${target.toLocaleString()}`,
+      },
+    };
+
     return {
       chart: {
         ...baseOptions.value.chart,
@@ -352,39 +394,17 @@ const chartOptions = computed(() => {
       colors: [gaugeColor.value],
       plotOptions: {
         radialBar: {
-          startAngle: -135,
-          endAngle: 135,
-          hollow: { size: isCompact.value ? '58%' : '62%' },
+          startAngle: semi ? -90 : -135,
+          endAngle: semi ? 90 : 135,
+          hollow: { size: isCompact.value ? '58%' : (variant === 'needle' ? '68%' : '62%') },
           track: {
             background: isDark.value ? '#334155' : '#e2e8f0',
             strokeWidth: '100%',
           },
-          dataLabels: {
-            name: {
-              show: true,
-              offsetY: -6,
-              color: isDark.value ? '#94a3b8' : '#64748b',
-              fontSize: isCompact.value ? '11px' : '12px',
-            },
-            value: {
-              show: true,
-              offsetY: 4,
-              fontSize: isCompact.value ? '22px' : '28px',
-              fontWeight: 700,
-              color: isDark.value ? '#f1f5f9' : '#0f172a',
-              formatter: (val: number) => `${Math.round(val)}%`,
-            },
-            total: {
-              show: !isCompact.value,
-              label: 'Actual',
-              fontSize: '11px',
-              color: isDark.value ? '#94a3b8' : '#64748b',
-              formatter: () => `${total.value.toLocaleString()} / ${target.toLocaleString()}`,
-            },
-          },
+          dataLabels,
         },
       },
-      labels: [props.widget.title],
+      labels: [gaugeCenterLabel.value],
       stroke: { lineCap: 'round' },
       tooltip: {
         theme: isDark.value ? 'dark' : 'light',
@@ -662,10 +682,50 @@ const widgetIcon = computed(() => props.widget.icon || 'i-lucide-hash');
     </div>
 
     <template v-else>
+      <!-- Gauge (optional needle overlay) -->
+      <ClientOnly v-if="isGauge">
+        <div class="relative w-full" :style="{ height: `${chartHeight}px` }">
+          <ApexChart
+            :key="`${widget.id}-${gaugeVariant}-${gaugePercent}`"
+            ref="chartRef"
+            width="100%"
+            :height="chartHeight"
+            type="radialBar"
+            :options="chartOptions"
+            :series="chartSeries"
+          />
+          <div
+            v-if="gaugeIsNeedle"
+            class="absolute inset-0 flex flex-col items-center justify-end pb-[12%] pointer-events-none"
+          >
+            <div class="relative w-28 h-14 mb-1">
+              <div
+                class="absolute bottom-0 left-1/2 w-1 origin-bottom -ml-0.5 rounded-full transition-transform duration-500 shadow-sm"
+                :style="{
+                  height: isCompact ? '52px' : '64px',
+                  transform: `rotate(${needleRotation}deg)`,
+                  backgroundColor: gaugeColor,
+                }"
+              />
+              <div
+                class="absolute bottom-0 left-1/2 -translate-x-1/2 size-3.5 rounded-full border-2 border-background shadow-sm"
+                :style="{ backgroundColor: gaugeColor }"
+              />
+            </div>
+            <p class="text-xl font-bold tabular-nums" :class="isDark ? 'text-highlighted' : 'text-default'">
+              {{ gaugePercent }}%
+            </p>
+            <p class="text-[11px] text-muted tabular-nums">
+              {{ total.toLocaleString() }} / {{ widget.target?.toLocaleString() }}
+            </p>
+          </div>
+        </div>
+      </ClientOnly>
+
       <!-- ApexCharts: bar, stacked bar, line, area, pie, donut, treemap -->
-      <ClientOnly v-if="isBar || isLine || isArea || isPie || isDonut || isTreemap || isGauge">
+      <ClientOnly v-else-if="isBar || isLine || isArea || isPie || isDonut || isTreemap">
         <ApexChart
-          :key="`${widget.id}-${rows.length}-${seriesData.length}-${gaugePercent}`"
+          :key="`${widget.id}-${rows.length}-${seriesData.length}`"
           ref="chartRef"
           width="100%"
           :height="chartHeight"
