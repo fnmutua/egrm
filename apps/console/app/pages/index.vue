@@ -6,6 +6,7 @@ import type { Widget } from '~/types/dashboard';
 const route = useRoute();
 const { user, fetchMe } = useAuth();
 const { loadDashboards, visibleDashboards, loading: dashLoading } = useDashboards();
+const { resetFilter, setEnabled } = useDashboardUnitFilter();
 
 const activeDashId = ref<string | null>(null);
 const activeDash = computed(
@@ -34,8 +35,13 @@ onMounted(async () => {
 
 watch(() => route.query.d, (qd) => pickDash(qd as string | undefined));
 
+watch(activeDash, (dash) => {
+  setEnabled(Boolean(dash?.filter_bar?.unit));
+}, { immediate: true });
+
 function switchDashboard(id: string) {
   activeDashId.value = id;
+  resetFilter();
   navigateTo({ query: { d: id } }, { replace: true });
 }
 </script>
@@ -63,34 +69,38 @@ function switchDashboard(id: string) {
       <template v-else>
         <!-- Dashboard tabs — sticky while scrolling -->
         <div
-          class="sticky top-0 z-20 -mx-4 sm:-mx-8 px-4 sm:px-8 py-3 mb-4 flex items-center gap-3 flex-wrap border-b border-default/70 bg-default/95 backdrop-blur supports-[backdrop-filter]:bg-default/80"
+          class="sticky top-0 z-20 -mx-4 sm:-mx-8 px-4 sm:px-8 py-3 mb-4 space-y-3 border-b border-default/70 bg-default/95 backdrop-blur supports-[backdrop-filter]:bg-default/80"
         >
-          <div v-if="visibleDashboards.length > 1" class="flex gap-1 flex-wrap">
+          <div class="flex items-center gap-3 flex-wrap">
+            <div v-if="visibleDashboards.length > 1" class="flex gap-1 flex-wrap">
+              <UButton
+                v-for="d in visibleDashboards"
+                :key="d.id"
+                size="sm"
+                :variant="activeDashId === d.id ? 'solid' : 'ghost'"
+                :icon="d.icon || 'i-lucide-layout-dashboard'"
+                @click="switchDashboard(d.id)"
+              >
+                {{ d.title }}
+              </UButton>
+            </div>
+            <template v-else-if="activeDash">
+              <UIcon :name="activeDash.icon || 'i-lucide-layout-dashboard'" class="text-primary size-5" />
+              <h1 class="text-xl font-semibold">{{ activeDash.title }}</h1>
+            </template>
+            <div class="flex-1" />
             <UButton
-              v-for="d in visibleDashboards"
-              :key="d.id"
-              size="sm"
-              :variant="activeDashId === d.id ? 'solid' : 'ghost'"
-              :icon="d.icon || 'i-lucide-layout-dashboard'"
-              @click="switchDashboard(d.id)"
+              v-if="user.permissions.some((p: string) => p.startsWith('admin:'))"
+              size="xs"
+              variant="ghost"
+              icon="i-lucide-settings"
+              to="/admin/config/cd15_dashboards"
             >
-              {{ d.title }}
+              Edit dashboards
             </UButton>
           </div>
-          <template v-else-if="activeDash">
-            <UIcon :name="activeDash.icon || 'i-lucide-layout-dashboard'" class="text-primary size-5" />
-            <h1 class="text-xl font-semibold">{{ activeDash.title }}</h1>
-          </template>
-          <div class="flex-1" />
-          <UButton
-            v-if="user.permissions.some((p: string) => p.startsWith('admin:'))"
-            size="xs"
-            variant="ghost"
-            icon="i-lucide-settings"
-            to="/admin/config/cd15_dashboards"
-          >
-            Edit dashboards
-          </UButton>
+
+          <DashboardUnitFilter v-if="activeDash?.filter_bar?.unit" />
         </div>
 
         <!-- Sections -->

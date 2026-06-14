@@ -1,4 +1,4 @@
-import type { Widget, Section, Dashboard } from '~/types/dashboard';
+import type { Widget, Section, Dashboard, FilterDef } from '~/types/dashboard';
 
 export interface DashboardsConfig {
   dashboards: Dashboard[];
@@ -6,9 +6,16 @@ export interface DashboardsConfig {
 
 const TIME_CHARTS = new Set(['line', 'multi_line', 'area']);
 
+function mergeWidgetFilters(widgetFilters: FilterDef[] | undefined, unitId: string | null): FilterDef[] {
+  const base = [...(widgetFilters ?? [])].filter((f) => f.field !== 'unit_id');
+  if (unitId) base.push({ field: 'unit_id', op: 'eq', value: unitId });
+  return base;
+}
+
 export function useDashboards() {
   const { api } = useApi();
   const { user } = useAuth();
+  const { effectiveUnitId } = useDashboardUnitFilter();
 
   const dashboards = ref<Dashboard[]>([]);
   const loading = ref(false);
@@ -70,7 +77,7 @@ export function useDashboards() {
           unit_level: widget.unit_level,
           time_dimension: TIME_CHARTS.has(widget.chart_kind) ? widget.time_dimension : undefined,
           bucket: TIME_CHARTS.has(widget.chart_kind) ? widget.bucket : undefined,
-          filters: widget.filters ?? [],
+          filters: mergeWidgetFilters(widget.filters, effectiveUnitId.value),
         },
       });
     } catch {

@@ -3,6 +3,7 @@ import type { Widget } from '~/types/dashboard';
 
 const props = defineProps<{ widget: Widget }>();
 const { fetchWidgetData } = useDashboards();
+const { effectiveUnitId } = useDashboardUnitFilter();
 const colorMode = useColorMode();
 
 interface WidgetRow { label: string; value: number }
@@ -12,14 +13,22 @@ const categories = ref<string[]>([]);
 const total      = ref(0);
 const loading    = ref(true);
 
-onMounted(async () => {
-  const res = await fetchWidgetData(props.widget);
-  rows.value       = res.rows ?? [];
-  seriesData.value = res.series ?? [];
-  categories.value = res.categories ?? [];
-  total.value      = res.total;
-  loading.value    = false;
-});
+async function loadData() {
+  loading.value = true;
+  try {
+    const res = await fetchWidgetData(props.widget);
+    rows.value       = res.rows ?? [];
+    seriesData.value = res.series ?? [];
+    categories.value = res.categories ?? [];
+    total.value      = res.total;
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(() => loadData());
+
+watch(effectiveUnitId, () => loadData());
 
 const isMulti = computed(() => seriesData.value.length > 0);
 

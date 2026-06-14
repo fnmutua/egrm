@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { and, count, eq, inArray, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Cd02Hierarchy } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
@@ -187,6 +187,66 @@ async function buildCaseWhere(
   return and(...conditions)!;
 }
 
+function unitIsAncestorOf(
+  ancestorId: string,
+  unitId: string,
+  parentById: Map<string, string | null>,
+): boolean {
+  let cur: string | null = unitId;
+  const seen = new Set<string>();
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    if (cur === ancestorId) return true;
+    cur = parentById.get(cur) ?? null;
+  }
+  return false;
+}
+
+async function listDashboardUnitOptions(
+  tenantId: string,
+  userId: string,
+  levelCode: string,
+  parentId?: string | null,
+) {
+  const access = await loadUserAccess(userId, tenantId);
+  const conditions = [
+    eq(schema.unit.tenantId, tenantId),
+    eq(schema.unit.active, true),
+    eq(schema.unit.levelCode, levelCode),
+  ];
+  if (parentId) {
+    conditions.push(eq(schema.unit.parentId, parentId));
+  } else {
+    conditions.push(isNull(schema.unit.parentId));
+  }
+
+  const rows = await db
+    .select({ id: schema.unit.id, name: schema.unit.name, levelCode: schema.unit.levelCode })
+    .from(schema.unit)
+    .where(and(...conditions))
+    .orderBy(schema.unit.name);
+
+  if (access.tenantWide) {
+    return rows.map((r) => ({ id: r.id, name: r.name, levelCode: r.levelCode }));
+  }
+
+  const allowed = await expandUnitSubtrees(tenantId, access.jurisdictionRoots);
+  const tree = await db
+    .select({ id: schema.unit.id, parentId: schema.unit.parentId })
+    .from(schema.unit)
+    .where(eq(schema.unit.tenantId, tenantId));
+  const parentById = new Map(tree.map((u) => [u.id, u.parentId]));
+
+  return rows
+    .filter((u) => {
+      for (const aid of allowed) {
+        if (unitIsAncestorOf(u.id, aid, parentById)) return true;
+      }
+      return false;
+    })
+    .map((r) => ({ id: r.id, name: r.name, levelCode: r.levelCode }));
+}
+
 export default async function dashboardRoutes(app: FastifyInstance) {
   /** Active dashboard layout for the home page — any signed-in user, no admin config permission required. */
   app.get('/api/v1/dashboards/layout', { onRequest: [app.authenticate] }, async (req, reply) => {
@@ -340,6 +400,50 @@ export default async function dashboardRoutes(app: FastifyInstance) {
 
       const total = Number(row?.value ?? 0);
       return { rows: [{ label: 'total', value: total }], series: [], categories: [], total };
+    },
+  );
+
+  /** Hierarchy levels + selectable units for the dashboard cascade filter (no admin:hierarchy required). */
+  app.get(
+    '/api/v1/dashboards/unit-filter',
+    { onRequest: [app.authenticate] },
+    async (req) => {
+      const hierarchy = await getActiveConfig<Cd02Hierarchy>(req.tenant.id, 'cd02_hierarchy');
+      const levelsBottomFirst = hierarchy?.levels ?? [];
+      const hierarchyLevels = [...levelsBottomFirst].reverse().map((l) => ({
+        code: l.code,
+        label: l.label || l.code,
+      }));
+
+      const { level_code: levelCode, parent_id: parentId } = req.query as {
+        level_code?: string;
+        parent_id?: string;
+      };
+
+      if (!levelCode) {
+        return { levels: hierarchyLevels, units: [] };
+      }
+
+      const topCode = hierarchyLevels[0]?.code;
+      const levelIndex = hierarchyLevels.findIndex((l) => l.code === levelCode);
+      if (levelIndex < 0) return { levels: hierarchyLevels, units: [] };
+
+      const needsParent = levelIndex > 0;
+      if (needsParent && !parentId) {
+        return { levels: hierarchyLevels, units: [] };
+      }
+      if (!needsParent && parentId) {
+        return { levels: hierarchyLevels, units: [] };
+      }
+
+      const units = await listDashboardUnitOptions(
+        req.tenant.id,
+        req.user.sub,
+        levelCode,
+        needsParent ? parentId : null,
+      );
+
+      return { levels: hierarchyLevels, units, top_level_code: topCode ?? null };
     },
   );
 
