@@ -207,6 +207,7 @@ async function listDashboardUnitOptions(
   userId: string,
   levelCode: string,
   parentId?: string | null,
+  opts?: { allAtLevel?: boolean },
 ) {
   const access = await loadUserAccess(userId, tenantId);
   const conditions = [
@@ -214,7 +215,9 @@ async function listDashboardUnitOptions(
     eq(schema.unit.active, true),
     eq(schema.unit.levelCode, levelCode),
   ];
-  if (parentId) {
+  if (opts?.allAtLevel) {
+    // All units at this level (filter bar starts below the hierarchy top).
+  } else if (parentId) {
     conditions.push(eq(schema.unit.parentId, parentId));
   } else {
     conditions.push(isNull(schema.unit.parentId));
@@ -428,20 +431,30 @@ export default async function dashboardRoutes(app: FastifyInstance) {
       const levelIndex = hierarchyLevels.findIndex((l) => l.code === levelCode);
       if (levelIndex < 0) return { levels: hierarchyLevels, units: [] };
 
-      const needsParent = levelIndex > 0;
-      if (needsParent && !parentId) {
-        return { levels: hierarchyLevels, units: [] };
+      let units: Awaited<ReturnType<typeof listDashboardUnitOptions>>;
+      if (parentId) {
+        units = await listDashboardUnitOptions(
+          req.tenant.id,
+          req.user.sub,
+          levelCode,
+          parentId,
+        );
+      } else if (levelIndex === 0) {
+        units = await listDashboardUnitOptions(
+          req.tenant.id,
+          req.user.sub,
+          levelCode,
+          null,
+        );
+      } else {
+        units = await listDashboardUnitOptions(
+          req.tenant.id,
+          req.user.sub,
+          levelCode,
+          null,
+          { allAtLevel: true },
+        );
       }
-      if (!needsParent && parentId) {
-        return { levels: hierarchyLevels, units: [] };
-      }
-
-      const units = await listDashboardUnitOptions(
-        req.tenant.id,
-        req.user.sub,
-        levelCode,
-        needsParent ? parentId : null,
-      );
 
       return { levels: hierarchyLevels, units, top_level_code: topCode ?? null };
     },

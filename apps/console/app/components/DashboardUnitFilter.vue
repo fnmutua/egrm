@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useDashboardUnitFilter } from '~/composables/useDashboardUnitFilter';
+
 const {
   levels,
   selections,

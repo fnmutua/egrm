@@ -1,4 +1,5 @@
 import type { Widget, Section, Dashboard, FilterDef } from '~/types/dashboard';
+import { useDashboardUnitFilter } from '~/composables/useDashboardUnitFilter';
 
 export interface DashboardsConfig {
   dashboards: Dashboard[];

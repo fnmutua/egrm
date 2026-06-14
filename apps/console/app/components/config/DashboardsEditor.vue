@@ -153,20 +153,25 @@ const hierarchyLevelItems = computed(() =>
   })),
 );
 const topHierarchyLevel = computed(() => hierarchyLevelItems.value[0]?.value);
+/** Filter bar starts one level below the hierarchy top (e.g. County, not National). */
+const filterStartLevelItems = computed(() => hierarchyLevelItems.value.slice(1));
+const defaultFilterUnitLevel = computed(
+  () => filterStartLevelItems.value[0]?.value ?? hierarchyLevelItems.value[0]?.value,
+);
 
 function applyDefaultUnitLevels() {
-  const top = topHierarchyLevel.value;
-  if (!top) return;
+  const start = defaultFilterUnitLevel.value;
+  if (!start) return;
   for (const d of props.payload.dashboards as Dashboard[]) {
     d.filter_bar ??= { period: true, unit: true, category: false };
-    if (d.filter_bar.unit && !d.filter_bar.unit_level) d.filter_bar.unit_level = top;
+    if (d.filter_bar.unit && !d.filter_bar.unit_level) d.filter_bar.unit_level = start;
   }
 }
 
 function onUnitFilterToggle(dash: Dashboard, enabled: boolean) {
   dash.filter_bar.unit = enabled;
-  if (enabled && !dash.filter_bar.unit_level && topHierarchyLevel.value) {
-    dash.filter_bar.unit_level = topHierarchyLevel.value;
+  if (enabled && !dash.filter_bar.unit_level && defaultFilterUnitLevel.value) {
+    dash.filter_bar.unit_level = defaultFilterUnitLevel.value;
   }
 }
 
@@ -227,8 +232,8 @@ function ensure() {
     d.audience.roles ??= []; d.audience.levels ??= [];
     d.is_main ??= false; d.is_public ??= false; d.layout ??= 'grid';
     d.filter_bar ??= { period: true, unit: true, category: false };
-    if (d.filter_bar.unit && !d.filter_bar.unit_level && topHierarchyLevel.value) {
-      d.filter_bar.unit_level = topHierarchyLevel.value;
+    if (d.filter_bar.unit && !d.filter_bar.unit_level && defaultFilterUnitLevel.value) {
+      d.filter_bar.unit_level = defaultFilterUnitLevel.value;
     }
     d.sections ??= [];
     for (const s of d.sections) {
@@ -481,7 +486,7 @@ function chartProfile(kind: string): ChartProfile {
 }
 
 function defaultWidgetUnitLevel(): string | undefined {
-  return activeDash.value?.filter_bar?.unit_level ?? topHierarchyLevel.value;
+  return activeDash.value?.filter_bar?.unit_level ?? defaultFilterUnitLevel.value;
 }
 
 function supportsGeoCategory(kind: string): boolean {
@@ -674,7 +679,7 @@ function seedDashboards() {
   const dashCount = Math.max(1, Math.min(20, Math.round(seedDashboardCount.value) || 1));
   const kpiCount = Math.max(1, Math.min(4, Math.round(seedKpiCount.value) || 4));
   const canBeMain = !dashboards.value.some((d) => d.is_main);
-  const topLevel = topHierarchyLevel.value;
+  const filterLevel = defaultFilterUnitLevel.value;
   const chartKinds = CHART_KINDS.filter((ck) => ck.value !== 'kpi_card');
   let firstDashId: string | null = null;
 
@@ -712,7 +717,7 @@ function seedDashboards() {
         period: true,
         unit: true,
         category: false,
-        ...(topLevel ? { unit_level: topLevel } : {}),
+        ...(filterLevel ? { unit_level: filterLevel } : {}),
       },
       sections,
     });
@@ -881,14 +886,14 @@ const dashTabClass = (id: string) => [
               <UFormField
                 v-if="dash.filter_bar.unit"
                 label="Unit filter level"
-                help="Admin level for the dashboard unit picker. Defaults to the top of your hierarchy (e.g. National, County)."
+                help="First level shown in the dashboard unit picker. The hierarchy top (e.g. National) is omitted — defaults to the level below (e.g. County)."
               >
                 <USelectMenu
                   v-model="dash.filter_bar.unit_level"
-                  :items="hierarchyLevelItems"
+                  :items="filterStartLevelItems"
                   value-key="value"
                   label-key="label"
-                  placeholder="Top level"
+                  placeholder="County (default)"
                   class="w-full"
                 />
               </UFormField>

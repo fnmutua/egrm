@@ -16,12 +16,25 @@ interface UnitFilterResponse {
 
 const ALL_VALUE = '__all__';
 
-const levels = ref<HierarchyLevelOption[]>([]);
+const allLevels = ref<HierarchyLevelOption[]>([]);
+const startLevelCode = ref<string | null>(null);
 const selections = ref<Record<string, string>>({});
 const unitsByLevel = ref<Record<string, UnitOption[]>>({});
 const loading = ref(false);
 const initialized = ref(false);
 const enabled = ref(false);
+
+/** Visible cascade levels — skips the hierarchy top; starts at configured/default 2nd level. */
+const levels = computed(() => {
+  if (!allLevels.value.length) return [];
+  const topCode = allLevels.value[0]?.code;
+  const fallback = allLevels.value[1]?.code ?? allLevels.value[0]?.code;
+  let start = startLevelCode.value ?? fallback;
+  if (start === topCode) start = fallback;
+  const idx = allLevels.value.findIndex((l) => l.code === start);
+  if (idx < 0) return allLevels.value.length > 1 ? allLevels.value.slice(1) : allLevels.value;
+  return allLevels.value.slice(idx);
+});
 
 function levelCacheKey(levelCode: string, parentId: string | null): string {
   return `${levelCode}:${parentId ?? 'root'}`;
@@ -61,24 +74,28 @@ export function useDashboardUnitFilter() {
     if (parentId) params.set('parent_id', parentId);
 
     const res = await api<UnitFilterResponse>(`/api/v1/dashboards/unit-filter?${params}`);
-    levels.value = res.levels.length ? res.levels : levels.value;
+    allLevels.value = res.levels.length ? res.levels : allLevels.value;
     unitsByLevel.value[level.code] = res.units ?? [];
+  }
+
+  function initSelections() {
+    selections.value = {};
+    unitsByLevel.value = {};
+    for (const lvl of levels.value) {
+      selections.value[lvl.code] = ALL_VALUE;
+    }
   }
 
   async function initFilter() {
     loading.value = true;
     try {
       const res = await api<UnitFilterResponse>('/api/v1/dashboards/unit-filter');
-      levels.value = res.levels ?? [];
-      selections.value = {};
-      unitsByLevel.value = {};
-      for (const lvl of levels.value) {
-        selections.value[lvl.code] = ALL_VALUE;
-      }
+      allLevels.value = res.levels ?? [];
+      initSelections();
       if (levels.value.length) await loadUnitsForLevel(0);
       initialized.value = true;
     } catch {
-      levels.value = [];
+      allLevels.value = [];
       selections.value = {};
       unitsByLevel.value = {};
       initialized.value = false;
@@ -88,11 +105,7 @@ export function useDashboardUnitFilter() {
   }
 
   function resetFilter() {
-    selections.value = {};
-    unitsByLevel.value = {};
-    for (const lvl of levels.value) {
-      selections.value[lvl.code] = ALL_VALUE;
-    }
+    initSelections();
     if (levels.value.length) void loadUnitsForLevel(0);
   }
 
@@ -127,6 +140,13 @@ export function useDashboardUnitFilter() {
     if (!active) resetFilter();
   }
 
+  function setStartLevel(code: string | null | undefined) {
+    const next = code ?? null;
+    const changed = startLevelCode.value !== next;
+    startLevelCode.value = next;
+    if (changed && initialized.value && enabled.value) resetFilter();
+  }
+
   return {
     ALL_VALUE,
     levels,
@@ -140,6 +160,7 @@ export function useDashboardUnitFilter() {
     initFilter,
     resetFilter,
     setEnabled,
+    setStartLevel,
     onLevelChange,
     selectItems,
     levelCacheKey,

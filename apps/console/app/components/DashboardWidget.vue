@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Widget } from '~/types/dashboard';
+import { useDashboardUnitFilter } from '~/composables/useDashboardUnitFilter';
 
 const props = defineProps<{ widget: Widget }>();
 const { fetchWidgetData } = useDashboards();

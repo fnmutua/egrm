@@ -2,11 +2,12 @@
 definePageMeta({ layout: 'shell' });
 
 import type { Widget } from '~/types/dashboard';
+import { useDashboardUnitFilter } from '~/composables/useDashboardUnitFilter';
 
 const route = useRoute();
 const { user, fetchMe } = useAuth();
 const { loadDashboards, visibleDashboards, loading: dashLoading } = useDashboards();
-const { resetFilter, setEnabled } = useDashboardUnitFilter();
+const { resetFilter, setEnabled, setStartLevel } = useDashboardUnitFilter();
 
 const activeDashId = ref<string | null>(null);
 const activeDash = computed(
@@ -37,6 +38,7 @@ watch(() => route.query.d, (qd) => pickDash(qd as string | undefined));
 
 watch(activeDash, (dash) => {
   setEnabled(Boolean(dash?.filter_bar?.unit));
+  setStartLevel(dash?.filter_bar?.unit_level);
 }, { immediate: true });
 
 function switchDashboard(id: string) {
