@@ -157,7 +157,7 @@ const heroSubtitle = computed(
   <div class="min-h-screen flex flex-col">
     <!-- Header -->
     <header class="border-b border-default sticky top-0 bg-default/95 backdrop-blur z-10">
-      <div class="max-w-5xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-3">
+      <div class="max-w-6xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-3">
         <div class="flex items-center gap-2 sm:gap-3 min-w-0">
           <img
             v-if="p?.branding.logo_url && !logoFailed"
@@ -201,17 +201,23 @@ const heroSubtitle = computed(
         :style="{
           background: p?.hero?.image_url
             ? `linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)), url(${p.hero.image_url}) center/cover`
-            : `linear-gradient(135deg, color-mix(in srgb, var(--ui-primary) 8%, transparent), color-mix(in srgb, var(--ui-primary) 2%, transparent))`,
+            : `linear-gradient(135deg, color-mix(in srgb, var(--ui-primary) 10%, transparent), color-mix(in srgb, var(--ui-primary) 3%, transparent))`,
         }"
       >
-        <div class="max-w-5xl mx-auto px-4 py-10 sm:py-16">
-          <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 max-w-3xl" :class="p?.hero?.image_url ? 'text-white' : ''">
+        <div class="max-w-6xl mx-auto px-4 py-16 sm:py-24 text-center">
+          <h1
+            class="text-3xl sm:text-4xl md:text-5xl font-bold mb-5 max-w-3xl mx-auto leading-tight"
+            :class="p?.hero?.image_url ? 'text-white' : ''"
+          >
             {{ heroTitle }}
           </h1>
-          <p class="max-w-2xl mb-8 text-base sm:text-lg" :class="p?.hero?.image_url ? 'text-white/85' : 'text-muted'">
+          <p
+            class="max-w-2xl mx-auto mb-10 text-base sm:text-lg"
+            :class="p?.hero?.image_url ? 'text-white/85' : 'text-muted'"
+          >
             {{ heroSubtitle }}
           </p>
-          <div class="flex flex-col sm:flex-row gap-3">
+          <div class="flex flex-col sm:flex-row gap-3 justify-center">
             <UButton to="/submit" size="lg" class="justify-center">{{ ui.submit }}</UButton>
             <UButton to="/track" size="lg" variant="outline" class="justify-center">{{ ui.trackLong }}</UButton>
           </div>
@@ -219,26 +225,26 @@ const heroSubtitle = computed(
       </section>
 
       <!-- Trust statements -->
-      <section class="max-w-5xl mx-auto px-4 -mt-6 relative z-[1]">
+      <section class="max-w-6xl mx-auto px-4 -mt-8 relative z-[1]">
         <div class="grid sm:grid-cols-3 gap-4">
-          <UCard v-for="(s, i) in statementCards" :key="i" :ui="{ body: 'p-4 sm:p-4' }">
-            <div class="flex items-start gap-3">
-              <UIcon :name="s.icon" class="text-xl shrink-0 mt-0.5 text-secondary" />
-              <div class="text-sm">{{ s.text }}</div>
+          <UCard v-for="(s, i) in statementCards" :key="i" :ui="{ body: 'p-6 sm:p-6' }">
+            <div class="flex flex-col items-center text-center gap-3">
+              <UIcon :name="s.icon" class="text-3xl text-primary" />
+              <div class="text-sm font-medium">{{ s.text }}</div>
             </div>
           </UCard>
         </div>
       </section>
 
       <!-- How it works -->
-      <section v-if="p?.how_it_works?.length" class="max-w-5xl mx-auto px-4 py-14">
-        <h2 class="text-2xl font-semibold mb-8">{{ ui.howItWorks }}</h2>
-        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div v-for="(step, i) in p.how_it_works" :key="i">
-            <div class="w-9 h-9 rounded-full flex items-center justify-center text-inverted font-semibold mb-3 bg-secondary">
+      <section v-if="p?.how_it_works?.length" class="max-w-6xl mx-auto px-4 py-20">
+        <h2 class="text-2xl sm:text-3xl font-semibold text-center mb-12">{{ ui.howItWorks }}</h2>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div v-for="(step, i) in p.how_it_works" :key="i" class="flex flex-col items-center text-center">
+            <div class="w-12 h-12 rounded-full flex items-center justify-center text-inverted font-bold text-lg mb-4 bg-primary">
               {{ i + 1 }}
             </div>
-            <div class="font-medium mb-1">{{ t(step.title) }}</div>
+            <div class="font-semibold mb-2">{{ t(step.title) }}</div>
             <p class="text-sm text-muted">{{ t(step.description) }}</p>
           </div>
         </div>
@@ -246,34 +252,34 @@ const heroSubtitle = computed(
 
       <!-- Other channels -->
       <section v-if="reachUsItems.length" class="border-y border-default bg-elevated/30">
-        <div class="max-w-5xl mx-auto px-4 py-10">
-          <h2 class="text-xl font-semibold mb-6">{{ ui.otherChannels }}</h2>
-          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div v-for="(c, i) in reachUsItems" :key="i" class="flex items-start gap-3">
-              <UIcon :name="c.icon" class="text-xl shrink-0 mt-0.5 text-primary" />
-              <div>
-                <div class="text-xs text-muted">{{ c.label }}</div>
+        <div class="max-w-6xl mx-auto px-4 py-16">
+          <h2 class="text-2xl sm:text-3xl font-semibold text-center mb-10">{{ ui.otherChannels }}</h2>
+          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <UCard v-for="(c, i) in reachUsItems" :key="i" :ui="{ body: 'p-5' }">
+              <div class="flex flex-col items-center text-center gap-3">
+                <UIcon :name="c.icon" class="text-2xl text-primary" />
+                <div class="text-xs text-muted uppercase tracking-wide">{{ c.label }}</div>
                 <a
                   v-if="'href' in c && c.href"
                   :href="c.href"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="text-sm font-medium text-primary hover:underline"
+                  class="text-sm font-semibold text-primary hover:underline"
                 >
                   {{ c.value }}
                 </a>
-                <div v-else class="text-sm font-medium">{{ c.value }}</div>
+                <div v-else class="text-sm font-semibold">{{ c.value }}</div>
               </div>
-            </div>
+            </UCard>
           </div>
         </div>
       </section>
 
       <!-- About -->
-      <section v-if="p?.about && t(p.about.body)" class="max-w-5xl mx-auto px-4 py-14 w-full">
-        <h2 class="text-2xl font-semibold mb-4">{{ t(p.about.heading) || 'About' }}</h2>
-        <p class="text-muted leading-relaxed whitespace-pre-line">{{ t(p.about.body) }}</p>
-        <div v-if="p.branding.partner_logos?.length" class="flex flex-wrap items-center gap-6 mt-8">
+      <section v-if="p?.about && t(p.about.body)" class="max-w-6xl mx-auto px-4 py-20 w-full">
+        <h2 class="text-2xl sm:text-3xl font-semibold mb-5 text-center">{{ t(p.about.heading) || 'About' }}</h2>
+        <p class="text-muted leading-relaxed whitespace-pre-line max-w-3xl mx-auto text-center">{{ t(p.about.body) }}</p>
+        <div v-if="p.branding.partner_logos?.length" class="flex flex-wrap items-center justify-center gap-8 mt-10">
           <a
             v-for="logo in p.branding.partner_logos"
             :key="logo.name"
@@ -281,21 +287,39 @@ const heroSubtitle = computed(
             target="_blank"
             rel="noopener"
           >
-            <img :src="logo.image_url" :alt="logo.name" :title="logo.name" class="h-12 object-contain" />
+            <img :src="logo.image_url" :alt="logo.name" :title="logo.name" class="h-12 object-contain opacity-80 hover:opacity-100 transition-opacity" />
           </a>
         </div>
       </section>
 
       <!-- FAQ -->
-      <section v-if="faqItems.length" class="max-w-3xl mx-auto px-4 pb-14 w-full">
-        <h2 class="text-2xl font-semibold mb-6">{{ ui.faq }}</h2>
+      <section v-if="faqItems.length" class="max-w-3xl mx-auto px-4 pb-20 w-full">
+        <h2 class="text-2xl sm:text-3xl font-semibold mb-8 text-center">{{ ui.faq }}</h2>
         <UAccordion :items="faqItems" />
+      </section>
+
+      <!-- Closing CTA -->
+      <section class="bg-primary">
+        <div class="max-w-6xl mx-auto px-4 py-16 text-center">
+          <h2 class="text-2xl sm:text-3xl font-bold text-inverted mb-4">
+            {{ locale === 'sw' ? 'Uko tayari kuwasilisha?' : 'Ready to raise a concern?' }}
+          </h2>
+          <p class="text-inverted/80 mb-8 max-w-xl mx-auto">
+            {{ locale === 'sw'
+              ? 'Wasilisha malalamiko yako au fuatilia kesi iliyopo.'
+              : 'Submit a new grievance or check the status of an existing case.' }}
+          </p>
+          <div class="flex flex-col sm:flex-row gap-3 justify-center">
+            <UButton to="/submit" size="lg" color="neutral" variant="solid" class="justify-center">{{ ui.submit }}</UButton>
+            <UButton to="/track" size="lg" color="neutral" variant="outline" class="justify-center">{{ ui.trackLong }}</UButton>
+          </div>
+        </div>
       </section>
     </main>
 
     <!-- Footer -->
     <footer class="border-t border-default py-8 text-sm text-muted">
-      <div class="max-w-5xl mx-auto px-4 grid sm:grid-cols-2 gap-6">
+      <div class="max-w-6xl mx-auto px-4 grid sm:grid-cols-2 gap-6">
         <div>
           <div class="font-medium text-highlighted mb-1">{{ p?.legal_name ?? p?.name }}</div>
           <div v-if="p?.footer?.address">{{ p.footer.address }}</div>
