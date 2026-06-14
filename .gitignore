@@ -10,3 +10,6 @@ dist/
 coverage/
 .DS_Store
 data/
+!apps/api/data/
+apps/api/data/*
+!apps/api/data/kisip-units-import-template.xlsx

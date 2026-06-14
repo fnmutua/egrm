@@ -4,7 +4,10 @@ node_modules
 **/dist
 .git
 .cursor
-specs
+# Spec docs — keep adminunits Excel sources for API image (KISIP import template build)
+specs/*
+!specs/adminunits
+!specs/adminunits/**
 reference
 **/.env
 **/.env.*
