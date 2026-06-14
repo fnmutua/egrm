@@ -21,6 +21,7 @@ interface Widget {
   filters: FilterDef[]; target?: number | null;
   thresholds: Threshold[];
   size?: 'compact' | 'standard' | 'wide' | 'full';
+  unit_level?: string;
 }
 
 interface Section {
@@ -31,7 +32,7 @@ interface Dashboard {
   id: string; title: string; icon?: string;
   audience: { roles: string[]; levels: string[] };
   is_main: boolean; is_public: boolean; layout: string;
-  filter_bar: { period: boolean; unit: boolean; category: boolean };
+  filter_bar: { period: boolean; unit: boolean; category: boolean; unit_level?: string };
   sections: Section[];
 }
 
@@ -126,6 +127,10 @@ const WIDGET_SIZES = [
   { value: 'full', label: 'Full width', help: 'Spans the entire row — use for busy charts.' },
 ];
 const THRESHOLD_COLORS = [{ value: 'success', label: 'Green' }, { value: 'warning', label: 'Amber' }, { value: 'error', label: 'Red' }];
+const CATEGORY_MODES = [
+  { value: 'field', label: 'Case field' },
+  { value: 'unit_level', label: 'Admin unit level' },
+];
 
 const DEFAULT_PACK = [
   { title: 'Operational', icon: 'i-lucide-clipboard-list', audience: { roles: [], levels: [] }, is_main: true, is_public: false, layout: 'grid', filter_bar: { period: true, unit: true, category: false }, sections: [] },
@@ -146,6 +151,29 @@ const fieldValuesLoading = reactive<Record<string, boolean>>({});
 const caseFieldOptions = ref(FALLBACK_CASE_FIELDS);
 const unitRollupOptions = ref(FALLBACK_UNIT_ROLLUPS);
 const groupByOptions = computed(() => [...caseFieldOptions.value, ...unitRollupOptions.value]);
+const hierarchyLevelItems = computed(() =>
+  unitRollupOptions.value.map((o) => ({
+    value: o.value.replace(/^unit_level:/, ''),
+    label: o.label,
+  })),
+);
+const topHierarchyLevel = computed(() => hierarchyLevelItems.value[0]?.value);
+
+function applyDefaultUnitLevels() {
+  const top = topHierarchyLevel.value;
+  if (!top) return;
+  for (const d of props.payload.dashboards as Dashboard[]) {
+    d.filter_bar ??= { period: true, unit: true, category: false };
+    if (d.filter_bar.unit && !d.filter_bar.unit_level) d.filter_bar.unit_level = top;
+  }
+}
+
+function onUnitFilterToggle(dash: Dashboard, enabled: boolean) {
+  dash.filter_bar.unit = enabled;
+  if (enabled && !dash.filter_bar.unit_level && topHierarchyLevel.value) {
+    dash.filter_bar.unit_level = topHierarchyLevel.value;
+  }
+}
 
 async function ensureFieldValues(field: string) {
   if (fieldValuesCache[field] !== undefined || fieldValuesLoading[field]) return;
@@ -189,6 +217,7 @@ onMounted(async () => {
     }>('/api/v1/dashboards/dimensions');
     caseFieldOptions.value = res.case_fields ?? res.case_dimensions ?? FALLBACK_CASE_FIELDS;
     unitRollupOptions.value = res.unit_rollups ?? res.unit_dimensions ?? FALLBACK_UNIT_ROLLUPS;
+    applyDefaultUnitLevels();
   } catch {
     caseFieldOptions.value = FALLBACK_CASE_FIELDS;
     unitRollupOptions.value = FALLBACK_UNIT_ROLLUPS;
@@ -203,12 +232,16 @@ function ensure() {
     d.audience.roles ??= []; d.audience.levels ??= [];
     d.is_main ??= false; d.is_public ??= false; d.layout ??= 'grid';
     d.filter_bar ??= { period: true, unit: true, category: false };
+    if (d.filter_bar.unit && !d.filter_bar.unit_level && topHierarchyLevel.value) {
+      d.filter_bar.unit_level = topHierarchyLevel.value;
+    }
     d.sections ??= [];
     for (const s of d.sections) {
       s.widgets ??= [];
       for (const w of s.widgets) {
         w.metrics ??= []; w.group_by ??= []; w.filters ??= []; w.thresholds ??= [];
         w.size ??= 'standard';
+        syncWidgetUnitLevelFromGroupBy(w);
       }
     }
   }
@@ -463,12 +496,65 @@ function chartProfile(kind: string): ChartProfile {
   return CHART_PROFILES[kind] ?? DEFAULT_PROFILE;
 }
 
+function defaultWidgetUnitLevel(): string | undefined {
+  return activeDash.value?.filter_bar?.unit_level ?? topHierarchyLevel.value;
+}
+
+function syncWidgetUnitLevelFromGroupBy(w: Widget) {
+  const cat = w.group_by[0];
+  if (cat?.startsWith('unit_level:')) {
+    w.unit_level = cat.slice('unit_level:'.length);
+  }
+}
+
+function supportsGeoCategory(kind: string): boolean {
+  const p = chartProfile(kind);
+  return p.categories.show && !usesCaseFieldsOnly(kind) && kind !== 'map';
+}
+
+function widgetCategoryMode(w: Widget): 'field' | 'unit_level' {
+  if (w.chart_kind === 'map') return 'unit_level';
+  const cat = categoryDim(w);
+  if (cat?.startsWith('unit_level:') || w.unit_level) return 'unit_level';
+  return 'field';
+}
+
+function setWidgetCategoryMode(w: Widget, mode: 'field' | 'unit_level') {
+  if (mode === 'unit_level') {
+    const level = w.unit_level ?? defaultWidgetUnitLevel();
+    if (!level) return;
+    onWidgetUnitLevelChange(w, level);
+  } else {
+    w.unit_level = undefined;
+    if (categoryDim(w)?.startsWith('unit_level:')) setCategoryDim(w, undefined);
+  }
+}
+
+function onWidgetUnitLevelChange(w: Widget, level: string) {
+  w.unit_level = level;
+  setCategoryDim(w, `unit_level:${level}`);
+}
+
+function widgetUnitLevelHelp(w: Widget): string {
+  const dashLevel = activeDash.value?.filter_bar?.unit_level;
+  const dashLabel = hierarchyLevelItems.value.find((l) => l.value === dashLevel)?.label;
+  if (dashLevel && w.unit_level === dashLevel) {
+    return `Matches this dashboard's unit filter (${dashLabel ?? dashLevel}). Choose a lower level to drill down.`;
+  }
+  return 'Groups cases by admin units at the selected hierarchy level.';
+}
+
 function categoryDim(w: Widget): string | undefined { return w.group_by[0]; }
 function seriesDim(w: Widget): string | undefined { return w.group_by[1]; }
 
 function setCategoryDim(w: Widget, v: string | undefined) {
   const series = w.group_by[1];
   w.group_by = v ? (series ? [v, series] : [v]) : (series ? [series] : []);
+  if (v?.startsWith('unit_level:')) {
+    w.unit_level = v.slice('unit_level:'.length);
+  } else {
+    w.unit_level = undefined;
+  }
 }
 
 function setSeriesDim(w: Widget, v: string | undefined) {
@@ -507,6 +593,18 @@ function normalizeWidgetForChart(w: Widget, kind: string) {
   }
 
   w.metrics = [];
+
+  if (kind === 'map') {
+    const level = w.unit_level ?? defaultWidgetUnitLevel();
+    if (level) {
+      w.unit_level = level;
+      w.group_by = [`unit_level:${level}`];
+    }
+  } else if (w.unit_level && supportsGeoCategory(kind)) {
+    const dim = `unit_level:${w.unit_level}`;
+    const series = w.group_by[1];
+    w.group_by = series && p.series.show ? [dim, series] : [dim];
+  }
 }
 
 function onChartKindChange(w: Widget, kind: string) {
@@ -517,7 +615,13 @@ function onChartKindChange(w: Widget, kind: string) {
 function widgetConfigIssues(w: Widget): string[] {
   const p = chartProfile(w.chart_kind);
   const issues: string[] = [];
-  if (p.categories.required && !categoryDim(w)) issues.push(`${p.categories.label} is required`);
+  if (p.categories.required) {
+    if (widgetCategoryMode(w) === 'unit_level') {
+      if (!(w.unit_level ?? defaultWidgetUnitLevel())) issues.push('Unit level is required');
+    } else if (!categoryDim(w)) {
+      issues.push(`${p.categories.label} is required`);
+    }
+  }
   if (p.series.required) {
     const hasSeries = p.categories.show ? seriesDim(w) : categoryDim(w);
     if (!hasSeries) issues.push(`${p.series.label} is required`);
@@ -535,7 +639,8 @@ function usesCaseFieldsOnly(kind: string) {
 function categoryFieldOptions(w: Widget) {
   if (w.chart_kind === 'map') return unitRollupOptions.value;
   if (usesCaseFieldsOnly(w.chart_kind)) return caseFieldOptions.value;
-  return groupByOptions.value;
+  if (widgetCategoryMode(w) === 'unit_level') return unitRollupOptions.value;
+  return caseFieldOptions.value;
 }
 
 function seriesFieldOptions(w: Widget) {
@@ -611,9 +716,25 @@ const dashTabClass = (id: string) => [
               <UFormField label="Filter bar">
                 <div class="flex flex-wrap gap-4 mt-1">
                   <label class="flex items-center gap-1.5 text-sm cursor-pointer"><UCheckbox v-model="dash.filter_bar.period" /> Period</label>
-                  <label class="flex items-center gap-1.5 text-sm cursor-pointer"><UCheckbox v-model="dash.filter_bar.unit" /> Unit</label>
+                  <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+                    <UCheckbox :model-value="dash.filter_bar.unit" @update:model-value="onUnitFilterToggle(dash, $event)" /> Unit
+                  </label>
                   <label class="flex items-center gap-1.5 text-sm cursor-pointer"><UCheckbox v-model="dash.filter_bar.category" /> Category</label>
                 </div>
+              </UFormField>
+              <UFormField
+                v-if="dash.filter_bar.unit"
+                label="Unit filter level"
+                help="Admin level for the dashboard unit picker. Defaults to the top of your hierarchy (e.g. National, County)."
+              >
+                <USelectMenu
+                  v-model="dash.filter_bar.unit_level"
+                  :items="hierarchyLevelItems"
+                  value-key="value"
+                  label-key="label"
+                  placeholder="Top level"
+                  class="w-full"
+                />
               </UFormField>
               <div class="flex flex-col gap-2 justify-center">
                 <label class="flex items-center gap-2 text-sm cursor-pointer">
@@ -830,8 +951,56 @@ const dashTabClass = (id: string) => [
                     </div>
                   </template>
 
+                  <template v-if="supportsGeoCategory(widget.chart_kind)">
+                    <UFormField
+                      label="Break down by"
+                      help="Case field uses a cases-table column. Admin unit level rolls cases up to County, Ward, Settlement, etc."
+                    >
+                      <USelectMenu
+                        :model-value="widgetCategoryMode(widget)"
+                        :items="CATEGORY_MODES"
+                        value-key="value"
+                        label-key="label"
+                        class="w-full"
+                        @update:model-value="(v: 'field' | 'unit_level') => setWidgetCategoryMode(widget, v)"
+                      />
+                    </UFormField>
+                    <UFormField
+                      v-if="widgetCategoryMode(widget) === 'unit_level'"
+                      label="Unit level"
+                      :help="widgetUnitLevelHelp(widget)"
+                    >
+                      <USelectMenu
+                        :model-value="widget.unit_level ?? defaultWidgetUnitLevel()"
+                        :items="hierarchyLevelItems"
+                        value-key="value"
+                        label-key="label"
+                        placeholder="Pick level…"
+                        class="w-full"
+                        @update:model-value="(v: string) => onWidgetUnitLevelChange(widget, v)"
+                      />
+                    </UFormField>
+                  </template>
+
                   <UFormField
-                    v-if="chartProfile(widget.chart_kind).categories.show"
+                    v-if="widget.chart_kind === 'map'"
+                    label="Region level"
+                    :help="widgetUnitLevelHelp(widget)"
+                    :required="chartProfile(widget.chart_kind).categories.required"
+                  >
+                    <USelectMenu
+                      :model-value="widget.unit_level ?? defaultWidgetUnitLevel()"
+                      :items="hierarchyLevelItems"
+                      value-key="value"
+                      label-key="label"
+                      placeholder="Pick level…"
+                      class="w-full"
+                      @update:model-value="(v: string) => onWidgetUnitLevelChange(widget, v)"
+                    />
+                  </UFormField>
+
+                  <UFormField
+                    v-if="chartProfile(widget.chart_kind).categories.show && widgetCategoryMode(widget) === 'field'"
                     :label="chartProfile(widget.chart_kind).categories.label"
                     :help="chartProfile(widget.chart_kind).categories.help"
                     :required="chartProfile(widget.chart_kind).categories.required"

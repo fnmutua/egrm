@@ -33,6 +33,8 @@ export interface Widget {
   thresholds?: Threshold[];
   /** Grid footprint + chart density: compact | standard | wide | full */
   size?: 'compact' | 'standard' | 'wide' | 'full';
+  /** Admin hierarchy level for geographic breakdown — sets group_by to unit_level:{code} */
+  unit_level?: string;
 }
 
 export interface Section {
@@ -52,6 +54,6 @@ export interface Dashboard {
   is_main?: boolean;
   is_public?: boolean;
   layout?: string;
-  filter_bar?: { period?: boolean; unit?: boolean; category?: boolean };
+  filter_bar?: { period?: boolean; unit?: boolean; category?: boolean; unit_level?: string };
   sections: Section[];
 }

@@ -215,11 +215,18 @@ export default async function dashboardRoutes(app: FastifyInstance) {
         group: 'unit_rollup' as const,
       }));
 
+      const hierarchyLevels = [...levels].reverse().map((l) => ({
+        code: l.code,
+        label: l.label || l.code,
+      }));
+
       return {
         case_fields: caseFields,
         case_dimensions: caseFields,
         unit_rollups: unitRollups,
         unit_dimensions: unitRollups,
+        hierarchy_levels: hierarchyLevels,
+        default_unit_level: levels.length ? levels[levels.length - 1]!.code : null,
       };
     },
   );

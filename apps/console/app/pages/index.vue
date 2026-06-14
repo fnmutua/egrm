@@ -4,8 +4,11 @@ definePageMeta({ layout: 'shell' });
 import type { Widget } from '~/types/dashboard';
 
 const route = useRoute();
+const { api } = useApi();
 const { user, fetchMe } = useAuth();
 const { loadDashboards, visibleDashboards, loading: dashLoading } = useDashboards();
+
+const hierarchyLevelLabels = ref<Record<string, string>>({});
 
 const activeDashId = ref<string | null>(null);
 const activeDash = computed(
@@ -20,6 +23,11 @@ function widgetGridClass(widget: Widget, layout?: string) {
   return '';
 }
 
+function unitLevelLabel(code?: string) {
+  if (!code) return 'Top level';
+  return hierarchyLevelLabels.value[code] ?? code;
+}
+
 function pickDash(qd?: string) {
   const match = qd && visibleDashboards.value.find((d) => d.id === qd);
   activeDashId.value = match ? match.id : (visibleDashboards.value[0]?.id ?? null);
@@ -28,6 +36,14 @@ function pickDash(qd?: string) {
 onMounted(async () => {
   const me = await fetchMe();
   if (!me) return navigateTo({ path: '/login', query: { reason: 'session_expired' } });
+  try {
+    const res = await api<{ hierarchy_levels?: { code: string; label: string }[] }>('/api/v1/dashboards/dimensions');
+    hierarchyLevelLabels.value = Object.fromEntries(
+      (res.hierarchy_levels ?? []).map((l) => [l.code, l.label]),
+    );
+  } catch {
+    hierarchyLevelLabels.value = {};
+  }
   await loadDashboards();
   pickDash(route.query.d as string | undefined);
 });
@@ -97,7 +113,7 @@ function switchDashboard(id: string) {
             All time
           </UBadge>
           <UBadge v-if="activeDash.filter_bar.unit" variant="outline" color="neutral" icon="i-lucide-map-pin">
-            All units
+            All units · {{ unitLevelLabel(activeDash.filter_bar.unit_level) }}
           </UBadge>
           <UBadge v-if="activeDash.filter_bar.category" variant="outline" color="neutral" icon="i-lucide-tag">
             All categories
