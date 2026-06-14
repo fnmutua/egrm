@@ -30,3 +30,9 @@ The worker (`pnpm dev:worker`) is excluded from `pnpm dev` until Phase 2 — not
 ## Deploy to Railway
 
 See [`docs/deploy-railway.md`](docs/deploy-railway.md) for Docker-based deployment of **api**, **portal**, and **console** with PostgreSQL.
+
+## WhatsApp (Meta templates)
+
+Outbound WhatsApp uses **approved Meta message templates** (CD-09). Copy-paste bodies, CD-09 field mapping, and a rollout checklist:
+
+[`docs/whatsapp-meta-templates.md`](docs/whatsapp-meta-templates.md)

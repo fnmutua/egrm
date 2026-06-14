@@ -10,6 +10,7 @@ import type { Cd10OrgAccess } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
 import { getActiveConfig } from '../services/config.js';
 import { createCase } from '../services/intake.js';
+import { searchIntakeUnits } from '../services/intake-units.js';
 import { piiLookupHash } from '../services/crypto.js';
 import { getAuthPolicy, validatePassword } from '../services/auth-policy.js';
 import {
@@ -78,17 +79,6 @@ export default async function publicRoutes(app: FastifyInstance) {
     const form = formRaw ? normalizeCd06IntakeForms(formRaw) : null;
     if (!form || !hierarchy) return reply.code(503).send({ error: 'tenant_not_configured' });
 
-    const units = await db
-      .select({
-        id: schema.unit.id,
-        levelCode: schema.unit.levelCode,
-        parentId: schema.unit.parentId,
-        name: schema.unit.name,
-      })
-      .from(schema.unit)
-      .where(and(eq(schema.unit.tenantId, req.tenant.id), eq(schema.unit.active, true)))
-      .orderBy(asc(schema.unit.name));
-
     return {
       locales: identity?.locales ?? { default: 'en', enabled: ['en'] },
       anonymous_allowed: form.anonymous_allowed,
@@ -96,7 +86,6 @@ export default async function publicRoutes(app: FastifyInstance) {
       fields: form.fields.filter((f) => f.enabled),
       categories: (taxonomy?.categories ?? []).filter((c) => c.active !== false),
       levels: hierarchy.levels,
-      units,
       notification_channels: notifications ? configuredPartyNotificationChannels(notifications) : [],
       attachments: {
         enabled: form.attachment_policy.intake_enabled,
@@ -120,6 +109,27 @@ export default async function publicRoutes(app: FastifyInstance) {
           .map((k) => ({ code: k.code, label: k.label })),
       },
     };
+  });
+
+  app.get('/api/v1/public/intake-units/search', { config: rateLimit }, async (req, reply) => {
+    const query = z
+      .object({
+        q: z.string().optional(),
+        id: z.string().uuid().optional(),
+        limit: z.coerce.number().int().min(1).max(50).optional(),
+      })
+      .parse(req.query);
+
+    if (!query.q && !query.id) {
+      return reply.code(400).send({ error: 'q_or_id_required' });
+    }
+
+    const units = await searchIntakeUnits(req.tenant.id, {
+      q: query.q,
+      id: query.id,
+      limit: query.limit,
+    });
+    return { units };
   });
 
   app.post('/api/v1/public/cases', { config: rateLimit }, async (req, reply) => {

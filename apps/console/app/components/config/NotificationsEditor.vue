@@ -138,8 +138,7 @@ function ensureSmsSender(sms: Record<string, unknown>) {
 
 function ensureWhatsappSender(wa: Record<string, unknown>) {
   ensureSenderIdentity(wa, 'whatsapp');
-  wa.mode ??= 'test';
-  wa.template_name ??= 'hello_world';
+  wa.mode = 'live';
   wa.template_language ??= 'en_US';
   if (!(wa.headers as ProviderField[] | undefined)?.length) {
     loadWhatsappPreset(wa);
@@ -203,17 +202,13 @@ watch(
   },
 );
 
-watch(
-  () => props.payload.senders?.whatsapp?.mode,
-  (mode) => {
-    const wa = props.payload.senders?.whatsapp;
-    if (!wa) return;
-    if (mode === 'test') {
-      wa.template_name = 'hello_world';
-      wa.template_language = 'en_US';
-    }
-  },
-);
+const waConfigInvalid = computed(() => {
+  const wa = props.payload.senders?.whatsapp;
+  if (!wa?.enabled) return false;
+  if (!String(wa.phone_number_id ?? '').trim()) return true;
+  const templateName = String(wa.template_name ?? '').trim().toLowerCase();
+  return templateName === 'hello_world';
+});
 
 function ensure() {
   const p = props.payload;
@@ -415,9 +410,13 @@ const CHANNEL_LABELS: Record<string, string> = {
   in_app: 'In-app',
 };
 
-const CHANNEL_STARTERS: Record<string, { subject?: string; body: string }> = {
+const CHANNEL_STARTERS: Record<string, { subject?: string; body: string; wa_template_name?: string; wa_template_language?: string; wa_body_param_keys?: string[] }> = {
   sms: { body: '{{tenant.name}}: update on {{case.reference}} — {{tracking.url}}' },
-  whatsapp: { body: '{{tenant.name}}: update on {{case.reference}} — {{tracking.url}}' },
+  whatsapp: {
+    body: '{{tenant.name}}: update on {{case.reference}} — {{tracking.url}}',
+    wa_template_language: 'en_US',
+    wa_body_param_keys: ['party.name', 'case.reference', 'tenant.name', 'tracking.url'],
+  },
   email: {
     subject: 'Update — {{case.reference}}',
     body: 'Your grievance {{case.reference}} has been updated.\nTrack: {{tracking.url}}',
@@ -450,7 +449,31 @@ function templateLocales(tpl: Record<string, unknown>): string[] {
 }
 
 function getVariant(tpl: Record<string, unknown>, locale: string, channel: string) {
-  return (tpl.variants as Record<string, Record<string, { subject?: string; body: string }>>)[locale][channel]!;
+  return (tpl.variants as Record<string, Record<string, Record<string, unknown>>>)[locale][channel]!;
+}
+
+function waParamKeysStr(variant: Record<string, unknown>): string {
+  const keys = variant.wa_body_param_keys as string[] | undefined;
+  return keys?.join(', ') ?? '';
+}
+
+function setWaParamKeys(variant: Record<string, unknown>, raw: string) {
+  variant.wa_body_param_keys = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function senderParamKeysStr(sender: Record<string, unknown>): string {
+  const keys = sender.template_body_param_keys as string[] | undefined;
+  return keys?.join(', ') ?? '';
+}
+
+function setSenderParamKeys(sender: Record<string, unknown>, raw: string) {
+  sender.template_body_param_keys = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function addChannel(tpl: Record<string, unknown>, locale: string, channel: string) {
@@ -894,6 +917,34 @@ function varToken(name: string) {
                     class="w-full font-mono text-xs p-2 rounded border border-default bg-elevated/40"
                     :placeholder="`${ch} body — use {{case.reference}} etc.`"
                   />
+                  <div v-if="ch === 'whatsapp'" class="mt-2 grid sm:grid-cols-2 gap-2">
+                    <UFormField label="Meta template" help="Approved template name in Meta Business Manager. Overrides sender default.">
+                      <UInput
+                        v-model="getVariant(tpl, loc, ch).wa_template_name"
+                        class="w-full font-mono text-xs"
+                        placeholder="kisip_case_registered"
+                      />
+                    </UFormField>
+                    <UFormField label="Template language">
+                      <UInput
+                        v-model="getVariant(tpl, loc, ch).wa_template_language"
+                        class="w-full font-mono text-xs"
+                        placeholder="en_US"
+                      />
+                    </UFormField>
+                    <UFormField
+                      label="Body parameters"
+                      help="Comma-separated {{var}} keys mapped to {{1}}, {{2}}, … in the Meta template body."
+                      class="sm:col-span-2"
+                    >
+                      <UInput
+                        :model-value="waParamKeysStr(getVariant(tpl, loc, ch))"
+                        class="w-full font-mono text-xs"
+                        placeholder="party.name, case.reference, tenant.name, tracking.url"
+                        @update:model-value="setWaParamKeys(getVariant(tpl, loc, ch), $event)"
+                      />
+                    </UFormField>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1134,14 +1185,6 @@ function varToken(name: string) {
             <UIcon name="i-lucide-message-circle" class="size-4 text-primary shrink-0" />
             <span class="text-sm font-medium">WhatsApp</span>
             <UBadge v-if="!payload.senders.whatsapp.enabled" size="sm" variant="subtle" color="neutral">Off</UBadge>
-            <UBadge
-              v-else-if="payload.senders.whatsapp.mode === 'test'"
-              size="sm"
-              variant="subtle"
-              color="warning"
-            >
-              Test
-            </UBadge>
           </div>
           <div class="flex items-center gap-2 shrink-0" @click.stop>
             <USwitch v-model="payload.senders.whatsapp.enabled" size="sm" />
@@ -1153,54 +1196,46 @@ function varToken(name: string) {
         </div>
         <div v-if="senderExpanded.has('whatsapp')" class="border-t border-default px-4 py-3 space-y-3">
         <div v-if="payload.senders.whatsapp.enabled" class="space-y-3">
-          <UFormField
-            label="Environment"
-            help="Test uses Meta sandbox (hello_world template; recipients must be on your sandbox To list). Live sends plain text via the Graph API URL below."
-          >
-            <USelectMenu
-              v-model="payload.senders.whatsapp.mode"
-              :items="[
-                { value: 'test', label: 'Test (sandbox)' },
-                { value: 'live', label: 'Live (production)' },
-              ]"
-              value-key="value"
-              label-key="label"
-              class="w-full"
-            />
-          </UFormField>
           <UAlert
-            v-if="payload.senders.whatsapp.mode === 'test'"
-            color="warning"
+            v-if="waConfigInvalid"
+            color="error"
             variant="subtle"
-            icon="i-lucide-flask-conical"
-            title="Sandbox mode"
-            description="Sends hello_world only. Add each recipient number to Meta → WhatsApp → API Setup → To."
+            icon="i-lucide-triangle-alert"
+            title="WhatsApp not ready"
+            description="Set phone number ID, Authorization Bearer token, and replace hello_world with an approved Meta template."
+          />
+          <UAlert
+            v-else
+            color="info"
+            variant="subtle"
+            icon="i-lucide-info"
+            title="Meta message templates"
+            description="Business-initiated WhatsApp uses approved Meta templates. Set a default template below or per notification rule. The body text is kept for preview and logs."
           />
           <div class="grid sm:grid-cols-2 gap-3">
+            <UFormField label="Default Meta template" help="Fallback when a notification rule omits its own template name.">
+              <UInput v-model="payload.senders.whatsapp.template_name" class="w-full font-mono" placeholder="kisip_case_registered" />
+            </UFormField>
+            <UFormField label="Default template language">
+              <UInput v-model="payload.senders.whatsapp.template_language" class="w-full font-mono" placeholder="en_US" />
+            </UFormField>
+            <UFormField
+              label="Default body parameters"
+              help="Comma-separated {{var}} keys for the default template body."
+              class="sm:col-span-2"
+            >
+              <UInput
+                :model-value="senderParamKeysStr(payload.senders.whatsapp)"
+                class="w-full font-mono text-xs"
+                placeholder="party.name, case.reference, tenant.name, tracking.url"
+                @update:model-value="setSenderParamKeys(payload.senders.whatsapp, $event)"
+              />
+            </UFormField>
             <UFormField label="Display number" help="Business number shown to recipients (E.164).">
               <UInput v-model="payload.senders.whatsapp.display_number" class="w-full" placeholder="+254…" />
             </UFormField>
             <UFormField label="Phone number ID" help="Numeric ID from Meta → WhatsApp → API Setup (not your +254 display number).">
-              <UInput v-model="payload.senders.whatsapp.phone_number_id" class="w-full font-mono" placeholder="1107744639097239" />
-            </UFormField>
-            <UFormField
-              label="Template name"
-              :help="payload.senders.whatsapp.mode === 'test' ? 'Locked to hello_world in test mode.' : 'Meta-approved template name for business-initiated messages.'"
-            >
-              <UInput
-                v-model="payload.senders.whatsapp.template_name"
-                class="w-full font-mono"
-                placeholder="hello_world"
-                :disabled="payload.senders.whatsapp.mode === 'test'"
-              />
-            </UFormField>
-            <UFormField label="Template language" :help="payload.senders.whatsapp.mode === 'test' ? 'Locked to en_US in test mode.' : undefined">
-              <UInput
-                v-model="payload.senders.whatsapp.template_language"
-                class="w-full font-mono"
-                placeholder="en_US"
-                :disabled="payload.senders.whatsapp.mode === 'test'"
-              />
+              <UInput v-model="payload.senders.whatsapp.phone_number_id" class="w-full font-mono" placeholder="1150176101510853" />
             </UFormField>
             <UFormField label="Provider preset">
               <USelectMenu

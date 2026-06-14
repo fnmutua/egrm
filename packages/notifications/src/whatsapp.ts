@@ -31,34 +31,43 @@ function apiUrl(cfg: WhatsAppSenderConfig): string {
   return `https://graph.facebook.com/${META_WHATSAPP_API_VERSION}/${phoneNumberId}/messages`;
 }
 
-function buildTemplatePayload(cfg: WhatsAppSenderConfig, message: OutboundWhatsApp) {
-  const isTest = (cfg.mode ?? 'test') === 'test';
-  const name = isTest
-    ? 'hello_world'
-    : message.templateName?.trim() || cfg.template_name?.trim() || 'hello_world';
-  const language = isTest
-    ? 'en_US'
-    : message.templateLanguage?.trim() || cfg.template_language?.trim() || 'en_US';
-  const params = isTest ? [] : (message.templateBodyParams ?? []).filter((p) => p.trim().length > 0);
-
-  const template: Record<string, unknown> = {
-    name,
-    language: { code: language },
-  };
-
-  if (params.length > 0) {
-    template.components = [
-      {
-        type: 'body',
-        parameters: params.map((text) => ({ type: 'text', text })),
-      },
-    ];
+function metaRequestBody(to: string, message: OutboundWhatsApp): Record<string, unknown> {
+  const templateName = message.templateName?.trim();
+  if (templateName) {
+    const language = message.templateLanguage?.trim() || 'en_US';
+    const parameters = (message.templateParams ?? []).map((text) => ({
+      type: 'text',
+      text: String(text),
+    }));
+    const template: Record<string, unknown> = {
+      name: templateName,
+      language: { code: language },
+    };
+    if (parameters.length > 0) {
+      template.components = [{ type: 'body', parameters }];
+    }
+    return {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'template',
+      template,
+    };
   }
 
-  return template;
+  const bodyText = message.body?.trim();
+  if (!bodyText) {
+    throw new DeliveryError('Empty WhatsApp message body', 'meta', false);
+  }
+
+  return {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'text',
+    text: { body: bodyText },
+  };
 }
 
-/** Send a WhatsApp message via Meta Cloud API (CD-09 senders.whatsapp). */
+/** Send via Meta Cloud API — template when templateName is set, otherwise plain text. */
 async function sendMetaWhatsApp(
   cfg: WhatsAppSenderConfig,
   message: OutboundWhatsApp,
@@ -66,33 +75,13 @@ async function sendMetaWhatsApp(
   const to = formatMobileNumber(message.to);
   if (!to) throw new DeliveryError('Invalid WhatsApp recipient phone', 'meta', false);
 
-  const isLive = (cfg.mode ?? 'test') === 'live';
-  const bodyText = message.body?.trim();
-  if (isLive && !bodyText) {
-    throw new DeliveryError('Empty WhatsApp body for live text message', 'meta', false);
-  }
-
-  const payload = isLive
-    ? {
-        messaging_product: 'whatsapp',
-        to,
-        type: 'text',
-        text: { body: bodyText },
-      }
-    : {
-        messaging_product: 'whatsapp',
-        to,
-        type: 'template',
-        template: buildTemplatePayload(cfg, message),
-      };
-
   const res = await fetch(apiUrl(cfg), {
     method: 'POST',
     headers: {
       Authorization: authHeader(cfg),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(metaRequestBody(to, message)),
   });
 
   const text = await res.text();
@@ -113,8 +102,7 @@ async function sendMetaWhatsApp(
   }
 
   const status = msg?.message_status ?? 'sent';
-  const envTag = (cfg.mode ?? 'test') === 'live' ? 'live' : 'test';
-  return { messageId: `${messageId}:${status}`, provider: `meta:${envTag}` };
+  return { messageId: `${messageId}:${status}`, provider: 'meta:live' };
 }
 
 /** Route WhatsApp via Meta Cloud API or configurable HTTP (CD-09 senders.whatsapp). */

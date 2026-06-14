@@ -19,7 +19,7 @@ export interface SmsSenderConfig extends ChannelApiConfig {
 }
 
 export interface WhatsAppSenderConfig extends ChannelApiConfig {
-  mode?: 'test' | 'live';
+  mode?: 'live';
   phone_number_id?: string;
   display_number?: string;
   template_name?: string;
@@ -40,11 +40,13 @@ export interface OutboundSms {
 
 export interface OutboundWhatsApp {
   to: string;
-  /** Rendered preview / log text (not sent when using Meta templates). */
+  /** Rendered preview / fallback plain-text body. */
   body: string;
+  /** Meta-approved template name (business-initiated sends). */
   templateName?: string;
   templateLanguage?: string;
-  templateBodyParams?: string[];
+  /** Values for template body {{1}}, {{2}}, … in order. */
+  templateParams?: string[];
 }
 
 export interface SendResult {

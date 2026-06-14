@@ -643,7 +643,7 @@ export async function runSeed() {
   // WhatsApp Meta Cloud API — set phone_number_id + Bearer token in console → Sender identities
   kisipNotifications.senders.whatsapp.enabled = true;
   kisipNotifications.senders.whatsapp.provider = 'meta';
-  kisipNotifications.senders.whatsapp.mode = 'test';
+  kisipNotifications.senders.whatsapp.mode = 'live';
 
   await ensureCd09Notifications(kisip!.id, kisipNotifications, admin!.id);
 

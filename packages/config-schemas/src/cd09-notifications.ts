@@ -70,6 +70,7 @@ export const TEMPLATE_VARIABLES = [
   'case.update_summary',
   'tenant.name',
   'tenant.short_name',
+  'party.name',
   'actor.name',
   'tracking.link',
   'tracking.url',
@@ -292,7 +293,13 @@ const whatsappTemplateBody = templateChannelBody.extend({
 type TemplateVariants = Record<string, {
   sms?: { body: string; subject?: string };
   email?: { body: string; subject?: string };
-  whatsapp?: { body: string; subject?: string };
+  whatsapp?: {
+    body: string;
+    subject?: string;
+    wa_template_name?: string;
+    wa_template_language?: string;
+    wa_body_param_keys?: string[];
+  };
   in_app?: { body: string };
 }>;
 
@@ -344,17 +351,17 @@ export const smsSenderIdentity = channelApiConfig.extend({
   bulk_api_url: z.string().optional(),
 });
 
-export const WHATSAPP_SENDER_MODES = ['test', 'live'] as const;
+export const WHATSAPP_SENDER_MODES = ['live'] as const;
 
 export const whatsappSenderIdentity = channelApiConfig.extend({
-  /** Test = Meta sandbox (hello_world, sandbox recipient list). Live = production number + approved templates. */
-  mode: z.enum(WHATSAPP_SENDER_MODES).default('test'),
+  /** Production Meta Cloud API — uses approved message templates for business-initiated sends. */
+  mode: z.literal('live').default('live'),
   phone_number_id: z.string().optional(),
   display_number: z.string().optional(),
-  /** Meta-approved template name (e.g. hello_world). Required for business-initiated messages. */
-  template_name: z.string().default('hello_world'),
-  template_language: z.string().default('en_US'),
-  /** Optional {{1}}, {{2}}… parameter keys from notification template variables. */
+  /** Default Meta template when a notification rule omits wa_template_name. */
+  template_name: z.string().optional(),
+  template_language: z.string().default('en_US').optional(),
+  /** Ordered {{var}} keys mapped to template body {{1}}, {{2}}, … */
   template_body_param_keys: z.array(z.string()).optional(),
 });
 
@@ -407,6 +414,14 @@ export const cd09Notifications = z
       data.status_change_alerts = { ...DEFAULT_STATUS_CHANGE_ALERTS };
     } else if (!data.status_change_alerts.complainant_exclude_statuses?.length) {
       data.status_change_alerts.complainant_exclude_statuses = [...DEFAULT_STATUS_CHANGE_ALERTS.complainant_exclude_statuses];
+    }
+
+    const senders = (data as { senders?: { whatsapp?: Record<string, unknown> } }).senders;
+    if (senders?.whatsapp) {
+      senders.whatsapp.mode = 'live';
+      if (!senders.whatsapp.template_language) {
+        senders.whatsapp.template_language = 'en_US';
+      }
     }
 
     return data;
@@ -513,6 +528,25 @@ export const cd09Notifications = z
         message: `Unknown template "${cfg.status_change_alerts.template}"`,
       });
     }
+
+    const wa = cfg.senders?.whatsapp;
+    if (wa?.enabled !== false) {
+      if (!wa.phone_number_id?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['senders', 'whatsapp', 'phone_number_id'],
+          message: 'Phone number ID is required for WhatsApp.',
+        });
+      }
+      const templateName = wa.template_name?.trim().toLowerCase();
+      if (templateName === 'hello_world') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['senders', 'whatsapp', 'template_name'],
+          message: 'hello_world is Meta sandbox-only — use an approved production template name.',
+        });
+      }
+    }
   });
 
 export type Cd09Notifications = z.infer<typeof cd09Notifications>;
@@ -594,7 +628,10 @@ export function defaultNotificationPack(): Cd09Notifications {
             body: '{{tenant.name}}: your grievance {{case.reference}} is registered. Track: {{tracking.url}}',
           },
           whatsapp: {
-            body: '{{tenant.name}}: your grievance {{case.reference}} is registered. Track: {{tracking.url}}',
+            body: 'Hello {{party.name}}, your grievance reference {{case.reference}} has been registered with {{tenant.name}}. You may track progress and view status updates at any time using this link: {{tracking.url}} Thank you.',
+            wa_template_name: 'kisip_case_registered',
+            wa_template_language: 'en_US',
+            wa_body_param_keys: ['party.name', 'case.reference', 'tenant.name', 'tracking.url'],
           },
           email: {
             subject: 'Grievance registered — {{case.reference}}',
@@ -609,7 +646,10 @@ export function defaultNotificationPack(): Cd09Notifications {
             body: '{{tenant.name}}: malalamiko {{case.reference}} yamepokelewa. Fuatilia: {{tracking.url}}',
           },
           whatsapp: {
-            body: '{{tenant.name}}: malalamiko {{case.reference}} yamepokelewa. Fuatilia: {{tracking.url}}',
+            body: 'Habari {{party.name}}, rejeleo la malalamiko {{case.reference}} limepokelewa na {{tenant.name}}. Unaweza kufuatilia hali kwa kiungo hiki: {{tracking.url}} Asante.',
+            wa_template_name: 'kisip_case_registered',
+            wa_template_language: 'en_US',
+            wa_body_param_keys: ['party.name', 'case.reference', 'tenant.name', 'tracking.url'],
           },
           email: {
             subject: 'Malalamiko yamepokelewa — {{case.reference}}',
@@ -628,7 +668,7 @@ export function defaultNotificationPack(): Cd09Notifications {
       variants: {
         en: {
           sms: { body: '{{tenant.name}}: reference {{case.reference}} registered. Track: {{tracking.url}}' },
-          whatsapp: { body: '{{tenant.name}}: reference {{case.reference}} registered. Track: {{tracking.url}}' },
+          whatsapp: { body: 'Hello {{party.name}}, your grievance reference {{case.reference}} has been registered with {{tenant.name}}. You may track progress and view status updates at any time using this link: {{tracking.url}} Thank you.', wa_template_name: 'kisip_case_registered', wa_template_language: 'en_US', wa_body_param_keys: ['party.name', 'case.reference', 'tenant.name', 'tracking.url'] },
           email: {
             subject: 'Reference {{case.reference}}',
             body: 'Your submission {{case.reference}} has been registered.\nTrack: {{tracking.url}}',
@@ -636,7 +676,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         },
         sw: {
           sms: { body: '{{tenant.name}}: rejeleo {{case.reference}} limepokelewa. Fuatilia: {{tracking.url}}' },
-          whatsapp: { body: '{{tenant.name}}: rejeleo {{case.reference}} limepokelewa. Fuatilia: {{tracking.url}}' },
+          whatsapp: { body: 'Habari {{party.name}}, rejeleo {{case.reference}} limepokelewa na {{tenant.name}}. Fuatilia: {{tracking.url}} Asante.', wa_template_name: 'kisip_case_registered', wa_template_language: 'en_US', wa_body_param_keys: ['party.name', 'case.reference', 'tenant.name', 'tracking.url'] },
           email: {
             subject: 'Rejeleo {{case.reference}}',
             body: 'Wasilisho lako {{case.reference}} limepokelewa.\nFuatilia: {{tracking.url}}',
@@ -655,6 +695,9 @@ export function defaultNotificationPack(): Cd09Notifications {
           },
           whatsapp: {
             body: '{{case.reference}}: {{case.status_label}}. {{case.update_summary}} {{tracking.url}}',
+            wa_template_name: 'kisip_status_update',
+            wa_template_language: 'en_US',
+            wa_body_param_keys: ['case.reference', 'case.status_label'],
           },
           email: {
             subject: 'Update on {{case.reference}}',
@@ -668,6 +711,9 @@ export function defaultNotificationPack(): Cd09Notifications {
           },
           whatsapp: {
             body: '{{case.reference}}: {{case.status_label}}. {{case.update_summary}} {{tracking.url}}',
+            wa_template_name: 'kisip_status_update',
+            wa_template_language: 'en_US',
+            wa_body_param_keys: ['case.reference', 'case.status_label'],
           },
           email: {
             subject: 'Taarifa kuhusu {{case.reference}}',
@@ -1041,9 +1087,9 @@ export function defaultNotificationPack(): Cd09Notifications {
         fields: cloneProviderFields(metaWhatsapp.fields),
         phone_number_id: '',
         display_number: '',
-        mode: 'test',
-        template_name: 'hello_world',
+        mode: 'live',
         template_language: 'en_US',
+        template_body_param_keys: ['party.name', 'case.reference', 'tenant.name', 'tracking.url'],
       },
     },
     quiet_hours: {

@@ -3,7 +3,7 @@ const API_HEALTH_URL = process.env.API_HEALTH_URL ?? 'http://localhost:4100/heal
 const MAX_WAIT_MS = Number(process.env.API_WAIT_MS ?? 120_000);
 const INTERVAL_MS = 500;
 
-async function healthy(): Promise<boolean> {
+async function healthy() {
   try {
     const res = await fetch(API_HEALTH_URL, { signal: AbortSignal.timeout(2_000) });
     return res.ok;

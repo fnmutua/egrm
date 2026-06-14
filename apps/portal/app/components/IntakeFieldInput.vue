@@ -15,6 +15,10 @@ const label = computed(() => props.field.label[props.locale] ?? props.field.labe
 <template>
   <UFormField :label="label" :required="field.required">
     <UTextarea v-if="field.type === 'textarea'" v-model="model as string" class="w-full" :rows="4" />
+    <IntakeUnitSelect
+      v-else-if="field.type === 'select' && field.options_ref === 'units'"
+      v-model="model as string"
+    />
     <USelectMenu
       v-else-if="field.type === 'select'"
       v-model="model as string"

@@ -8,6 +8,14 @@ import { env } from '../env.js';
 
 type RecipientSelector = NotificationRule['to'][number];
 
+type WhatsAppTemplateVariant = {
+  body: string;
+  subject?: string;
+  wa_template_name?: string;
+  wa_template_language?: string;
+  wa_body_param_keys?: string[];
+};
+
 export function renderTemplateBody(
   cfg: Cd09Notifications,
   templateId: string,
@@ -27,29 +35,38 @@ export function renderTemplateBody(
   return { subject, body };
 }
 
-function whatsappSendOptions(
+/** Resolve Meta template name, language, and body parameters for WhatsApp dispatch. */
+export function whatsappSendOptions(
   cfg: Cd09Notifications,
   templateId: string,
   locale: string,
   vars: Record<string, string>,
-  body: string,
-): { body: string; templateName?: string; templateLanguage?: string; templateBodyParams?: string[] } {
+): {
+  body: string;
+  templateName?: string;
+  templateLanguage?: string;
+  templateParams?: string[];
+} {
+  const { body } = renderTemplateBody(cfg, templateId, locale, 'whatsapp', vars);
   const tpl = cfg.templates.find((t) => t.id === templateId);
-  const variant =
-    tpl?.variants[locale]?.whatsapp ??
-    tpl?.variants.en?.whatsapp;
+  const localeVariants = tpl?.variants[locale] ?? tpl?.variants.en;
+  const variant = (localeVariants?.whatsapp ?? localeVariants?.sms) as WhatsAppTemplateVariant | undefined;
   const sender = cfg.senders.whatsapp;
-  const isTest = (sender?.mode ?? 'test') === 'test';
+
+  const templateName = variant?.wa_template_name?.trim() || sender.template_name?.trim();
+  if (!templateName) {
+    return { body };
+  }
+
+  const templateLanguage =
+    variant?.wa_template_language?.trim() || sender.template_language?.trim() || 'en_US';
   const paramKeys =
-    variant?.wa_body_param_keys ??
-    sender?.template_body_param_keys ??
-    [];
-  return {
-    body,
-    templateName: isTest ? 'hello_world' : variant?.wa_template_name ?? sender?.template_name ?? 'hello_world',
-    templateLanguage: isTest ? 'en_US' : variant?.wa_template_language ?? sender?.template_language ?? 'en_US',
-    templateBodyParams: isTest ? [] : paramKeys.map((key) => vars[key] ?? ''),
-  };
+    variant?.wa_body_param_keys?.length
+      ? variant.wa_body_param_keys
+      : sender.template_body_param_keys ?? [];
+  const templateParams = paramKeys.map((key: string) => vars[key] ?? '');
+
+  return { body, templateName, templateLanguage, templateParams };
 }
 
 async function ancestorUnitIds(tenantId: string, unitId: string | null): Promise<Set<string>> {
@@ -156,17 +173,22 @@ async function buildTemplateVars(
     status: string;
     levelCode: string;
     unitId: string | null;
+    partyId: string | null;
   },
 ): Promise<Record<string, string>> {
-  const [identity, unitRow] = await Promise.all([
+  const [identity, unitRow, partyRow] = await Promise.all([
     getActiveConfig<Cd01Identity>(tenantId, 'cd01_identity'),
     caseRow.unitId
       ? db.select({ name: schema.unit.name }).from(schema.unit).where(eq(schema.unit.id, caseRow.unitId)).limit(1)
+      : Promise.resolve([]),
+    caseRow.partyId
+      ? db.select({ nameEnc: schema.party.nameEnc }).from(schema.party).where(eq(schema.party.id, caseRow.partyId)).limit(1)
       : Promise.resolve([]),
   ]);
 
   const tenantName = identity?.name ?? 'GRM';
   const trackUrl = `${env.PUBLIC_PORTAL_BASE_URL.replace(/\/$/, '')}/track?ref=${encodeURIComponent(caseRow.reference)}`;
+  const partyName = partyRow[0]?.nameEnc ? decryptPII(partyRow[0].nameEnc) : '';
 
   return {
     'case.reference': caseRow.reference,
@@ -176,6 +198,7 @@ async function buildTemplateVars(
     'case.unit_name': unitRow[0]?.name ?? caseRow.levelCode,
     'tenant.name': tenantName,
     'tenant.short_name': tenantName.split(/\s+/)[0] ?? tenantName,
+    'party.name': partyName || 'Complainant',
     'tracking.url': trackUrl,
     'tracking.link': caseRow.reference,
     'date.today': new Date().toISOString().slice(0, 10),
@@ -205,10 +228,17 @@ async function deliverMessage(
     return sendSms(cfg.senders.sms, { to, body });
   }
   if (channel === 'whatsapp') {
-    const waOpts = opts
-      ? whatsappSendOptions(cfg, opts.templateId, opts.locale, opts.vars, body)
-      : { body, templateName: cfg.senders.whatsapp?.template_name, templateLanguage: cfg.senders.whatsapp?.template_language };
-    return sendWhatsApp(cfg.senders.whatsapp, { to, ...waOpts });
+    const wa =
+      opts != null
+        ? whatsappSendOptions(cfg, opts.templateId, opts.locale, opts.vars)
+        : { body };
+    return sendWhatsApp(cfg.senders.whatsapp, {
+      to,
+      body: wa.body,
+      templateName: wa.templateName,
+      templateLanguage: wa.templateLanguage,
+      templateParams: wa.templateParams,
+    });
   }
   if (channel === 'in_app') {
     return { messageId: `in_app-${Date.now()}`, provider: 'in_app' };
@@ -290,6 +320,7 @@ export async function dispatchNotificationOutbox(outboxId: string): Promise<void
         'case.unit_name': '',
         'tenant.name': 'GRM',
         'tenant.short_name': 'GRM',
+        'party.name': 'Complainant',
         'tracking.url': env.PUBLIC_PORTAL_BASE_URL,
         'tracking.link': '',
         'date.today': new Date().toISOString().slice(0, 10),

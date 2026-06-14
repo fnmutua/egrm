@@ -1,33 +1,32 @@
 import pg from 'pg';
+import { readFileSync } from 'node:fs';
+
+for (const line of readFileSync('.env', 'utf8').split('\n')) {
+  const m = line.match(/^([^#=]+)=(.*)$/);
+  if (m) process.env[m[1].trim()] = m[2].trim();
+}
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL ?? 'postgres://postgres:Admin%402011@localhost:5432/egrm',
 });
 
 const logs = await pool.query(`
-  SELECT status, template_id, rendered_preview, provider_message_id, attempts, updated_at
-  FROM notification_log
-  WHERE channel = 'whatsapp'
-  ORDER BY updated_at DESC
+  SELECT nl.status, nl.channel, nl.provider_message_id, nl.rendered_preview, nl.updated_at, c.reference
+  FROM notification_log nl
+  LEFT JOIN grm_case c ON c.id = nl.case_id
+  WHERE nl.channel = 'whatsapp'
+  ORDER BY nl.updated_at DESC
   LIMIT 15
 `);
-console.log('=== WhatsApp notification_log (latest) ===');
-for (const row of logs.rows) {
-  console.log(JSON.stringify(row, null, 2));
-}
+console.log('=== Recent WhatsApp logs ===');
+console.log(JSON.stringify(logs.rows, null, 2));
 
-const active = await pool.query(`
-  SELECT cv.version, cv.status,
-         cv.payload->'senders'->'whatsapp'->'mode' as mode,
-         cv.payload->'senders'->'whatsapp'->'phone_number_id' as phone_number_id,
-         cv.payload->'senders'->'whatsapp'->'template_name' as template_name,
-         length(cv.payload->'senders'->'whatsapp'->'headers'->0->>'value') as auth_len
-  FROM config_version cv
-  JOIN tenant t ON t.id = cv.tenant_id
-  WHERE t.code = 'kisip' AND cv.domain = 'cd09_notifications' AND cv.status = 'active'
-  LIMIT 1
+const wa = await pool.query(`
+  SELECT cv.payload->'senders'->'whatsapp' as wa
+  FROM config_version cv JOIN tenant t ON t.id = cv.tenant_id
+  WHERE t.code = 'kisip' AND cv.domain = 'cd09_notifications' AND cv.status = 'active' LIMIT 1
 `);
-console.log('\n=== Active CD-09 WhatsApp config ===');
-console.log(JSON.stringify(active.rows[0] ?? null, null, 2));
+console.log('\n=== Active WA sender config ===');
+console.log(JSON.stringify(wa.rows[0].wa, null, 2));
 
 await pool.end();
