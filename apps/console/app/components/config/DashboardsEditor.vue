@@ -1,64 +1,35 @@
 <script setup lang="ts">
 /**
- * CD-15 Dashboards: tenant dashboard builder — dashboards → sections → widgets.
- * Structure: dashboard (settings, audience, filter bar) → section (title, order) → widget (chart kind, dataset, measures, filters…)
+ * CD-15 Dashboards — three subsection views:
+ *   sec-dashboards  → card grid of dashboards; click to expand settings
+ *   sec-sections    → section list for active dashboard; click to expand settings
+ *   sec-widgets     → widget list for active section; click to expand editor
+ *
+ * activeDashId / activeSectionId persist across subsection navigation.
  */
 
 // ---- Types ----
 
-interface FilterDef {
-  field: string;
-  op: string;
-  value: unknown;
-}
-
-interface Threshold {
-  value: number;
-  color: 'success' | 'warning' | 'error';
-  label?: string;
-}
-
-interface Metric {
-  measure: string;
-  aggregation: string;
-  label: string;
-}
+interface FilterDef { field: string; op: string; value: unknown }
+interface Threshold { value: number; color: 'success' | 'warning' | 'error'; label?: string }
+interface Metric { measure: string; aggregation: string; label: string }
 
 interface Widget {
-  id: string;
-  title: string;
-  chart_kind: string;
-  dataset: string;
-  measure: string;
-  aggregation: string;
-  metrics: Metric[];
-  group_by: string[];
-  time_dimension?: string;
-  bucket?: string;
-  filters: FilterDef[];
-  target?: number | null;
-  thresholds: Threshold[];
-  drill_down?: string | null;
-  caption?: string | null;
+  id: string; title: string; chart_kind: string; dataset: string;
+  measure: string; aggregation: string; metrics: Metric[];
+  group_by: string[]; time_dimension?: string; bucket?: string;
+  filters: FilterDef[]; target?: number | null;
+  thresholds: Threshold[]; drill_down?: string | null; caption?: string | null;
 }
 
 interface Section {
-  id: string;
-  title: string;
-  icon?: string;
-  color?: string;
-  order: number;
-  widgets: Widget[];
+  id: string; title: string; icon?: string; color?: string; order: number; widgets: Widget[];
 }
 
 interface Dashboard {
-  id: string;
-  title: string;
-  icon?: string;
+  id: string; title: string; icon?: string;
   audience: { roles: string[]; levels: string[] };
-  is_main: boolean;
-  is_public: boolean;
-  layout: string;
+  is_main: boolean; is_public: boolean; layout: string;
   filter_bar: { period: boolean; unit: boolean; category: boolean };
   sections: Section[];
 }
@@ -66,18 +37,15 @@ interface Dashboard {
 // ---- Constants ----
 
 const DATASETS = [
-  { value: 'cases', label: 'Cases', description: 'Case records with status, category, channel, unit, priority' },
-  { value: 'case_events', label: 'Case events', description: 'Timeline events: created, transitioned, assigned, resolved' },
-  { value: 'sla_clocks', label: 'SLA clocks', description: 'Acknowledgement, response, resolution targets and actuals' },
-  { value: 'satisfaction', label: 'Satisfaction', description: 'Complainant satisfaction responses' },
-  { value: 'cases_sensitive_aggregate', label: 'Sensitive aggregate', description: 'Pre-aggregated sensitive case data (minimum cell size enforced)' },
+  { value: 'cases', label: 'Cases' }, { value: 'case_events', label: 'Case events' },
+  { value: 'sla_clocks', label: 'SLA clocks' }, { value: 'satisfaction', label: 'Satisfaction' },
+  { value: 'cases_sensitive_aggregate', label: 'Sensitive aggregate' },
 ];
-
 const CHART_KINDS = [
   { value: 'kpi_card', label: 'KPI Card', icon: 'i-lucide-square-dashed' },
   { value: 'bar', label: 'Bar', icon: 'i-lucide-bar-chart-2' },
   { value: 'stacked_bar', label: 'Stacked bar', icon: 'i-lucide-bar-chart' },
-  { value: 'stacked_bar_100', label: 'Stacked bar 100%', icon: 'i-lucide-bar-chart' },
+  { value: 'stacked_bar_100', label: 'Stacked 100%', icon: 'i-lucide-bar-chart' },
   { value: 'line', label: 'Line', icon: 'i-lucide-trending-up' },
   { value: 'multi_line', label: 'Multi-line', icon: 'i-lucide-activity' },
   { value: 'area', label: 'Area', icon: 'i-lucide-area-chart' },
@@ -88,130 +56,58 @@ const CHART_KINDS = [
   { value: 'table', label: 'Table', icon: 'i-lucide-table' },
   { value: 'pyramid', label: 'Pyramid', icon: 'i-lucide-triangle' },
 ];
-
 const AGGREGATIONS = [
-  { value: 'count', label: 'Count' },
-  { value: 'count_distinct', label: 'Count distinct' },
-  { value: 'sum', label: 'Sum' },
-  { value: 'avg', label: 'Average' },
-  { value: 'min', label: 'Minimum' },
-  { value: 'max', label: 'Maximum' },
-  { value: 'pct', label: 'Percentage' },
+  { value: 'count', label: 'Count' }, { value: 'count_distinct', label: 'Count distinct' },
+  { value: 'sum', label: 'Sum' }, { value: 'avg', label: 'Average' },
+  { value: 'min', label: 'Minimum' }, { value: 'max', label: 'Maximum' }, { value: 'pct', label: 'Percentage' },
 ];
-
 const DIMENSIONS = [
-  { value: 'category', label: 'Category' },
-  { value: 'status_tag', label: 'Status tag' },
-  { value: 'channel', label: 'Channel' },
-  { value: 'priority', label: 'Priority' },
-  { value: 'sensitivity', label: 'Sensitivity class' },
-  { value: 'unit_level_1', label: 'Unit — level 1' },
-  { value: 'unit_level_2', label: 'Unit — level 2' },
-  { value: 'unit_level_3', label: 'Unit — level 3' },
-  { value: 'time_bucket', label: 'Time bucket' },
-  { value: 'assignee', label: 'Assignee' },
-  { value: 'team', label: 'Team' },
+  { value: 'category', label: 'Category' }, { value: 'status_tag', label: 'Status tag' },
+  { value: 'channel', label: 'Channel' }, { value: 'priority', label: 'Priority' },
+  { value: 'sensitivity', label: 'Sensitivity' },
+  { value: 'unit_level_1', label: 'Unit L1' }, { value: 'unit_level_2', label: 'Unit L2' }, { value: 'unit_level_3', label: 'Unit L3' },
+  { value: 'time_bucket', label: 'Time bucket' }, { value: 'assignee', label: 'Assignee' }, { value: 'team', label: 'Team' },
 ];
-
 const TIME_DIMENSIONS = [
-  { value: 'submitted_at', label: 'Submitted at' },
-  { value: 'resolved_at', label: 'Resolved at' },
-  { value: 'closed_at', label: 'Closed at' },
-  { value: 'acknowledged_at', label: 'Acknowledged at' },
+  { value: 'submitted_at', label: 'Submitted at' }, { value: 'resolved_at', label: 'Resolved at' },
+  { value: 'closed_at', label: 'Closed at' }, { value: 'acknowledged_at', label: 'Acknowledged at' },
   { value: 'first_response_at', label: 'First response at' },
 ];
-
 const TIME_BUCKETS = [
-  { value: 'day', label: 'Day' },
-  { value: 'week', label: 'Week' },
-  { value: 'month', label: 'Month' },
-  { value: 'quarter', label: 'Quarter' },
-  { value: 'year', label: 'Year' },
+  { value: 'day', label: 'Day' }, { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' }, { value: 'quarter', label: 'Quarter' }, { value: 'year', label: 'Year' },
 ];
-
 const FILTER_OPS = [
-  { value: 'eq', label: '= equals' },
-  { value: 'neq', label: '≠ not equals' },
-  { value: 'in', label: 'in list' },
-  { value: 'nin', label: 'not in list' },
-  { value: 'lt', label: '< less than' },
-  { value: 'gt', label: '> greater than' },
-  { value: 'between', label: 'between' },
+  { value: 'eq', label: '= equals' }, { value: 'neq', label: '≠ not equals' },
+  { value: 'in', label: 'in list' }, { value: 'nin', label: 'not in list' },
+  { value: 'lt', label: '< less than' }, { value: 'gt', label: '> greater than' }, { value: 'between', label: 'between' },
 ];
+const LAYOUT_OPTIONS = [{ value: 'grid', label: 'Grid' }, { value: 'single_col', label: 'Single column' }];
+const THRESHOLD_COLORS = [{ value: 'success', label: 'Green' }, { value: 'warning', label: 'Amber' }, { value: 'error', label: 'Red' }];
 
-const LAYOUT_OPTIONS = [
-  { value: 'grid', label: 'Grid' },
-  { value: 'single_col', label: 'Single column' },
-];
-
-const THRESHOLD_COLORS = [
-  { value: 'success', label: 'Green (success)' },
-  { value: 'warning', label: 'Amber (warning)' },
-  { value: 'error', label: 'Red (error)' },
-];
-
-const DEFAULT_DASHBOARD_PACK: Omit<Dashboard, 'id'>[] = [
-  {
-    title: 'Operational',
-    icon: 'i-lucide-clipboard-list',
-    audience: { roles: [], levels: [] },
-    is_main: true,
-    is_public: false,
-    layout: 'grid',
-    filter_bar: { period: true, unit: true, category: false },
-    sections: [],
-  },
-  {
-    title: 'Management',
-    icon: 'i-lucide-bar-chart-2',
-    audience: { roles: [], levels: [] },
-    is_main: false,
-    is_public: false,
-    layout: 'grid',
-    filter_bar: { period: true, unit: true, category: true },
-    sections: [],
-  },
-  {
-    title: 'Transparency',
-    icon: 'i-lucide-globe',
-    audience: { roles: [], levels: [] },
-    is_main: false,
-    is_public: true,
-    layout: 'grid',
-    filter_bar: { period: true, unit: false, category: false },
-    sections: [],
-  },
+const DEFAULT_PACK = [
+  { title: 'Operational', icon: 'i-lucide-clipboard-list', audience: { roles: [], levels: [] }, is_main: true, is_public: false, layout: 'grid', filter_bar: { period: true, unit: true, category: false }, sections: [] },
+  { title: 'Management', icon: 'i-lucide-bar-chart-2', audience: { roles: [], levels: [] }, is_main: false, is_public: false, layout: 'grid', filter_bar: { period: true, unit: true, category: true }, sections: [] },
+  { title: 'Transparency', icon: 'i-lucide-globe', audience: { roles: [], levels: [] }, is_main: false, is_public: true, layout: 'grid', filter_bar: { period: true, unit: false, category: false }, sections: [] },
 ];
 
 // ---- Props & state ----
 
-const props = defineProps<{ payload: Record<string, any> }>();
+const props = defineProps<{ payload: Record<string, any>; section?: string }>();
 const { roleNames, loadRoleNames } = useTenantRoles();
-
-onMounted(async () => {
-  await loadRoleNames();
-  ensure();
-});
+onMounted(async () => { await loadRoleNames(); ensure(); });
 
 function ensure() {
   props.payload.dashboards ??= [];
   for (const d of props.payload.dashboards as Dashboard[]) {
     d.audience ??= { roles: [], levels: [] };
-    d.audience.roles ??= [];
-    d.audience.levels ??= [];
-    d.is_main ??= false;
-    d.is_public ??= false;
-    d.layout ??= 'grid';
+    d.audience.roles ??= []; d.audience.levels ??= [];
+    d.is_main ??= false; d.is_public ??= false; d.layout ??= 'grid';
     d.filter_bar ??= { period: true, unit: true, category: false };
     d.sections ??= [];
     for (const s of d.sections) {
       s.widgets ??= [];
-      for (const w of s.widgets) {
-        w.metrics ??= [];
-        w.group_by ??= [];
-        w.filters ??= [];
-        w.thresholds ??= [];
-      }
+      for (const w of s.widgets) { w.metrics ??= []; w.group_by ??= []; w.filters ??= []; w.thresholds ??= []; }
     }
   }
 }
@@ -220,481 +116,418 @@ watch(() => props.payload, ensure, { deep: false });
 
 const dashboards = computed<Dashboard[]>(() => props.payload.dashboards);
 
-const expandedDash = ref<string | null>(null);
-const expandedSection = ref<string | null>(null);
-const expandedWidget = ref<string | null>(null);
+// Shared context — persists across subsection navigation
+const activeDashId = ref<string | null>(null);
+const activeSectionId = ref<string | null>(null);
+const expandedWidgetId = ref<string | null>(null);
 
-function uid() {
-  return Math.random().toString(36).slice(2, 9);
-}
+const activeDash = computed(() => dashboards.value.find((d) => d.id === activeDashId.value) ?? dashboards.value[0] ?? null);
+const activeSection = computed(() => activeDash.value?.sections.find((s) => s.id === activeSectionId.value) ?? activeDash.value?.sections[0] ?? null);
 
-// ---- Dashboard CRUD ----
+watch(dashboards, (ds) => {
+  if (!activeDashId.value && ds.length) activeDashId.value = ds[0].id;
+  if (activeDashId.value && !ds.find((d) => d.id === activeDashId.value)) activeDashId.value = ds[0]?.id ?? null;
+}, { immediate: true });
+
+watch(activeDash, (d) => {
+  if (!activeSectionId.value && d?.sections.length) activeSectionId.value = d.sections[0].id;
+  if (activeSectionId.value && !d?.sections.find((s) => s.id === activeSectionId.value)) activeSectionId.value = d?.sections[0]?.id ?? null;
+}, { immediate: true });
+
+// ---- CRUD ----
+
+function uid() { return Math.random().toString(36).slice(2, 9); }
 
 function addDashboard() {
   const id = `dash-${uid()}`;
-  props.payload.dashboards.push({
-    id,
-    title: 'Dashboard',
-    icon: 'i-lucide-layout-dashboard',
-    audience: { roles: [], levels: [] },
-    is_main: false,
-    is_public: false,
-    layout: 'grid',
-    filter_bar: { period: true, unit: true, category: false },
-    sections: [],
-  });
-  expandedDash.value = id;
-  expandedSection.value = null;
-  expandedWidget.value = null;
-}
-
-function loadDefaultPack() {
-  for (const tpl of DEFAULT_DASHBOARD_PACK) {
-    props.payload.dashboards.push({ id: `dash-${uid()}`, ...structuredClone(tpl) });
-  }
-  expandedDash.value = null;
+  props.payload.dashboards.push({ id, title: 'Dashboard', icon: 'i-lucide-layout-dashboard', audience: { roles: [], levels: [] }, is_main: false, is_public: false, layout: 'grid', filter_bar: { period: true, unit: true, category: false }, sections: [] });
+  activeDashId.value = id;
 }
 
 function removeDashboard(dash: Dashboard) {
   props.payload.dashboards = dashboards.value.filter((d) => d.id !== dash.id);
-  if (expandedDash.value === dash.id) expandedDash.value = null;
+  activeDashId.value = dashboards.value[0]?.id ?? null;
 }
 
-function toggleDash(id: string) {
-  expandedDash.value = expandedDash.value === id ? null : id;
-  expandedSection.value = null;
-  expandedWidget.value = null;
+function loadDefaultPack() {
+  const firstId = `dash-${uid()}`;
+  let first = true;
+  for (const tpl of DEFAULT_PACK) {
+    const id = first ? firstId : `dash-${uid()}`;
+    props.payload.dashboards.push({ id, ...structuredClone(tpl) });
+    first = false;
+  }
+  activeDashId.value = firstId;
 }
-
-// ---- Section CRUD ----
 
 function addSection(dash: Dashboard) {
   const id = `sec-${uid()}`;
   dash.sections.push({ id, title: 'New section', icon: '', color: '', order: dash.sections.length, widgets: [] });
-  expandedSection.value = id;
-  expandedWidget.value = null;
+  activeSectionId.value = id;
 }
 
-function removeSection(dash: Dashboard, section: Section) {
-  dash.sections = dash.sections.filter((s) => s.id !== section.id);
-  if (expandedSection.value === section.id) expandedSection.value = null;
+function removeSection(dash: Dashboard, sec: Section) {
+  dash.sections = dash.sections.filter((s) => s.id !== sec.id);
+  if (activeSectionId.value === sec.id) activeSectionId.value = dash.sections[0]?.id ?? null;
 }
 
-function toggleSection(id: string) {
-  expandedSection.value = expandedSection.value === id ? null : id;
-  expandedWidget.value = null;
+function moveSectionUp(dash: Dashboard, i: number) {
+  if (i === 0) return;
+  [dash.sections[i - 1], dash.sections[i]] = [dash.sections[i]!, dash.sections[i - 1]!];
 }
 
-// ---- Widget CRUD ----
+function moveSectionDown(dash: Dashboard, i: number) {
+  if (i >= dash.sections.length - 1) return;
+  [dash.sections[i], dash.sections[i + 1]] = [dash.sections[i + 1]!, dash.sections[i]!];
+}
 
-function addWidget(section: Section) {
+function addWidget(sec: Section) {
   const id = `w-${uid()}`;
-  section.widgets.push({
-    id,
-    title: 'New widget',
-    chart_kind: 'kpi_card',
-    dataset: 'cases',
-    measure: 'id',
-    aggregation: 'count',
-    metrics: [],
-    group_by: [],
-    filters: [],
-    thresholds: [],
-  });
-  expandedWidget.value = id;
+  sec.widgets.push({ id, title: 'New widget', chart_kind: 'kpi_card', dataset: 'cases', measure: 'id', aggregation: 'count', metrics: [], group_by: [], filters: [], thresholds: [] });
+  expandedWidgetId.value = id;
 }
 
-function removeWidget(section: Section, widget: Widget) {
-  section.widgets = section.widgets.filter((w) => w.id !== widget.id);
-  if (expandedWidget.value === widget.id) expandedWidget.value = null;
+function removeWidget(sec: Section, w: Widget) {
+  sec.widgets = sec.widgets.filter((x) => x.id !== w.id);
+  if (expandedWidgetId.value === w.id) expandedWidgetId.value = null;
 }
 
-function toggleWidget(id: string) {
-  expandedWidget.value = expandedWidget.value === id ? null : id;
-}
+function toggleWidget(id: string) { expandedWidgetId.value = expandedWidgetId.value === id ? null : id; }
 
-// ---- Metrics / filters / thresholds ----
+function addMetric(w: Widget) { w.metrics.push({ measure: 'id', aggregation: 'count', label: '' }); }
+function removeMetric(w: Widget, i: number) { w.metrics.splice(i, 1); }
+function addFilter(w: Widget) { w.filters.push({ field: 'category', op: 'eq', value: '' }); }
+function removeFilter(w: Widget, i: number) { w.filters.splice(i, 1); }
+function addThreshold(w: Widget) { w.thresholds.push({ value: 0, color: 'warning', label: '' }); }
+function removeThreshold(w: Widget, i: number) { w.thresholds.splice(i, 1); }
 
-function addMetric(widget: Widget) {
-  widget.metrics.push({ measure: 'id', aggregation: 'count', label: '' });
-}
-function removeMetric(widget: Widget, i: number) { widget.metrics.splice(i, 1); }
+const isMultiSeries = (k: string) => ['multi_line', 'stacked_bar', 'stacked_bar_100', 'area'].includes(k);
+const needsTimeDim = (k: string) => ['line', 'multi_line', 'area'].includes(k);
+const chartIcon = (k: string) => CHART_KINDS.find((c) => c.value === k)?.icon ?? 'i-lucide-bar-chart-2';
+const datasetLabel = (v: string) => DATASETS.find((d) => d.value === v)?.label ?? v;
 
-function addFilter(widget: Widget) {
-  widget.filters.push({ field: 'category', op: 'eq', value: '' });
-}
-function removeFilter(widget: Widget, i: number) { widget.filters.splice(i, 1); }
-
-function addThreshold(widget: Widget) {
-  widget.thresholds.push({ value: 0, color: 'warning', label: '' });
-}
-function removeThreshold(widget: Widget, i: number) { widget.thresholds.splice(i, 1); }
-
-// ---- Helpers ----
-
-const isMultiSeries = (kind: string) => ['multi_line', 'stacked_bar', 'stacked_bar_100', 'area'].includes(kind);
-const needsTimeDim = (kind: string) => ['line', 'multi_line', 'area'].includes(kind);
-const chartIcon = (kind: string) => CHART_KINDS.find((k) => k.value === kind)?.icon ?? 'i-lucide-bar-chart-2';
-const datasetLabel = (val: string) => DATASETS.find((d) => d.value === val)?.label ?? val;
+// Dashboard selector strip used on Sections + Widgets pages
+const dashTabClass = (id: string) => [
+  'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer select-none',
+  activeDashId.value === id ? 'bg-primary text-inverted' : 'text-muted hover:text-default hover:bg-elevated/60',
+].join(' ');
 </script>
 
 <template>
-  <div class="space-y-3">
+  <div>
 
-    <!-- Empty state -->
-    <div v-if="dashboards.length === 0" class="text-center py-12 space-y-3">
-      <UIcon name="i-lucide-layout-dashboard" class="size-10 text-muted mx-auto" />
-      <p class="text-sm text-muted">No dashboards configured yet.</p>
-      <div class="flex justify-center gap-2">
-        <UButton variant="soft" icon="i-lucide-plus" @click="addDashboard">Add dashboard</UButton>
-        <UButton variant="outline" icon="i-lucide-package" @click="loadDefaultPack">Load default pack</UButton>
-      </div>
-    </div>
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!--  DASHBOARDS                                               -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <template v-if="!section || section === 'sec-dashboards'">
 
-    <!-- Dashboard list -->
-    <div
-      v-for="dash in dashboards"
-      :key="dash.id"
-      class="rounded-lg border border-default bg-default"
-    >
-      <!-- Dashboard header row -->
-      <div
-        class="flex items-center gap-2 px-4 py-3 cursor-pointer select-none hover:bg-elevated/40 transition rounded-lg"
-        @click="toggleDash(dash.id)"
-      >
-        <UIcon :name="dash.icon || 'i-lucide-layout-dashboard'" class="text-primary shrink-0 size-5" />
-        <span class="font-medium flex-1 truncate">{{ dash.title || '(untitled dashboard)' }}</span>
-        <UBadge v-if="dash.is_main" size="xs" color="primary" variant="subtle">Main</UBadge>
-        <UBadge v-if="dash.is_public" size="xs" color="success" variant="subtle">Public</UBadge>
-        <UBadge size="xs" color="neutral" variant="subtle">{{ dash.sections.length }} section{{ dash.sections.length !== 1 ? 's' : '' }}</UBadge>
-        <UBadge size="xs" color="neutral" variant="subtle">{{ dash.sections.reduce((n, s) => n + s.widgets.length, 0) }} widget{{ dash.sections.reduce((n, s) => n + s.widgets.length, 0) !== 1 ? 's' : '' }}</UBadge>
-        <UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click.stop="removeDashboard(dash)" />
-        <UIcon :name="expandedDash === dash.id ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="text-muted size-4 shrink-0" />
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs text-muted">{{ dashboards.length }} dashboard{{ dashboards.length !== 1 ? 's' : '' }}</span>
+        <div class="flex gap-2">
+          <UButton size="xs" variant="outline" icon="i-lucide-package" @click="loadDefaultPack">Load defaults</UButton>
+          <UButton size="xs" variant="soft" icon="i-lucide-plus" @click="addDashboard">Add</UButton>
+        </div>
       </div>
 
-      <!-- Dashboard detail -->
-      <template v-if="expandedDash === dash.id">
+      <div v-if="dashboards.length === 0" class="py-10 text-center text-sm text-muted">
+        No dashboards yet.
+      </div>
 
-        <!-- Settings panel -->
-        <div class="border-t border-default px-4 py-4 space-y-4 bg-muted/20">
-          <p class="text-xs font-semibold text-muted uppercase tracking-wide">Dashboard settings</p>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            <UFormField label="Title" help="One word, max 20 chars — shown in the sidebar nav.">
-              <UInput
-                v-model="dash.title"
-                class="w-full"
-                maxlength="20"
-                @input="dash.title = dash.title.replace(/\s+/g, '')"
-              />
-            </UFormField>
-            <UFormField label="Icon" help="Lucide icon token, e.g. i-lucide-bar-chart-2">
-              <UInput v-model="dash.icon" class="w-full font-mono text-xs" placeholder="i-lucide-layout-dashboard" />
-            </UFormField>
-            <UFormField label="Layout">
-              <USelectMenu v-model="dash.layout" :items="LAYOUT_OPTIONS" value-key="value" label-key="label" class="w-full" />
-            </UFormField>
+      <div v-else class="divide-y divide-default">
+        <div v-for="dash in dashboards" :key="dash.id">
+          <!-- Summary row -->
+          <div
+            class="flex items-center gap-3 px-0 py-2.5 cursor-pointer hover:bg-elevated/40 transition"
+            @click="activeDashId = activeDashId === dash.id ? null : dash.id"
+          >
+            <UIcon :name="dash.icon || 'i-lucide-layout-dashboard'" class="size-4 text-muted shrink-0" />
+            <span class="text-sm font-medium flex-1">{{ dash.title }}</span>
+            <span class="text-xs text-muted">{{ dash.sections.length }} sections · {{ dash.sections.reduce((n, s) => n + s.widgets.length, 0) }} widgets</span>
+            <UBadge v-if="dash.is_main" size="xs" color="neutral" variant="subtle">Main</UBadge>
+            <UBadge v-if="dash.is_public" size="xs" color="neutral" variant="subtle">Public</UBadge>
+            <UIcon :name="activeDashId === dash.id ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="size-4 text-muted shrink-0" />
           </div>
 
-          <div class="flex flex-wrap gap-5">
-            <label class="flex items-center gap-2 text-sm">
-              <USwitch v-model="dash.is_main" size="sm" />
-              Main dashboard (post-login landing)
-            </label>
-            <label class="flex items-center gap-2 text-sm">
-              <USwitch v-model="dash.is_public" size="sm" />
-              Public transparency page
-            </label>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <UFormField label="Audience — roles" help="Which roles see this dashboard. Empty = all roles.">
-              <USelectMenu
-                v-model="dash.audience.roles"
-                :items="roleNames"
-                multiple
-                placeholder="All roles"
-                class="w-full"
-              />
-            </UFormField>
-            <UFormField label="Global filter bar" help="Which filter controls viewers can adjust.">
-              <div class="flex flex-wrap gap-4 mt-1">
-                <label class="flex items-center gap-1.5 text-sm">
-                  <UCheckbox v-model="dash.filter_bar.period" /> Period
+          <!-- Expanded form -->
+          <div v-if="activeDashId === dash.id" class="py-4 space-y-4" @click.stop>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <UFormField label="Title" help="One word, max 20 chars">
+                <UInput v-model="dash.title" maxlength="20" @input="dash.title = dash.title.replace(/\s+/g, '')" />
+              </UFormField>
+              <UFormField label="Icon" help="Lucide token, e.g. i-lucide-bar-chart-2">
+                <UInput v-model="dash.icon" class="font-mono text-xs" placeholder="i-lucide-layout-dashboard" />
+              </UFormField>
+              <UFormField label="Layout">
+                <USelectMenu v-model="dash.layout" :items="LAYOUT_OPTIONS" value-key="value" label-key="label" class="w-full" />
+              </UFormField>
+              <UFormField label="Audience — roles" help="Empty = all roles">
+                <USelectMenu v-model="dash.audience.roles" :items="roleNames" multiple placeholder="All roles" class="w-full" />
+              </UFormField>
+              <UFormField label="Filter bar">
+                <div class="flex flex-wrap gap-4 mt-1">
+                  <label class="flex items-center gap-1.5 text-sm cursor-pointer"><UCheckbox v-model="dash.filter_bar.period" /> Period</label>
+                  <label class="flex items-center gap-1.5 text-sm cursor-pointer"><UCheckbox v-model="dash.filter_bar.unit" /> Unit</label>
+                  <label class="flex items-center gap-1.5 text-sm cursor-pointer"><UCheckbox v-model="dash.filter_bar.category" /> Category</label>
+                </div>
+              </UFormField>
+              <div class="flex flex-col gap-2 justify-center">
+                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                  <USwitch v-model="dash.is_main" size="sm" /> Main (post-login landing)
                 </label>
-                <label class="flex items-center gap-1.5 text-sm">
-                  <UCheckbox v-model="dash.filter_bar.unit" /> Unit
-                </label>
-                <label class="flex items-center gap-1.5 text-sm">
-                  <UCheckbox v-model="dash.filter_bar.category" /> Category
+                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                  <USwitch v-model="dash.is_public" size="sm" /> Public transparency
                 </label>
               </div>
-            </UFormField>
+            </div>
+            <div class="flex justify-end pt-1">
+              <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" @click="removeDashboard(dash)">Delete</UButton>
+            </div>
           </div>
         </div>
+      </div>
+    </template>
 
-        <!-- Sections -->
-        <div class="px-4 py-3 space-y-2 border-t border-default">
-          <div class="flex items-center justify-between mb-1">
-            <p class="text-xs font-semibold text-muted uppercase tracking-wide">Sections</p>
-            <UButton size="xs" variant="soft" icon="i-lucide-plus" @click="addSection(dash)">Add section</UButton>
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!--  SECTIONS                                                 -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <template v-else-if="section === 'sec-sections'">
+
+      <div v-if="dashboards.length === 0" class="text-sm text-muted py-8 text-center">
+        No dashboards yet. <NuxtLink to="#sec-dashboards" class="text-primary underline">Create one first.</NuxtLink>
+      </div>
+
+      <template v-else>
+        <!-- Dashboard tabs -->
+        <div class="flex flex-wrap gap-1.5 mb-4 pb-3 border-b border-default">
+          <button v-for="dash in dashboards" :key="dash.id" :class="dashTabClass(dash.id)"
+            @click="activeDashId = dash.id; activeSectionId = null">
+            <UIcon :name="dash.icon || 'i-lucide-layout-dashboard'" class="size-3.5 shrink-0" />
+            <span class="max-w-[120px] truncate">{{ dash.title }}</span>
+          </button>
+        </div>
+
+        <div v-if="activeDash">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs text-muted">{{ activeDash.sections.length }} section{{ activeDash.sections.length !== 1 ? 's' : '' }}</span>
+            <UButton size="xs" variant="soft" icon="i-lucide-plus" @click="addSection(activeDash)">Add section</UButton>
           </div>
 
-          <p v-if="dash.sections.length === 0" class="text-xs text-muted italic py-2">No sections yet — add one above.</p>
+          <div v-if="activeDash.sections.length === 0" class="py-8 text-center text-sm text-muted">No sections yet.</div>
 
-          <div
-            v-for="section in dash.sections"
-            :key="section.id"
-            class="rounded-lg border border-default"
-          >
-            <!-- Section header -->
-            <div
-              class="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none hover:bg-elevated/30 transition rounded-lg"
-              @click="toggleSection(section.id)"
-            >
-              <UIcon :name="section.icon || 'i-lucide-rows-3'" class="text-muted shrink-0 size-4" />
-              <span class="text-sm font-medium flex-1 truncate">{{ section.title || '(untitled section)' }}</span>
-              <UBadge size="xs" color="neutral" variant="subtle">{{ section.widgets.length }} widget{{ section.widgets.length !== 1 ? 's' : '' }}</UBadge>
-              <UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click.stop="removeSection(dash, section)" />
-              <UIcon :name="expandedSection === section.id ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="text-muted size-4 shrink-0" />
-            </div>
+          <div v-else class="divide-y divide-default">
+            <div v-for="(sec, idx) in activeDash.sections" :key="sec.id">
+              <!-- Section row -->
+              <div
+                class="flex items-center gap-3 px-0 py-2.5 cursor-pointer hover:bg-elevated/40 transition"
+                @click="activeSectionId = activeSectionId === sec.id ? null : sec.id"
+              >
+                <UIcon :name="sec.icon || 'i-lucide-rows-3'" class="size-4 text-muted shrink-0" />
+                <input
+                  v-model="sec.title"
+                  class="text-sm font-medium flex-1 bg-transparent outline-none cursor-text min-w-0"
+                  placeholder="Section title"
+                  @click.stop
+                  @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
+                />
+                <span class="text-xs text-muted shrink-0">{{ sec.widgets.length }} widget{{ sec.widgets.length !== 1 ? 's' : '' }}</span>
+                <div class="flex items-center gap-0.5 shrink-0" @click.stop>
+                  <UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-chevron-up" :disabled="idx === 0" @click="moveSectionUp(activeDash, idx)" />
+                  <UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-chevron-down" :disabled="idx === activeDash.sections.length - 1" @click="moveSectionDown(activeDash, idx)" />
+                  <UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click="removeSection(activeDash, sec)" />
+                </div>
+                <UIcon :name="activeSectionId === sec.id ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="size-4 text-muted shrink-0" />
+              </div>
 
-            <!-- Section detail -->
-            <template v-if="expandedSection === section.id">
-              <!-- Section settings -->
-              <div class="border-t border-default px-3 py-3 grid grid-cols-1 sm:grid-cols-3 gap-2 bg-muted/10">
-                <UFormField label="Title">
-                  <UInput v-model="section.title" class="w-full" />
-                </UFormField>
-                <UFormField label="Icon">
-                  <UInput v-model="section.icon" class="w-full font-mono text-xs" placeholder="i-lucide-rows-3" />
+              <!-- Expanded appearance -->
+              <div v-if="activeSectionId === sec.id" class="py-4 grid grid-cols-1 sm:grid-cols-2 gap-4" @click.stop>
+                <UFormField label="Icon" help="Lucide token">
+                  <UInput v-model="sec.icon" class="w-full font-mono text-xs" placeholder="i-lucide-rows-3" />
                 </UFormField>
                 <UFormField label="Accent color">
-                  <UInput v-model="section.color" class="w-full" placeholder="primary / neutral / #hex" />
+                  <UInput v-model="sec.color" class="w-full" placeholder="primary / #hex" />
                 </UFormField>
               </div>
-
-              <!-- Widgets -->
-              <div class="border-t border-default px-3 py-3 space-y-2">
-                <div class="flex items-center justify-between mb-1">
-                  <p class="text-xs font-semibold text-muted uppercase tracking-wide">Widgets</p>
-                  <UButton size="xs" variant="soft" icon="i-lucide-plus" @click="addWidget(section)">Add widget</UButton>
-                </div>
-
-                <p v-if="section.widgets.length === 0" class="text-xs text-muted italic py-1">No widgets yet.</p>
-
-                <div
-                  v-for="widget in section.widgets"
-                  :key="widget.id"
-                  class="rounded border border-default/70"
-                >
-                  <!-- Widget header -->
-                  <div
-                    class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none hover:bg-elevated/20 transition rounded"
-                    @click="toggleWidget(widget.id)"
-                  >
-                    <UIcon :name="chartIcon(widget.chart_kind)" class="text-primary shrink-0 size-4" />
-                    <span class="text-sm flex-1 truncate">{{ widget.title || '(untitled widget)' }}</span>
-                    <UBadge size="xs" color="neutral" variant="subtle" class="font-mono shrink-0">{{ widget.chart_kind }}</UBadge>
-                    <UBadge size="xs" color="info" variant="subtle" class="shrink-0">{{ datasetLabel(widget.dataset) }}</UBadge>
-                    <UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click.stop="removeWidget(section, widget)" />
-                    <UIcon :name="expandedWidget === widget.id ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="text-muted size-4 shrink-0" />
-                  </div>
-
-                  <!-- Widget editor -->
-                  <div v-if="expandedWidget === widget.id" class="border-t border-default px-3 py-4 space-y-4 bg-muted/10">
-
-                    <!-- Identity -->
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <UFormField label="Title" class="sm:col-span-1">
-                        <UInput v-model="widget.title" class="w-full" />
-                      </UFormField>
-                      <UFormField label="Chart kind">
-                        <USelectMenu
-                          v-model="widget.chart_kind"
-                          :items="CHART_KINDS"
-                          value-key="value"
-                          label-key="label"
-                          class="w-full"
-                        />
-                      </UFormField>
-                      <UFormField label="Dataset">
-                        <USelectMenu
-                          v-model="widget.dataset"
-                          :items="DATASETS"
-                          value-key="value"
-                          label-key="label"
-                          class="w-full"
-                        />
-                      </UFormField>
-                    </div>
-
-                    <!-- Measure (single) -->
-                    <template v-if="!isMultiSeries(widget.chart_kind)">
-                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <UFormField label="Measure" help="Field to aggregate, e.g. id, resolution_hours, rating">
-                          <UInput v-model="widget.measure" class="w-full font-mono" placeholder="id" />
-                        </UFormField>
-                        <UFormField label="Aggregation">
-                          <USelectMenu
-                            v-model="widget.aggregation"
-                            :items="AGGREGATIONS"
-                            value-key="value"
-                            label-key="label"
-                            class="w-full"
-                          />
-                        </UFormField>
-                      </div>
-                    </template>
-
-                    <!-- Metrics (multi-series) -->
-                    <template v-else>
-                      <div class="space-y-2">
-                        <div class="flex items-center justify-between">
-                          <p class="text-xs font-medium text-muted uppercase tracking-wide">Series</p>
-                          <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addMetric(widget)">Add series</UButton>
-                        </div>
-                        <p v-if="widget.metrics.length === 0" class="text-xs text-muted italic">No series — add one above.</p>
-                        <div
-                          v-for="(m, mi) in widget.metrics"
-                          :key="mi"
-                          class="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end p-2 rounded border border-default/50"
-                        >
-                          <UFormField label="Measure">
-                            <UInput v-model="m.measure" class="w-full font-mono text-xs" placeholder="id" />
-                          </UFormField>
-                          <UFormField label="Aggregation">
-                            <USelectMenu v-model="m.aggregation" :items="AGGREGATIONS" value-key="value" label-key="label" class="w-full" />
-                          </UFormField>
-                          <UFormField label="Series label">
-                            <UInput v-model="m.label" class="w-full" placeholder="e.g. Resolved" />
-                          </UFormField>
-                          <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" class="mb-0.5" @click="removeMetric(widget, mi)" />
-                        </div>
-                      </div>
-                    </template>
-
-                    <!-- Group by -->
-                    <UFormField label="Group by" help="Dimensions to split results by (e.g. category, channel).">
-                      <USelectMenu
-                        v-model="widget.group_by"
-                        :items="DIMENSIONS"
-                        value-key="value"
-                        label-key="label"
-                        multiple
-                        placeholder="No grouping (aggregate all)"
-                        class="w-full"
-                      />
-                    </UFormField>
-
-                    <!-- Time dimension (trend charts) -->
-                    <template v-if="needsTimeDim(widget.chart_kind)">
-                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <UFormField label="Time dimension" help="Date field to plot over time.">
-                          <USelectMenu
-                            v-model="widget.time_dimension"
-                            :items="TIME_DIMENSIONS"
-                            value-key="value"
-                            label-key="label"
-                            class="w-full"
-                          />
-                        </UFormField>
-                        <UFormField label="Bucket">
-                          <USelectMenu
-                            v-model="widget.bucket"
-                            :items="TIME_BUCKETS"
-                            value-key="value"
-                            label-key="label"
-                            class="w-full"
-                          />
-                        </UFormField>
-                      </div>
-                    </template>
-
-                    <!-- Filters -->
-                    <div class="space-y-2">
-                      <div class="flex items-center justify-between">
-                        <p class="text-xs font-medium text-muted uppercase tracking-wide">Filters</p>
-                        <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addFilter(widget)">Add filter</UButton>
-                      </div>
-                      <div
-                        v-for="(f, fi) in widget.filters"
-                        :key="fi"
-                        class="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end p-2 rounded border border-default/50"
-                      >
-                        <UFormField label="Field">
-                          <UInput v-model="f.field" class="w-full font-mono text-xs" placeholder="category" />
-                        </UFormField>
-                        <UFormField label="Operator">
-                          <USelectMenu v-model="f.op" :items="FILTER_OPS" value-key="value" label-key="label" class="w-full" />
-                        </UFormField>
-                        <UFormField label="Value">
-                          <UInput
-                            :model-value="String(f.value ?? '')"
-                            class="w-full text-xs"
-                            placeholder="value or comma-list"
-                            @update:model-value="f.value = $event"
-                          />
-                        </UFormField>
-                        <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" class="mb-0.5" @click="removeFilter(widget, fi)" />
-                      </div>
-                    </div>
-
-                    <!-- Target & thresholds -->
-                    <div class="space-y-3">
-                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <UFormField label="Target value" help="Optional numeric target shown as a progress indicator.">
-                          <UInput v-model.number="widget.target" type="number" class="w-full" placeholder="e.g. 30" />
-                        </UFormField>
-                      </div>
-                      <div class="space-y-2">
-                        <div class="flex items-center justify-between">
-                          <p class="text-xs font-medium text-muted uppercase tracking-wide">Thresholds</p>
-                          <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addThreshold(widget)">Add threshold</UButton>
-                        </div>
-                        <div
-                          v-for="(t, ti) in widget.thresholds"
-                          :key="ti"
-                          class="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end p-2 rounded border border-default/50"
-                        >
-                          <UFormField label="At value">
-                            <UInput v-model.number="t.value" type="number" class="w-full" />
-                          </UFormField>
-                          <UFormField label="Color">
-                            <USelectMenu v-model="t.color" :items="THRESHOLD_COLORS" value-key="value" label-key="label" class="w-full" />
-                          </UFormField>
-                          <UFormField label="Label">
-                            <UInput v-model="t.label" class="w-full" placeholder="e.g. At risk" />
-                          </UFormField>
-                          <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" class="mb-0.5" @click="removeThreshold(widget, ti)" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Drill-down & caption -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <UFormField label="Drill-down URL" help="Optional link to a queue view or child dashboard when a user clicks the widget.">
-                        <UInput v-model="widget.drill_down" class="w-full font-mono text-xs" placeholder="/cases?filter=…" />
-                      </UFormField>
-                      <UFormField label="Caption / source note" help="Small footer text shown below the widget.">
-                        <UInput v-model="widget.caption" class="w-full" placeholder="Source: GRM database" />
-                      </UFormField>
-                    </div>
-
-                  </div>
-                </div>
-              </div>
-            </template>
+            </div>
           </div>
         </div>
       </template>
-    </div>
+    </template>
 
-    <!-- Bottom actions (when dashboards exist) -->
-    <div v-if="dashboards.length > 0" class="flex gap-2 pt-1">
-      <UButton variant="soft" icon="i-lucide-plus" @click="addDashboard">Add dashboard</UButton>
-      <UButton variant="outline" icon="i-lucide-package" @click="loadDefaultPack">Add default pack</UButton>
-    </div>
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!--  WIDGETS                                                  -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <template v-else-if="section === 'sec-widgets'">
+
+      <div v-if="dashboards.length === 0" class="text-sm text-muted py-8 text-center">
+        No dashboards yet. <NuxtLink to="#sec-dashboards" class="text-primary underline">Create one first.</NuxtLink>
+      </div>
+
+      <template v-else>
+        <!-- Dashboard + section selectors -->
+        <div class="space-y-3 mb-4 pb-3 border-b border-default">
+          <div>
+            <p class="text-xs text-muted mb-1.5">Dashboard</p>
+            <div class="flex flex-wrap gap-1.5">
+              <button v-for="dash in dashboards" :key="dash.id" :class="dashTabClass(dash.id)"
+                @click="activeDashId = dash.id; activeSectionId = null; expandedWidgetId = null">
+                <UIcon :name="dash.icon || 'i-lucide-layout-dashboard'" class="size-3.5 shrink-0" />
+                <span class="max-w-[110px] truncate">{{ dash.title }}</span>
+              </button>
+            </div>
+          </div>
+          <div v-if="activeDash?.sections.length">
+            <p class="text-xs text-muted mb-1.5">Section</p>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="sec in activeDash.sections"
+                :key="sec.id"
+                class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer select-none"
+                :class="activeSectionId === sec.id ? 'bg-elevated border border-default text-default' : 'text-muted hover:text-default hover:bg-elevated/60'"
+                @click="activeSectionId = sec.id; expandedWidgetId = null"
+              >
+                <UIcon :name="sec.icon || 'i-lucide-rows-3'" class="size-3.5 shrink-0" />
+                <span class="max-w-[110px] truncate">{{ sec.title }}</span>
+                <span class="text-xs text-muted">{{ sec.widgets.length }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="activeDash && !activeDash.sections.length" class="py-8 text-center text-sm text-muted">
+          No sections in <strong>{{ activeDash.title }}</strong>.
+          <NuxtLink to="#sec-sections" class="text-primary underline ml-1">Add sections first.</NuxtLink>
+        </div>
+
+        <template v-else-if="activeSection">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs text-muted">{{ activeSection.widgets.length }} widget{{ activeSection.widgets.length !== 1 ? 's' : '' }}</span>
+            <UButton size="xs" variant="soft" icon="i-lucide-plus" @click="addWidget(activeSection)">Add widget</UButton>
+          </div>
+
+          <div v-if="activeSection.widgets.length === 0" class="py-8 text-center text-sm text-muted">No widgets yet.</div>
+
+          <div v-else class="divide-y divide-default">
+            <div v-for="widget in activeSection.widgets" :key="widget.id">
+
+              <!-- Widget row -->
+              <div
+                class="flex items-center gap-3 px-0 py-2.5 cursor-pointer hover:bg-elevated/40 transition"
+                @click="toggleWidget(widget.id)"
+              >
+                <UIcon :name="chartIcon(widget.chart_kind)" class="size-4 text-muted shrink-0" />
+                <span class="text-sm font-medium flex-1 truncate">{{ widget.title || '(untitled)' }}</span>
+                <span class="text-xs text-muted shrink-0">{{ widget.chart_kind }}</span>
+                <span class="text-xs text-muted shrink-0">{{ datasetLabel(widget.dataset) }}</span>
+                <UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click.stop="removeWidget(activeSection, widget)" />
+                <UIcon :name="expandedWidgetId === widget.id ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="size-4 text-muted shrink-0" />
+              </div>
+
+              <!-- Widget editor -->
+              <div v-if="expandedWidgetId === widget.id" class="py-4 space-y-4">
+
+                <!-- Identity -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <UFormField label="Title"><UInput v-model="widget.title" class="w-full" /></UFormField>
+                  <UFormField label="Chart type">
+                    <USelectMenu v-model="widget.chart_kind" :items="CHART_KINDS" value-key="value" label-key="label" class="w-full" />
+                  </UFormField>
+                  <UFormField label="Dataset">
+                    <USelectMenu v-model="widget.dataset" :items="DATASETS" value-key="value" label-key="label" class="w-full" />
+                  </UFormField>
+                </div>
+
+                <!-- Data -->
+                <div class="space-y-3 pt-4 border-t border-default/60">
+                  <p class="text-[11px] font-semibold text-muted uppercase tracking-wider">Data</p>
+                  <template v-if="!isMultiSeries(widget.chart_kind)">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <UFormField label="Measure" help="e.g. id, resolution_hours">
+                        <UInput v-model="widget.measure" class="w-full font-mono" placeholder="id" />
+                      </UFormField>
+                      <UFormField label="Aggregation">
+                        <USelectMenu v-model="widget.aggregation" :items="AGGREGATIONS" value-key="value" label-key="label" class="w-full" />
+                      </UFormField>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs text-muted">Series</span>
+                      <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addMetric(widget)">Add series</UButton>
+                    </div>
+                    <p v-if="widget.metrics.length === 0" class="text-xs text-muted italic">No series yet.</p>
+                    <div v-for="(m, mi) in widget.metrics" :key="mi" class="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end p-2 rounded border border-default/50">
+                      <UFormField label="Measure"><UInput v-model="m.measure" class="w-full font-mono text-xs" placeholder="id" /></UFormField>
+                      <UFormField label="Aggregation"><USelectMenu v-model="m.aggregation" :items="AGGREGATIONS" value-key="value" label-key="label" class="w-full" /></UFormField>
+                      <UFormField label="Label"><UInput v-model="m.label" class="w-full" placeholder="e.g. Resolved" /></UFormField>
+                      <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" class="mb-0.5" @click="removeMetric(widget, mi)" />
+                    </div>
+                  </template>
+                  <UFormField label="Group by" help="Split results by dimension.">
+                    <USelectMenu v-model="widget.group_by" :items="DIMENSIONS" value-key="value" label-key="label" multiple placeholder="No grouping — aggregate all" class="w-full" />
+                  </UFormField>
+                  <template v-if="needsTimeDim(widget.chart_kind)">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <UFormField label="Time dimension">
+                        <USelectMenu v-model="widget.time_dimension" :items="TIME_DIMENSIONS" value-key="value" label-key="label" class="w-full" />
+                      </UFormField>
+                      <UFormField label="Bucket">
+                        <USelectMenu v-model="widget.bucket" :items="TIME_BUCKETS" value-key="value" label-key="label" class="w-full" />
+                      </UFormField>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- Filters -->
+                <div class="space-y-2 pt-4 border-t border-default/60">
+                  <div class="flex items-center justify-between">
+                    <p class="text-[11px] font-semibold text-muted uppercase tracking-wider">Filters</p>
+                    <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addFilter(widget)">Add</UButton>
+                  </div>
+                  <p v-if="widget.filters.length === 0" class="text-xs text-muted italic">No filters — widget shows all records.</p>
+                  <div v-for="(f, fi) in widget.filters" :key="fi" class="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end p-2 rounded border border-default/50">
+                    <UFormField label="Field"><UInput v-model="f.field" class="w-full font-mono text-xs" placeholder="category" /></UFormField>
+                    <UFormField label="Operator"><USelectMenu v-model="f.op" :items="FILTER_OPS" value-key="value" label-key="label" class="w-full" /></UFormField>
+                    <UFormField label="Value">
+                      <UInput :model-value="String(f.value ?? '')" class="w-full text-xs" placeholder="value" @update:model-value="f.value = $event" />
+                    </UFormField>
+                    <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" class="mb-0.5" @click="removeFilter(widget, fi)" />
+                  </div>
+                </div>
+
+                <!-- Display -->
+                <div class="space-y-3 pt-4 border-t border-default/60">
+                  <p class="text-[11px] font-semibold text-muted uppercase tracking-wider">Display</p>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <UFormField label="Target" help="Numeric goal shown as progress.">
+                      <UInput v-model.number="widget.target" type="number" class="w-full" placeholder="e.g. 30" />
+                    </UFormField>
+                    <UFormField label="Drill-down URL">
+                      <UInput v-model="widget.drill_down" class="w-full font-mono text-xs" placeholder="/cases?filter=…" />
+                    </UFormField>
+                    <UFormField label="Caption" class="sm:col-span-2">
+                      <UInput v-model="widget.caption" class="w-full" placeholder="Source note shown below widget" />
+                    </UFormField>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs text-muted">Thresholds</span>
+                      <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addThreshold(widget)">Add</UButton>
+                    </div>
+                    <div v-for="(t, ti) in widget.thresholds" :key="ti" class="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end p-2 rounded border border-default/50">
+                      <UFormField label="At value"><UInput v-model.number="t.value" type="number" class="w-full" /></UFormField>
+                      <UFormField label="Color"><USelectMenu v-model="t.color" :items="THRESHOLD_COLORS" value-key="value" label-key="label" class="w-full" /></UFormField>
+                      <UFormField label="Label"><UInput v-model="t.label" class="w-full" placeholder="e.g. At risk" /></UFormField>
+                      <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" class="mb-0.5" @click="removeThreshold(widget, ti)" />
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </template>
+      </template>
+    </template>
 
   </div>
 </template>
