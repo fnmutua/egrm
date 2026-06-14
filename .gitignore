@@ -9,7 +9,9 @@ dist/
 !.env.example
 coverage/
 .DS_Store
-data/
-!apps/api/data/
+# Runtime/generated data at repo root only (not apps/api/src/data source files)
+/data/
+
+# API bundled assets; ignore other generated files under apps/api/data
 apps/api/data/*
 !apps/api/data/kisip-units-import-template.xlsx

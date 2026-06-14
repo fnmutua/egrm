@@ -224,10 +224,7 @@ async function setActive(u: Unit, active: boolean) {
     await api(`/api/v1/units/${u.id}`, { method: 'PATCH', body: { active } });
     patchUnit(u, { active });
     toast.add({
-      title: active ? `"${u.name}" is active` : `"${u.name}" deactivated`,
-      description: active
-        ? 'Available for intake and routing.'
-        : 'Hidden from intake and new assignments; existing cases keep their link.',
+      title: active ? `"${u.name}" activated` : `"${u.name}" deactivated`,
       color: 'success',
     });
   } catch (e: unknown) {
@@ -471,8 +468,14 @@ onMounted(async () => {
 
 <template>
   <div v-if="user" class="p-4 sm:p-8">
-    <div class="flex items-start justify-between gap-3 mb-1 flex-wrap">
-      <h1 class="text-2xl font-semibold">Jurisdiction units</h1>
+    <div class="flex items-start justify-between gap-3 mb-6 flex-wrap">
+      <div>
+        <h1 class="text-2xl font-semibold">Jurisdiction units</h1>
+        <p class="text-sm text-muted mt-1">
+          {{ [...levels].reverse().map((l) => l.label).join(' → ') }}
+          <span v-if="summary?.total"> · {{ summary.total.toLocaleString() }}</span>
+        </p>
+      </div>
       <div class="flex flex-wrap items-center gap-2">
         <UButton variant="outline" color="neutral" icon="i-lucide-download" @click="downloadTemplateFile">
           Download template
@@ -516,30 +519,6 @@ onMounted(async () => {
         </UButton>
       </div>
     </div>
-    <p class="text-muted mb-2">
-      Instances of the configured hierarchy levels
-      ({{ [...levels].reverse().map((l) => l.label).join(' → ') }}). Cases route and escalate along this tree.
-    </p>
-    <p class="text-sm text-muted mb-6">
-      Bulk load via Excel only (not seeded). Download template uses your CD-02 hierarchy (one sheet per level).
-      KISIP tenants get the full pre-filled workbook from <code class="text-xs">specs/adminunits</code>
-      (47 counties, 290 sub-counties, 1,450 wards, 1,034 settlements).
-    </p>
-
-    <p v-if="summary && summary.total > 0" class="text-sm text-muted mb-4">
-      {{ summary.total.toLocaleString() }} units loaded —
-      use the arrow on each row to load children on demand (faster for large imports).
-    </p>
-
-    <UAlert
-      v-if="summary && summary.total > 0"
-      color="neutral"
-      variant="subtle"
-      icon="i-lucide-info"
-      class="mb-4"
-      title="Reading this table"
-      description="▶ Arrow — show child units. Active switch — on means the unit appears in intake and routing; off hides it without deleting. ⋮ More — move a unit up/down the hierarchy or delete a leaf unit."
-    />
 
     <UCard :ui="{ body: 'p-0 sm:p-0' }">
       <div class="flex items-center justify-end gap-1 px-4 pt-3">
@@ -560,7 +539,7 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-if="visibleRows.length === 0">
-              <td colspan="5" class="py-8 text-center text-muted">No units yet — add one to get started.</td>
+              <td colspan="5" class="py-8 text-center text-muted">No units yet.</td>
             </tr>
             <tr
               v-for="row in visibleRows"
@@ -590,21 +569,13 @@ onMounted(async () => {
               <td class="py-2 pr-4 capitalize">{{ levelLabel(row.unit.levelCode) }}</td>
               <td class="py-2 pr-4 font-mono text-xs">{{ row.unit.code }}</td>
               <td class="py-2 pr-4">
-                <div
-                  class="flex items-center gap-2"
-                  :title="row.unit.active
-                    ? 'On — available for intake and routing'
-                    : 'Off — hidden from intake; existing cases keep their link'"
-                >
-                  <USwitch
+                <USwitch
                     :model-value="row.unit.active"
                     :loading="togglingActive.has(row.unit.id)"
                     size="sm"
                     :aria-label="`${row.unit.name}: ${row.unit.active ? 'active' : 'inactive'}`"
                     @update:model-value="setActive(row.unit, $event)"
-                  />
-                  <span class="text-xs text-muted w-6">{{ row.unit.active ? 'On' : 'Off' }}</span>
-                </div>
+                />
               </td>
               <td class="py-2">
                 <div class="flex items-center justify-end gap-1">

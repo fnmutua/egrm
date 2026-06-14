@@ -7,7 +7,7 @@
  */
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, type AnyColumn } from 'drizzle-orm';
 import { db, pool, schema } from './client.js';
 import { deleteAttachmentBlob } from '../services/attachment-storage.js';
 
@@ -51,18 +51,17 @@ export async function resetCases(tenantCode?: string): Promise<void> {
   }
 
   await db.transaction(async (tx) => {
-    const forTenant = (table: { tenantId: typeof schema.grmCase.tenantId }) =>
-      inArray(table.tenantId, tenantIds);
+    const forTenant = (tenantIdCol: AnyColumn) => inArray(tenantIdCol, tenantIds);
 
     const counts = {
-      notification_log: Number((await tx.delete(schema.notificationLog).where(forTenant(schema.notificationLog))).rowCount ?? 0),
-      notification_outbox: Number((await tx.delete(schema.notificationOutbox).where(forTenant(schema.notificationOutbox))).rowCount ?? 0),
-      case_attachment: Number((await tx.delete(schema.caseAttachment).where(forTenant(schema.caseAttachment))).rowCount ?? 0),
-      thread_entry: Number((await tx.delete(schema.threadEntry).where(forTenant(schema.threadEntry))).rowCount ?? 0),
-      case_event: Number((await tx.delete(schema.caseEvent).where(forTenant(schema.caseEvent))).rowCount ?? 0),
-      grm_case: Number((await tx.delete(schema.grmCase).where(forTenant(schema.grmCase))).rowCount ?? 0),
-      party: Number((await tx.delete(schema.party).where(forTenant(schema.party))).rowCount ?? 0),
-      case_sequence: Number((await tx.delete(schema.caseSequence).where(forTenant(schema.caseSequence))).rowCount ?? 0),
+      notification_log: Number((await tx.delete(schema.notificationLog).where(forTenant(schema.notificationLog.tenantId))).rowCount ?? 0),
+      notification_outbox: Number((await tx.delete(schema.notificationOutbox).where(forTenant(schema.notificationOutbox.tenantId))).rowCount ?? 0),
+      case_attachment: Number((await tx.delete(schema.caseAttachment).where(forTenant(schema.caseAttachment.tenantId))).rowCount ?? 0),
+      thread_entry: Number((await tx.delete(schema.threadEntry).where(forTenant(schema.threadEntry.tenantId))).rowCount ?? 0),
+      case_event: Number((await tx.delete(schema.caseEvent).where(forTenant(schema.caseEvent.tenantId))).rowCount ?? 0),
+      grm_case: Number((await tx.delete(schema.grmCase).where(forTenant(schema.grmCase.tenantId))).rowCount ?? 0),
+      party: Number((await tx.delete(schema.party).where(forTenant(schema.party.tenantId))).rowCount ?? 0),
+      case_sequence: Number((await tx.delete(schema.caseSequence).where(forTenant(schema.caseSequence.tenantId))).rowCount ?? 0),
     };
 
     console.log('[reset-cases] deleted rows:', counts);
