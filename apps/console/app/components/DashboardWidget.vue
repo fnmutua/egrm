@@ -22,23 +22,77 @@ onMounted(async () => {
 });
 
 const isMulti = computed(() => seriesData.value.length > 0);
-const hasData = computed(() => {
-  if (isTable.value) return rows.value.length > 0;
-  return rows.value.length > 0 || isMulti.value;
-});
 
-const tableCategoryLabel = computed(() => {
-  const dim = props.widget.group_by?.[0];
-  if (!dim) return 'Label';
+function dimLabel(dim?: string): string {
+  if (!dim) return '';
   if (dim.startsWith('unit_level:')) return dim.slice('unit_level:'.length).replace(/_/g, ' ');
   if (dim === 'unit_id') return 'Unit';
   return dim.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const isStacked = computed(() => ['stacked_bar', 'stacked_bar_100'].includes(props.widget.chart_kind));
+
+const hasData = computed(() => {
+  const kind = props.widget.chart_kind;
+  if (kind === 'table') return rows.value.length > 0;
+  if (isStacked.value || kind === 'multi_line' || kind === 'area') {
+    return seriesData.value.length > 0 && categories.value.length > 0;
+  }
+  if (kind === 'line') return rows.value.length > 0;
+  if (kind === 'pie' || kind === 'donut' || kind === 'bar') return rows.value.length > 0;
+  return rows.value.length > 0 || isMulti.value;
 });
 
-const tableEmptyHint = computed(() => {
-  if (!isTable.value) return '';
-  if (!props.widget.group_by?.length) return 'Pick a Rows dimension in the widget config.';
-  return 'No matching cases for the current filters.';
+const tableCategoryLabel = computed(() => dimLabel(props.widget.group_by?.[0]) || 'Label');
+
+const chartEmptyHint = computed(() => {
+  const gb = props.widget.group_by ?? [];
+  const kind = props.widget.chart_kind;
+  if (kind === 'table') {
+    if (!gb[0]) return 'Pick a Rows dimension in the widget config.';
+    return 'No matching cases for the current filters.';
+  }
+  if (isStacked.value) {
+    if (!gb[0] || !gb[1]) return 'Set Categories (axis) and Series (stacks) in the widget config.';
+    return 'No matching cases for the current filters.';
+  }
+  if (kind === 'bar' && !gb[0]) return 'Set Categories in the widget config.';
+  if (kind === 'multi_line' || kind === 'area') {
+    if (!props.widget.time_dimension || !props.widget.bucket) return 'Set Time dimension and Bucket in the widget config.';
+    if (!gb[0]) return 'Set Series in the widget config.';
+    return 'No matching cases for the current filters.';
+  }
+  if (kind === 'line') {
+    if (!props.widget.time_dimension || !props.widget.bucket) return 'Set Time dimension and Bucket in the widget config.';
+    return 'No matching cases for the current filters.';
+  }
+  return '';
+});
+
+const AGGREGATION_LABELS: Record<string, string> = {
+  count: 'Count',
+  count_distinct: 'Count distinct',
+  sum: 'Sum',
+  avg: 'Average',
+  min: 'Minimum',
+  max: 'Maximum',
+  pct: 'Percentage',
+};
+
+const tableValueLabel = computed(() =>
+  AGGREGATION_LABELS[props.widget.aggregation ?? 'count'] ?? 'Count',
+);
+
+const widgetSize = computed(() => props.widget.size ?? 'standard');
+const isCompact = computed(() => widgetSize.value === 'compact');
+
+const chartHeight = computed(() => {
+  switch (widgetSize.value) {
+    case 'compact': return 150;
+    case 'wide': return 280;
+    case 'full': return 340;
+    default: return 220;
+  }
 });
 
 // ── KPI threshold ──────────────────────────────────────────────
@@ -117,7 +171,25 @@ const xAxisCategories = computed(() =>
   isMulti.value ? categories.value : rows.value.map((r) => r.label ?? '—')
 );
 
-const labelStyle = computed(() => ({ colors: isDark.value ? '#94a3b8' : '#64748b', fontSize: '11px' }));
+const labelStyle = computed(() => ({
+  colors: isDark.value ? '#94a3b8' : '#64748b',
+  fontSize: isCompact.value ? '9px' : '11px',
+}));
+
+const compactLegend = computed(() => ({
+  position: 'bottom' as const,
+  fontSize: isCompact.value ? '10px' : '12px',
+  ...baseOptions.value.legend,
+  labels: { ...baseOptions.value.legend.labels, fontSize: isCompact.value ? '10px' : '12px' },
+}));
+
+const compactXaxisLabels = computed(() => ({
+  style: labelStyle.value,
+  rotate: isCompact.value ? -35 : -30,
+  hideOverlappingLabels: true,
+  trim: true,
+  maxHeight: isCompact.value ? 36 : 60,
+}));
 
 // Build ApexCharts series + options per chart kind
 const chartOptions = computed(() => {
@@ -129,16 +201,20 @@ const chartOptions = computed(() => {
       ...baseOptions.value,
       labels: pieLabels,
       chart: { ...baseOptions.value.chart, type: isDonut.value ? 'donut' : 'pie' },
-      legend: { position: 'bottom', ...baseOptions.value.legend },
+      legend: { position: 'bottom', fontSize: isCompact.value ? '10px' : '12px', ...baseOptions.value.legend },
       plotOptions: {
-        pie: { donut: { size: '65%', labels: { show: isDonut.value, total: { show: true, label: 'Total', formatter: () => String(total.value) } } } },
+        pie: {
+          donut: { size: isCompact.value ? '55%' : '65%', labels: { show: isDonut.value && !isCompact.value, total: { show: !isCompact.value, label: 'Total', formatter: () => String(total.value) } } },
+        },
       },
     };
   }
 
   if (isBar.value) {
     const stacked    = props.widget.chart_kind !== 'bar';
-    const horizontal = !stacked;
+    const horizontal = !stacked || isCompact.value;
+    const valueLabel = isCompact.value ? undefined : tableValueLabel.value;
+    const axisTitle  = valueLabel ? { text: valueLabel, style: labelStyle.value } : undefined;
     return {
       ...baseOptions.value,
       chart: {
@@ -149,11 +225,16 @@ const chartOptions = computed(() => {
       },
       plotOptions: {
         bar: horizontal
-          ? { horizontal: true, borderRadius: 4, barHeight: '60%' }
-          : { horizontal: false, borderRadius: 2, columnWidth: '60%' },
+          ? { horizontal: true, borderRadius: 3, barHeight: isCompact.value ? '70%' : '60%' }
+          : { horizontal: false, borderRadius: 2, columnWidth: isCompact.value ? '75%' : '60%' },
       },
-      xaxis: { categories: axisLabels, labels: { style: labelStyle.value } },
-      yaxis: { labels: { style: labelStyle.value } },
+      legend: (stacked || isMulti.value) ? compactLegend.value : baseOptions.value.legend,
+      xaxis: horizontal
+        ? { categories: axisLabels, labels: compactXaxisLabels.value, title: axisTitle }
+        : { categories: axisLabels, labels: compactXaxisLabels.value },
+      yaxis: horizontal
+        ? { labels: { style: labelStyle.value } }
+        : { labels: { style: labelStyle.value }, title: axisTitle },
     };
   }
 
@@ -161,9 +242,11 @@ const chartOptions = computed(() => {
     return {
       ...baseOptions.value,
       chart: { ...baseOptions.value.chart, type: isArea.value ? 'area' : 'line' },
-      stroke: { curve: 'smooth', width: 2 },
+      stroke: { curve: 'smooth', width: isCompact.value ? 1.5 : 2 },
+      markers: { size: isCompact.value ? 0 : 3 },
+      legend: isMulti.value ? compactLegend.value : baseOptions.value.legend,
       fill: isArea.value ? { type: 'gradient', gradient: { opacityFrom: 0.4, opacityTo: 0.05 } } : undefined,
-      xaxis: { categories: axisLabels, labels: { style: labelStyle.value, rotate: -30 } },
+      xaxis: { categories: axisLabels, labels: compactXaxisLabels.value },
       yaxis: { labels: { style: labelStyle.value } },
     };
   }
@@ -196,7 +279,7 @@ const widgetIcon = computed(() => props.widget.icon || 'i-lucide-hash');
       <div class="min-w-0 space-y-1">
         <p class="text-sm font-medium text-muted truncate">{{ widget.title }}</p>
         <div v-if="loading" class="h-10 w-24 rounded bg-elevated animate-pulse" />
-        <p v-else :class="['text-4xl font-bold tabular-nums leading-none', kpiNumberClass[kpiColor]]">
+        <p v-else :class="['font-bold tabular-nums leading-none', isCompact ? 'text-3xl' : 'text-4xl', kpiNumberClass[kpiColor]]">
           {{ total.toLocaleString() }}
         </p>
       </div>
@@ -241,7 +324,7 @@ const widgetIcon = computed(() => props.widget.icon || 'i-lucide-hash');
     <!-- No data -->
     <div v-else-if="!hasData" class="flex-1 flex flex-col items-center justify-center py-10 gap-1">
       <p class="text-xs text-muted">No data</p>
-      <p v-if="tableEmptyHint" class="text-[10px] text-muted/80">{{ tableEmptyHint }}</p>
+      <p v-if="chartEmptyHint" class="text-[10px] text-muted/80">{{ chartEmptyHint }}</p>
     </div>
 
     <template v-else>
@@ -249,7 +332,7 @@ const widgetIcon = computed(() => props.widget.icon || 'i-lucide-hash');
       <ClientOnly v-if="isBar || isLine || isArea || isPie || isDonut">
         <ApexChart
           width="100%"
-          height="240"
+          :height="chartHeight"
           :type="chartType"
           :options="chartOptions"
           :series="chartSeries"
@@ -262,7 +345,7 @@ const widgetIcon = computed(() => props.widget.icon || 'i-lucide-hash');
           <thead>
             <tr class="border-b border-default">
               <th class="text-left py-1.5 pr-3 font-medium text-muted">{{ tableCategoryLabel }}</th>
-              <th class="text-right py-1.5 font-medium text-muted">Value</th>
+              <th class="text-right py-1.5 font-medium text-muted">{{ tableValueLabel }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-default">

@@ -20,6 +20,7 @@ interface Widget {
   group_by: string[]; time_dimension?: string; bucket?: string;
   filters: FilterDef[]; target?: number | null;
   thresholds: Threshold[];
+  size?: 'compact' | 'standard' | 'wide' | 'full';
 }
 
 interface Section {
@@ -67,7 +68,7 @@ const MEASURES = [
   { value: 'party_id',    label: 'Complainant' },
   { value: 'unit_id',     label: 'Unit' },
 ];
-const FALLBACK_GROUP_BY = [
+const FALLBACK_CASE_FIELDS = [
   { value: 'status', label: 'Status', group: 'case' },
   { value: 'status_tag', label: 'Status tag', group: 'case' },
   { value: 'channel', label: 'Channel', group: 'case' },
@@ -75,8 +76,12 @@ const FALLBACK_GROUP_BY = [
   { value: 'sensitivity', label: 'Sensitivity', group: 'case' },
   { value: 'case_type', label: 'Case type', group: 'case' },
   { value: 'level_code', label: 'Case level', group: 'case' },
-  { value: 'unit_id', label: 'Assigned unit', group: 'admin_units' },
+  { value: 'anonymous', label: 'Anonymous', group: 'case' },
+  { value: 'unit_id', label: 'Unit', group: 'case' },
+  { value: 'assignee_id', label: 'Assignee', group: 'case' },
+  { value: 'party_id', label: 'Complainant', group: 'case' },
 ];
+const FALLBACK_UNIT_ROLLUPS: { value: string; label: string; group: string }[] = [];
 const TIME_DIMENSIONS = [
   { value: 'submitted_at', label: 'Submitted at' }, { value: 'resolved_at', label: 'Resolved at' },
   { value: 'closed_at', label: 'Closed at' }, { value: 'acknowledged_at', label: 'Acknowledged at' },
@@ -114,6 +119,12 @@ const FIELD_TYPE: Record<string, 'enum' | 'bool' | 'text' | 'number' | 'date' | 
   unit_id:     'unit',
 };
 const LAYOUT_OPTIONS = [{ value: 'grid', label: 'Grid' }, { value: 'single_col', label: 'Single column' }];
+const WIDGET_SIZES = [
+  { value: 'compact', label: 'Compact', help: 'Fits small grid cells — shorter chart, tighter labels.' },
+  { value: 'standard', label: 'Standard', help: 'Default single-column tile.' },
+  { value: 'wide', label: 'Wide (2 cols)', help: 'Best for line, stacked, and multi-series charts.' },
+  { value: 'full', label: 'Full width', help: 'Spans the entire row — use for busy charts.' },
+];
 const THRESHOLD_COLORS = [{ value: 'success', label: 'Green' }, { value: 'warning', label: 'Amber' }, { value: 'error', label: 'Red' }];
 
 const DEFAULT_PACK = [
@@ -132,7 +143,9 @@ const { api } = useApi();
 const fieldValuesCache = reactive<Record<string, string[]>>({});
 const fieldValueLabels = reactive<Record<string, Record<string, string>>>({});
 const fieldValuesLoading = reactive<Record<string, boolean>>({});
-const groupByOptions = ref(FALLBACK_GROUP_BY);
+const caseFieldOptions = ref(FALLBACK_CASE_FIELDS);
+const unitRollupOptions = ref(FALLBACK_UNIT_ROLLUPS);
+const groupByOptions = computed(() => [...caseFieldOptions.value, ...unitRollupOptions.value]);
 
 async function ensureFieldValues(field: string) {
   if (fieldValuesCache[field] !== undefined || fieldValuesLoading[field]) return;
@@ -169,12 +182,16 @@ onMounted(async () => {
   ensure();
   try {
     const res = await api<{
-      case_dimensions: { value: string; label: string; group: string }[];
-      unit_dimensions: { value: string; label: string; group: string }[];
+      case_fields?: { value: string; label: string; group: string }[];
+      case_dimensions?: { value: string; label: string; group: string }[];
+      unit_rollups?: { value: string; label: string; group: string }[];
+      unit_dimensions?: { value: string; label: string; group: string }[];
     }>('/api/v1/dashboards/dimensions');
-    groupByOptions.value = [...(res.case_dimensions ?? []), ...(res.unit_dimensions ?? [])];
+    caseFieldOptions.value = res.case_fields ?? res.case_dimensions ?? FALLBACK_CASE_FIELDS;
+    unitRollupOptions.value = res.unit_rollups ?? res.unit_dimensions ?? FALLBACK_UNIT_ROLLUPS;
   } catch {
-    groupByOptions.value = FALLBACK_GROUP_BY;
+    caseFieldOptions.value = FALLBACK_CASE_FIELDS;
+    unitRollupOptions.value = FALLBACK_UNIT_ROLLUPS;
   }
   ensureFieldValues('unit_id');
 });
@@ -189,7 +206,10 @@ function ensure() {
     d.sections ??= [];
     for (const s of d.sections) {
       s.widgets ??= [];
-      for (const w of s.widgets) { w.metrics ??= []; w.group_by ??= []; w.filters ??= []; w.thresholds ??= []; }
+      for (const w of s.widgets) {
+        w.metrics ??= []; w.group_by ??= []; w.filters ??= []; w.thresholds ??= [];
+        w.size ??= 'standard';
+      }
     }
   }
 }
@@ -283,6 +303,16 @@ function removeWidget(sec: Section, w: Widget) {
   if (expandedWidgetId.value === w.id) expandedWidgetId.value = null;
 }
 
+function moveWidgetUp(sec: Section, i: number) {
+  if (i === 0) return;
+  [sec.widgets[i - 1], sec.widgets[i]] = [sec.widgets[i]!, sec.widgets[i - 1]!];
+}
+
+function moveWidgetDown(sec: Section, i: number) {
+  if (i >= sec.widgets.length - 1) return;
+  [sec.widgets[i], sec.widgets[i + 1]] = [sec.widgets[i + 1]!, sec.widgets[i]!];
+}
+
 function cloneWidget(sec: Section, w: Widget) {
   const idx = sec.widgets.findIndex((x) => x.id === w.id);
   const id = `w-${uid()}`;
@@ -362,18 +392,18 @@ const CHART_PROFILES: Record<string, ChartProfile> = {
     filters: true, kpiDisplay: false,
   },
   stacked_bar: {
-    hint: 'Stacked bars: categories on the axis, coloured stacks from a second dimension.',
+    hint: 'Stacked bars from two case fields — axis and stacks both come from the cases table.',
     measure: true, aggregation: true,
-    categories: { show: true, label: 'Categories (axis)', required: true, help: 'Primary axis labels — e.g. County, Month.' },
-    series: { show: true, label: 'Series (stacks)', required: true, help: 'Second dimension — each value becomes a coloured stack.' },
+    categories: { show: true, label: 'Categories (axis)', required: true, help: 'Case field on the axis — e.g. Unit, Channel, Priority.' },
+    series: { show: true, label: 'Series (stacks)', required: true, help: 'Second case field — each value becomes a coloured stack (e.g. Status).' },
     time: { show: false, required: false },
     filters: true, kpiDisplay: false,
   },
   stacked_bar_100: {
-    hint: '100% stacked bars — same as stacked bar but normalised to percentages.',
+    hint: '100% stacked bars from two case table fields.',
     measure: true, aggregation: true,
-    categories: { show: true, label: 'Categories (axis)', required: true, help: 'Primary axis labels.' },
-    series: { show: true, label: 'Series (stacks)', required: true, help: 'Second dimension for stack segments.' },
+    categories: { show: true, label: 'Categories (axis)', required: true, help: 'Case field on the axis.' },
+    series: { show: true, label: 'Series (stacks)', required: true, help: 'Second case field for stack segments.' },
     time: { show: false, required: false },
     filters: true, kpiDisplay: false,
   },
@@ -452,6 +482,12 @@ function setSeriesDim(w: Widget, v: string | undefined) {
 
 function normalizeWidgetForChart(w: Widget, kind: string) {
   const p = chartProfile(kind);
+  const allowed = new Set(
+    usesCaseFieldsOnly(kind)
+      ? caseFieldOptions.value.map((o) => o.value)
+      : groupByOptions.value.map((o) => o.value),
+  );
+  w.group_by = w.group_by.filter((d) => allowed.has(d));
   if (!p.categories.show && !p.series.show) w.group_by = [];
   else if (p.categories.show && !p.series.show) w.group_by = w.group_by.slice(0, 1);
   else if (p.categories.show && p.series.show) w.group_by = w.group_by.slice(0, 2);
@@ -490,11 +526,28 @@ function widgetConfigIssues(w: Widget): string[] {
   return issues;
 }
 
-const mapGroupByOptions = computed(() =>
-  groupByOptions.value.filter((o) => o.group === 'admin_units' || o.value.startsWith('unit_level:')),
-);
+const STACKED_CHARTS = new Set(['stacked_bar', 'stacked_bar_100']);
+
+function usesCaseFieldsOnly(kind: string) {
+  return STACKED_CHARTS.has(kind);
+}
+
+function categoryFieldOptions(w: Widget) {
+  if (w.chart_kind === 'map') return unitRollupOptions.value;
+  if (usesCaseFieldsOnly(w.chart_kind)) return caseFieldOptions.value;
+  return groupByOptions.value;
+}
+
+function seriesFieldOptions(w: Widget) {
+  const items = usesCaseFieldsOnly(w.chart_kind) ? caseFieldOptions.value : groupByOptions.value;
+  const cat = categoryDim(w);
+  return cat ? items.filter((o) => o.value !== cat) : items;
+}
+
+const mapGroupByOptions = computed(() => unitRollupOptions.value);
 
 const isKpiCard = (k: string) => chartProfile(k).kpiDisplay;
+const isChartWidget = (k: string) => !isKpiCard(k);
 const chartIcon = (k: string) => CHART_KINDS.find((c) => c.value === k)?.icon ?? 'i-lucide-bar-chart-2';
 const datasetLabel = (v: string) => DATASETS.find((d) => d.value === v)?.label ?? v;
 
@@ -699,7 +752,7 @@ const dashTabClass = (id: string) => [
           <div v-if="activeSection.widgets.length === 0" class="py-8 text-center text-sm text-muted">No widgets yet.</div>
 
           <div v-else class="divide-y divide-default">
-            <div v-for="widget in activeSection.widgets" :key="widget.id">
+            <div v-for="(widget, wi) in activeSection.widgets" :key="widget.id">
 
               <!-- Widget row -->
               <div
@@ -709,7 +762,10 @@ const dashTabClass = (id: string) => [
                 <UIcon :name="chartIcon(widget.chart_kind)" class="size-4 text-muted shrink-0" />
                 <span class="text-sm font-medium flex-1 truncate">{{ widget.title || '(untitled)' }}</span>
                 <span class="text-xs text-muted shrink-0">{{ widget.chart_kind }}</span>
+                <span v-if="widget.size && widget.size !== 'standard'" class="text-xs text-muted shrink-0">{{ widget.size }}</span>
                 <span class="text-xs text-muted shrink-0">{{ datasetLabel(widget.dataset) }}</span>
+                <UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-chevron-up" :disabled="wi === 0" title="Move up" @click.stop="moveWidgetUp(activeSection, wi)" />
+                <UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-chevron-down" :disabled="wi === activeSection.widgets.length - 1" title="Move down" @click.stop="moveWidgetDown(activeSection, wi)" />
                 <UButton size="xs" variant="ghost" icon="i-lucide-copy" title="Clone widget" @click.stop="cloneWidget(activeSection, widget)" />
                 <UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click.stop="removeWidget(activeSection, widget)" />
                 <UIcon :name="expandedWidgetId === widget.id ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="size-4 text-muted shrink-0" />
@@ -738,6 +794,19 @@ const dashTabClass = (id: string) => [
                     <USelectMenu v-model="widget.dataset" :items="DATASETS" value-key="value" label-key="label" class="w-full" />
                   </UFormField>
                 </div>
+                <UFormField
+                  v-if="isChartWidget(widget.chart_kind)"
+                  label="Display size"
+                  :help="WIDGET_SIZES.find((s) => s.value === (widget.size ?? 'standard'))?.help"
+                >
+                  <USelectMenu
+                    v-model="widget.size"
+                    :items="WIDGET_SIZES"
+                    value-key="value"
+                    label-key="label"
+                    class="w-full"
+                  />
+                </UFormField>
 
                 <!-- Data (chart-type aware) -->
                 <div class="space-y-3 pt-4 border-t border-default/60">
@@ -769,10 +838,10 @@ const dashTabClass = (id: string) => [
                   >
                     <USelectMenu
                       :model-value="categoryDim(widget)"
-                      :items="widget.chart_kind === 'map' ? mapGroupByOptions : groupByOptions"
+                      :items="categoryFieldOptions(widget)"
                       value-key="value"
                       label-key="label"
-                      placeholder="Pick dimension…"
+                      placeholder="Pick case field…"
                       class="w-full"
                       @update:model-value="(v: string) => setCategoryDim(widget, v)"
                     />
@@ -786,10 +855,10 @@ const dashTabClass = (id: string) => [
                   >
                     <USelectMenu
                       :model-value="chartProfile(widget.chart_kind).categories.show ? seriesDim(widget) : categoryDim(widget)"
-                      :items="groupByOptions"
+                      :items="seriesFieldOptions(widget)"
                       value-key="value"
                       label-key="label"
-                      placeholder="Pick dimension…"
+                      placeholder="Pick case field…"
                       class="w-full"
                       @update:model-value="(v: string) => chartProfile(widget.chart_kind).categories.show ? setSeriesDim(widget, v) : setCategoryDim(widget, v)"
                     />

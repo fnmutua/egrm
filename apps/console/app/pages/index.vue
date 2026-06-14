@@ -1,6 +1,8 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'shell' });
 
+import type { Widget } from '~/types/dashboard';
+
 const route = useRoute();
 const { user, fetchMe } = useAuth();
 const { loadDashboards, visibleDashboards, loading: dashLoading } = useDashboards();
@@ -9,6 +11,14 @@ const activeDashId = ref<string | null>(null);
 const activeDash = computed(
   () => visibleDashboards.value.find((d) => d.id === activeDashId.value) ?? visibleDashboards.value[0] ?? null,
 );
+
+function widgetGridClass(widget: Widget, layout?: string) {
+  if (layout === 'single_col') return '';
+  const size = widget.size ?? 'standard';
+  if (size === 'full') return 'col-span-full';
+  if (size === 'wide') return 'sm:col-span-2';
+  return '';
+}
 
 function pickDash(qd?: string) {
   const match = qd && visibleDashboards.value.find((d) => d.id === qd);
@@ -112,11 +122,13 @@ function switchDashboard(id: string) {
                   : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4',
               ]"
             >
-              <DashboardWidget
+              <div
                 v-for="widget in section.widgets"
                 :key="widget.id"
-                :widget="widget"
-              />
+                :class="widgetGridClass(widget, activeDash.layout)"
+              >
+                <DashboardWidget :widget="widget" />
+              </div>
             </div>
           </div>
 

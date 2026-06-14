@@ -193,26 +193,33 @@ export default async function dashboardRoutes(app: FastifyInstance) {
         sensitivity: 'Sensitivity',
         level_code: 'Case level',
         case_type: 'Case type',
+        anonymous: 'Anonymous',
         assignee_id: 'Assignee',
         party_id: 'Complainant',
+        unit_id: 'Unit',
       };
 
-      const caseDimensions = Object.keys(SCALAR_DIMS).map((value) => ({
-        value,
-        label: caseDimensionLabels[value] ?? value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        group: 'case',
-      }));
-
-      const unitDimensions = [
-        { value: 'unit_id', label: 'Assigned unit', group: 'admin_units' },
-        ...[...levels].reverse().map((l) => ({
-          value: `unit_level:${l.code}`,
-          label: l.label || l.code,
-          group: 'admin_units' as const,
+      const caseFields = [
+        ...Object.keys(SCALAR_DIMS).map((value) => ({
+          value,
+          label: caseDimensionLabels[value] ?? value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+          group: 'case' as const,
         })),
+        { value: 'unit_id', label: 'Unit', group: 'case' as const },
       ];
 
-      return { case_dimensions: caseDimensions, unit_dimensions: unitDimensions };
+      const unitRollups = [...levels].reverse().map((l) => ({
+        value: `unit_level:${l.code}`,
+        label: l.label || l.code,
+        group: 'unit_rollup' as const,
+      }));
+
+      return {
+        case_fields: caseFields,
+        case_dimensions: caseFields,
+        unit_rollups: unitRollups,
+        unit_dimensions: unitRollups,
+      };
     },
   );
 
@@ -233,6 +240,22 @@ export default async function dashboardRoutes(app: FastifyInstance) {
       const where = await buildCaseWhere(tenantId, req.user.sub, widget.filters as { field: string; op: string; value: unknown }[]);
       const kind = widget.chart_kind ?? '';
 
+      // Stacked bars — always 2D; never fall through to 1D or time-series paths
+      if (STACKED_CHARTS.has(kind)) {
+        if (widget.group_by.length >= 2) {
+          const dim0 = widget.group_by[0]!;
+          const dim1 = widget.group_by[1]!;
+          if (isGroupDimension(dim0) && isGroupDimension(dim1)) {
+            const raw = await queryGrouped2D(where, tenantId, dim0, dim1);
+            if (raw?.length) {
+              const { series, categories, total } = pivot2D(raw);
+              return { rows: [], series, categories, total };
+            }
+          }
+        }
+        return { rows: [], series: [], categories: [], total: 0 };
+      }
+
       // Table, bar, pie, etc. — always 1D rows; ignore stray time fields from old configs
       if (CATEGORICAL_CHARTS.has(kind)) {
         const groupDim = primaryGroupDim(widget.group_by);
@@ -241,14 +264,6 @@ export default async function dashboardRoutes(app: FastifyInstance) {
           if (rows) {
             return { rows, series: [], categories: [], total: rows.reduce((s, r) => s + Number(r.value), 0) };
           }
-        }
-      }
-
-      if (STACKED_CHARTS.has(kind) && widget.group_by.length >= 2) {
-        const raw = await queryGrouped2D(where, tenantId, widget.group_by[0]!, widget.group_by[1]!);
-        if (raw) {
-          const { series, categories, total } = pivot2D(raw);
-          return { rows: [], series, categories, total };
         }
       }
 

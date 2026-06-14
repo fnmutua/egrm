@@ -31,6 +31,8 @@ export interface Widget {
   filters?: FilterDef[];
   target?: number | null;
   thresholds?: Threshold[];
+  /** Grid footprint + chart density: compact | standard | wide | full */
+  size?: 'compact' | 'standard' | 'wide' | 'full';
 }
 
 export interface Section {
