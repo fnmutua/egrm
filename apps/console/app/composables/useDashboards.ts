@@ -61,6 +61,7 @@ export function useDashboards() {
     series: { name: string; data: number[] }[];
     categories: string[];
     total: number;
+    sparkline?: { label: string; value: number }[];
   }> {
     const groupBy = [...(widget.group_by ?? [])];
     if ((!groupBy[0] || !groupBy[0].startsWith('unit_level:')) && widget.unit_level) {
@@ -79,10 +80,11 @@ export function useDashboards() {
           time_dimension: TIME_CHARTS.has(widget.chart_kind) ? widget.time_dimension : undefined,
           bucket: TIME_CHARTS.has(widget.chart_kind) ? widget.bucket : undefined,
           filters: mergeWidgetFilters(widget.filters, effectiveUnitId.value),
+          sparkline_period: widget.chart_kind === 'kpi_spark' ? widget.sparkline_period ?? undefined : undefined,
         },
       });
     } catch {
-      return { rows: [], series: [], categories: [], total: 0 };
+      return { rows: [], series: [], categories: [], total: 0, sparkline: [] };
     }
   }
 

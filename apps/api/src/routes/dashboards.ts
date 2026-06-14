@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { and, count, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, count, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Cd02Hierarchy } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
@@ -50,8 +50,18 @@ const widgetBody = z.object({
   filters: z
     .array(z.object({ field: z.string(), op: z.string(), value: z.unknown() }))
     .default([]),
+  sparkline_period: z.enum(['7d', '14d', '30d', '8w', '6m']).optional(),
 });
 
+const SPARKLINE_PERIODS: Record<string, { bucket: string; cutoff: () => Date }> = {
+  '7d':  { bucket: 'day',   cutoff: () => new Date(Date.now() - 7 * 86_400_000) },
+  '14d': { bucket: 'day',   cutoff: () => new Date(Date.now() - 14 * 86_400_000) },
+  '30d': { bucket: 'day',   cutoff: () => new Date(Date.now() - 30 * 86_400_000) },
+  '8w':  { bucket: 'week',  cutoff: () => new Date(Date.now() - 56 * 86_400_000) },
+  '6m':  { bucket: 'month', cutoff: () => { const d = new Date(); d.setMonth(d.getMonth() - 6); return d; } },
+};
+
+const SCALAR_CHARTS = new Set(['kpi_card', 'kpi_spark', 'gauge']);
 const CATEGORICAL_CHARTS = new Set(['table', 'bar', 'pie', 'donut', 'treemap', 'map', 'pyramid']);
 const STACKED_CHARTS = new Set(['stacked_bar', 'stacked_bar_100']);
 const TIME_SPLIT_CHARTS = new Set(['multi_line', 'area']);
@@ -327,6 +337,26 @@ export default async function dashboardRoutes(app: FastifyInstance) {
 
       const where = await buildCaseWhere(tenantId, req.user.sub, widget.filters as { field: string; op: string; value: unknown }[]);
       const kind = widget.chart_kind ?? '';
+
+      // KPI card & gauge — single scalar total (no grouping)
+      if (SCALAR_CHARTS.has(kind)) {
+        const [row] = await db
+          .select({ value: count(schema.grmCase.id) })
+          .from(schema.grmCase)
+          .where(where);
+        const total = Number(row?.value ?? 0);
+
+        let sparkline: { label: string; value: number }[] | undefined;
+        if (kind === 'kpi_spark' && widget.sparkline_period) {
+          const cfg = SPARKLINE_PERIODS[widget.sparkline_period];
+          if (cfg) {
+            const sparkWhere = and(where, gte(schema.grmCase.createdAt, cfg.cutoff()));
+            sparkline = await queryTimeSeries1D(sparkWhere!, 'created_at', cfg.bucket);
+          }
+        }
+
+        return { rows: [{ label: 'total', value: total }], series: [], categories: [], total, sparkline };
+      }
 
       // Stacked bars — always 2D; never fall through to 1D or time-series paths
       if (STACKED_CHARTS.has(kind)) {

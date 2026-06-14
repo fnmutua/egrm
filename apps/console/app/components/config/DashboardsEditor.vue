@@ -23,6 +23,7 @@ interface Widget {
   size?: 'compact' | 'standard' | 'wide' | 'full';
   unit_level?: string;
   icon?: string;
+  sparkline_period?: '7d' | '14d' | '30d' | '8w' | '6m' | null;
 }
 
 interface Section {
@@ -46,6 +47,7 @@ const DATASETS = [
 ];
 const CHART_KINDS = [
   { value: 'kpi_card', label: 'KPI Card', icon: 'i-lucide-square-dashed' },
+  { value: 'kpi_spark', label: 'KPI Spark', icon: 'i-lucide-chart-line' },
   { value: 'bar', label: 'Bar', icon: 'i-lucide-bar-chart-2' },
   { value: 'stacked_bar', label: 'Stacked bar', icon: 'i-lucide-bar-chart' },
   { value: 'stacked_bar_100', label: 'Stacked 100%', icon: 'i-lucide-bar-chart' },
@@ -54,6 +56,7 @@ const CHART_KINDS = [
   { value: 'area', label: 'Area', icon: 'i-lucide-area-chart' },
   { value: 'pie', label: 'Pie', icon: 'i-lucide-pie-chart' },
   { value: 'donut', label: 'Donut', icon: 'i-lucide-circle-dashed' },
+  { value: 'gauge', label: 'Gauge', icon: 'i-lucide-gauge' },
   { value: 'treemap', label: 'Treemap', icon: 'i-lucide-layout-grid' },
   { value: 'map', label: 'Map', icon: 'i-lucide-map' },
   { value: 'table', label: 'Table', icon: 'i-lucide-table' },
@@ -128,6 +131,13 @@ const WIDGET_SIZES = [
   { value: 'full', label: 'Full width', help: 'Spans the entire row — use for busy charts.' },
 ];
 const THRESHOLD_COLORS = [{ value: 'success', label: 'Green' }, { value: 'warning', label: 'Amber' }, { value: 'error', label: 'Red' }];
+const SPARKLINE_PERIODS = [
+  { value: '7d', label: 'Last 7 days' },
+  { value: '14d', label: 'Last 14 days' },
+  { value: '30d', label: 'Last 30 days' },
+  { value: '8w', label: 'Last 8 weeks' },
+  { value: '6m', label: 'Last 6 months' },
+];
 const CATEGORY_MODES = [
   { value: 'field', label: 'Case field' },
   { value: 'unit_level', label: 'Admin unit level' },
@@ -370,11 +380,21 @@ interface ChartProfile {
   time: { show: boolean; required: boolean };
   filters: boolean;
   kpiDisplay: boolean;
+  /** Show target + threshold fields (KPI card or gauge % of target). */
+  targetDisplay?: boolean;
 }
 
 const CHART_PROFILES: Record<string, ChartProfile> = {
   kpi_card: {
     hint: 'Single total with optional target and colour thresholds.',
+    measure: true, aggregation: true,
+    categories: { show: false, label: '', required: false, help: '' },
+    series: { show: false, label: '', required: false, help: '' },
+    time: { show: false, required: false },
+    filters: true, kpiDisplay: true,
+  },
+  kpi_spark: {
+    hint: 'KPI total plus a mini trend sparkline over a chosen period.',
     measure: true, aggregation: true,
     categories: { show: false, label: '', required: false, help: '' },
     series: { show: false, label: '', required: false, help: '' },
@@ -404,6 +424,14 @@ const CHART_PROFILES: Record<string, ChartProfile> = {
     series: { show: false, label: '', required: false, help: '' },
     time: { show: false, required: false },
     filters: true, kpiDisplay: false,
+  },
+  gauge: {
+    hint: 'Radial gauge showing actual as a percentage of a numeric target.',
+    measure: true, aggregation: true,
+    categories: { show: false, label: '', required: false, help: '' },
+    series: { show: false, label: '', required: false, help: '' },
+    time: { show: false, required: false },
+    filters: true, kpiDisplay: false, targetDisplay: true,
   },
   table: {
     hint: 'Rows from one category dimension with a numeric value column.',
@@ -585,6 +613,10 @@ function normalizeWidgetForChart(w: Widget, kind: string) {
 
   w.metrics = [];
 
+  if (kind === 'kpi_card' || kind === 'kpi_spark') {
+    w.size = 'compact';
+  }
+
   if (kind === 'map') {
     const level = w.unit_level ?? defaultWidgetUnitLevel();
     if (level) {
@@ -603,14 +635,18 @@ function normalizeWidgetForChart(w: Widget, kind: string) {
 
 function onChartKindChange(w: Widget, kind: string) {
   w.chart_kind = kind;
+  if (kind === 'kpi_spark' && !w.sparkline_period) w.sparkline_period = '7d';
+  if (kind === 'kpi_card') delete w.sparkline_period;
   normalizeWidgetForChart(w, kind);
 }
 
-const SEED_KPI_VARIANTS = [
+const SEED_KPI_CARD_VARIANTS = [
   { title: 'Total cases', icon: 'i-lucide-hash', filters: [] as FilterDef[] },
   { title: 'Open cases', icon: 'i-lucide-inbox', filters: [{ field: 'status', op: 'in', value: ['received', 'investigation'] }] },
-  { title: 'Closed', icon: 'i-lucide-check-circle-2', filters: [{ field: 'status', op: 'eq', value: 'closed' }] },
-  { title: 'High priority', icon: 'i-lucide-alert-triangle', filters: [{ field: 'priority', op: 'eq', value: 'high' }] },
+];
+const SEED_KPI_SPARK_VARIANTS = [
+  { title: 'Closed', icon: 'i-lucide-check-circle-2', filters: [{ field: 'status', op: 'eq', value: 'closed' }], sparkline_period: '30d' as const },
+  { title: 'High priority', icon: 'i-lucide-alert-triangle', filters: [{ field: 'priority', op: 'eq', value: 'high' }], sparkline_period: '8w' as const },
 ];
 const SEED_SECTIONS = [
   { title: 'Cards', icon: 'i-lucide-square-dashed' },
@@ -621,7 +657,13 @@ function seedChartIcon(kind: string): string {
   return CHART_KINDS.find((c) => c.value === kind)?.icon ?? 'i-lucide-bar-chart-2';
 }
 
-function buildSeedWidget(kind: string, label: string, filters: FilterDef[] = [], icon?: string): Widget {
+function buildSeedWidget(
+  kind: string,
+  label: string,
+  filters: FilterDef[] = [],
+  icon?: string,
+  opts?: { sparkline_period?: Widget['sparkline_period']; target?: number },
+): Widget {
   const w: Widget = {
     id: `w-${uid()}`,
     title: label,
@@ -642,6 +684,12 @@ function buildSeedWidget(kind: string, label: string, filters: FilterDef[] = [],
 
   if (kind === 'kpi_card') {
     w.size = 'compact';
+  } else if (kind === 'kpi_spark') {
+    w.size = 'compact';
+    w.sparkline_period = opts?.sparkline_period ?? '7d';
+  } else if (kind === 'gauge') {
+    w.target = opts?.target ?? 100;
+    w.size = 'standard';
   } else if (['bar', 'pie', 'donut', 'table', 'treemap', 'pyramid'].includes(kind)) {
     w.group_by = ['status'];
   } else if (kind === 'stacked_bar' || kind === 'stacked_bar_100') {
@@ -673,14 +721,12 @@ function buildSeedWidget(kind: string, label: string, filters: FilterDef[] = [],
 
 const seedOpen = ref(false);
 const seedDashboardCount = ref(1);
-const seedKpiCount = ref(4);
 
 function seedDashboards() {
   const dashCount = Math.max(1, Math.min(20, Math.round(seedDashboardCount.value) || 1));
-  const kpiCount = Math.max(1, Math.min(4, Math.round(seedKpiCount.value) || 4));
   const canBeMain = !dashboards.value.some((d) => d.is_main);
   const filterLevel = defaultFilterUnitLevel.value;
-  const chartKinds = CHART_KINDS.filter((ck) => ck.value !== 'kpi_card');
+  const chartKinds = CHART_KINDS.filter((ck) => !['kpi_card', 'kpi_spark'].includes(ck.value));
   let firstDashId: string | null = null;
 
   for (let d = 0; d < dashCount; d++) {
@@ -696,13 +742,18 @@ function seedDashboards() {
       widgets: [],
     }));
 
-    for (let i = 0; i < kpiCount; i++) {
-      const preset = SEED_KPI_VARIANTS[i] ?? SEED_KPI_VARIANTS[0]!;
+    for (const preset of SEED_KPI_CARD_VARIANTS) {
       sections[0]!.widgets.push(buildSeedWidget('kpi_card', preset.title, preset.filters, preset.icon));
+    }
+    for (const preset of SEED_KPI_SPARK_VARIANTS) {
+      sections[0]!.widgets.push(
+        buildSeedWidget('kpi_spark', preset.title, preset.filters, preset.icon, { sparkline_period: preset.sparkline_period }),
+      );
     }
 
     chartKinds.forEach((ck) => {
-      sections[1]!.widgets.push(buildSeedWidget(ck.value, ck.label, [], ck.icon));
+      const extra = ck.value === 'gauge' ? { target: 100 } : undefined;
+      sections[1]!.widgets.push(buildSeedWidget(ck.value, ck.label, [], ck.icon, extra));
     });
 
     props.payload.dashboards.push({
@@ -745,6 +796,8 @@ function widgetConfigIssues(w: Widget): string[] {
     if (!seriesValue(w)) issues.push(`${p.series.label} is required`);
   }
   if (p.time.required && (!w.time_dimension || !w.bucket)) issues.push('Time dimension and bucket are required');
+  if (w.chart_kind === 'gauge' && !(w.target != null && w.target > 0)) issues.push('Target is required');
+  if (w.chart_kind === 'kpi_spark' && !w.sparkline_period) issues.push('Sparkline period is required');
   return issues;
 }
 
@@ -785,7 +838,8 @@ function seriesFieldOptions(w: Widget) {
 
 const mapGroupByOptions = computed(() => unitRollupOptions.value);
 
-const isKpiCard = (k: string) => chartProfile(k).kpiDisplay;
+const isKpiCard = (k: string) => k === 'kpi_card' || k === 'kpi_spark';
+const hasTargetConfig = (k: string) => chartProfile(k).targetDisplay ?? chartProfile(k).kpiDisplay;
 const isChartWidget = (k: string) => !isKpiCard(k);
 const chartIcon = (k: string) => CHART_KINDS.find((c) => c.value === k)?.icon ?? 'i-lucide-bar-chart-2';
 const datasetLabel = (v: string) => DATASETS.find((d) => d.value === v)?.label ?? v;
@@ -816,19 +870,14 @@ const dashTabClass = (id: string) => [
       <UModal
         v-model:open="seedOpen"
         title="Seed dashboards"
-        :description="`Two sections per dashboard: KPI cards (1–4) and one widget per chart type (${CHART_KINDS.length - 1} charts).`"
+        :description="`Two sections per dashboard: 2 KPI Cards + 2 KPI Spark, and one widget per chart type (${CHART_KINDS.length - 2} charts).`"
       >
         <template #body>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <UFormField label="Dashboards" help="How many dashboards to add (1–20).">
-              <UInput v-model.number="seedDashboardCount" type="number" min="1" max="20" class="w-full" />
-            </UFormField>
-            <UFormField label="KPI cards" help="Cards section — min 1, max 4.">
-              <UInput v-model.number="seedKpiCount" type="number" min="1" max="4" class="w-full" />
-            </UFormField>
-          </div>
+          <UFormField label="Dashboards" help="How many dashboards to add (1–20).">
+            <UInput v-model.number="seedDashboardCount" type="number" min="1" max="20" class="w-full" />
+          </UFormField>
           <p class="text-xs text-muted mt-3">
-            Each dashboard gets {{ SEED_SECTIONS.length }} sections: <span class="font-medium">Cards</span> (KPIs) and
+            Each dashboard gets {{ SEED_SECTIONS.length }} sections: <span class="font-medium">Cards</span> (2 KPI Card + 2 KPI Spark) and
             <span class="font-medium">Charts</span> (bar, line, pie, table, etc.).
           </p>
         </template>
@@ -1331,17 +1380,36 @@ const dashTabClass = (id: string) => [
                   </div>
                 </div>
 
-                <!-- KPI display options -->
-                <div v-if="isKpiCard(widget.chart_kind)" class="space-y-3 pt-4 border-t border-default/60">
+                <!-- KPI / gauge display options -->
+                <div v-if="hasTargetConfig(widget.chart_kind)" class="space-y-3 pt-4 border-t border-default/60">
                   <p class="text-[11px] font-semibold text-muted uppercase tracking-wider">Display</p>
-                  <UFormField label="Target" help="Numeric goal shown as progress.">
-                    <UInput v-model.number="widget.target" type="number" class="w-full" placeholder="e.g. 30" />
+                  <UFormField
+                    label="Target"
+                    :help="widget.chart_kind === 'gauge' ? 'Denominator for the gauge percentage (actual ÷ target × 100).' : 'Numeric goal shown as progress.'"
+                  >
+                    <UInput v-model.number="widget.target" type="number" min="1" class="w-full" placeholder="e.g. 100" />
+                  </UFormField>
+                  <UFormField
+                    v-if="widget.chart_kind === 'kpi_spark'"
+                    label="Sparkline period"
+                    help="Mini trend under the KPI — uses the same filters as the card total."
+                    required
+                  >
+                    <USelectMenu
+                      v-model="widget.sparkline_period"
+                      :items="SPARKLINE_PERIODS.filter((p) => p.value)"
+                      value-key="value"
+                      label-key="label"
+                      placeholder="Last 7 days"
+                      class="w-full"
+                    />
                   </UFormField>
                   <div class="space-y-2">
                     <div class="flex items-center justify-between">
                       <span class="text-xs text-muted">Thresholds</span>
                       <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addThreshold(widget)">Add</UButton>
                     </div>
+                    <p v-if="widget.chart_kind === 'gauge'" class="text-[11px] text-muted">Colour bands by % of target (0–100).</p>
                     <div v-for="(t, ti) in widget.thresholds" :key="ti" class="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end p-2 rounded border border-default/50">
                       <UFormField label="At value"><UInput v-model.number="t.value" type="number" class="w-full" /></UFormField>
                       <UFormField label="Color"><USelectMenu v-model="t.color" :items="THRESHOLD_COLORS" value-key="value" label-key="label" class="w-full" /></UFormField>

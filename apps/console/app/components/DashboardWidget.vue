@@ -11,6 +11,7 @@ interface WidgetRow { label: string; value: number }
 const rows       = ref<WidgetRow[]>([]);
 const seriesData = ref<{ name: string; data: number[] }[]>([]);
 const categories = ref<string[]>([]);
+const sparkline  = ref<WidgetRow[]>([]);
 const total      = ref(0);
 const loading    = ref(true);
 
@@ -21,6 +22,7 @@ async function loadData() {
     rows.value       = res.rows ?? [];
     seriesData.value = res.series ?? [];
     categories.value = res.categories ?? [];
+    sparkline.value  = res.sparkline ?? [];
     total.value      = res.total;
   } finally {
     loading.value = false;
@@ -49,6 +51,7 @@ const hasData = computed(() => {
     return seriesData.value.length > 0 && categories.value.length > 0;
   }
   if (kind === 'line') return rows.value.length > 0;
+  if (kind === 'gauge') return props.widget.target != null && props.widget.target > 0;
   if (kind === 'pie' || kind === 'donut' || kind === 'bar' || kind === 'treemap') return rows.value.length > 0;
   return rows.value.length > 0 || isMulti.value;
 });
@@ -77,6 +80,9 @@ const chartEmptyHint = computed(() => {
     return 'No matching cases for the current filters.';
   }
   if (kind === 'treemap' && !gb[0]) return 'Set Tiles dimension in the widget config.';
+  if (kind === 'gauge' && !(props.widget.target != null && props.widget.target > 0)) {
+    return 'Set a Target in the widget config to compute %.';
+  }
   return '';
 });
 
@@ -130,9 +136,83 @@ const progressBarClass: Record<string, string> = {
   success: 'bg-green-500', warning: 'bg-amber-500', error: 'bg-red-500', default: 'bg-primary',
 };
 
+const SPARKLINE_COLORS: Record<string, string> = {
+  success: '#22c55e',
+  warning: '#f59e0b',
+  error:   '#ef4444',
+  default: '#6366f1',
+};
+
+const sparklineColor = computed(() => SPARKLINE_COLORS[kpiColor.value] ?? SPARKLINE_COLORS.default);
+
+const hasSparkline = computed(
+  () => isKpiSpark.value && sparkline.value.length > 0,
+);
+
+/** Fixed spark slot so KPI Card and KPI Spark share the same footprint when mixed. */
+const KPI_SPARK_SLOT_H = 32;
+
+const sparklineOptions = computed(() => ({
+  chart: {
+    type: 'area' as const,
+    sparkline: { enabled: true },
+    animations: { enabled: true, speed: 500 },
+    background: 'transparent',
+    fontFamily: 'inherit',
+  },
+  theme: { mode: colorMode.value === 'dark' ? 'dark' : 'light' },
+  stroke: { curve: 'smooth' as const, width: 2, colors: [sparklineColor.value] },
+  fill: {
+    type: 'gradient' as const,
+    colors: [sparklineColor.value],
+    gradient: { shadeIntensity: 0.9, opacityFrom: 0.45, opacityTo: 0.05, stops: [0, 100] },
+  },
+  tooltip: {
+    theme: colorMode.value === 'dark' ? 'dark' : 'light',
+    x: { show: true },
+    y: { formatter: (v: number) => String(Math.round(v)) },
+  },
+}));
+
+const sparklineSeries = computed(() => [
+  { name: props.widget.title, data: sparkline.value.map((r) => r.value) },
+]);
+
+const sparklinePeriodLabel = computed(() => {
+  const labels: Record<string, string> = {
+    '7d': 'Last 7 days',
+    '14d': 'Last 14 days',
+    '30d': 'Last 30 days',
+    '8w': 'Last 8 weeks',
+    '6m': 'Last 6 months',
+  };
+  return props.widget.sparkline_period ? labels[props.widget.sparkline_period] ?? '' : '';
+});
+
 const progress = computed(() =>
   props.widget.target ? Math.min(1, total.value / props.widget.target) : null,
 );
+
+const gaugePercent = computed(() => {
+  if (!props.widget.target || props.widget.target <= 0) return null;
+  return Math.min(100, Math.round((total.value / props.widget.target) * 1000) / 10);
+});
+
+const THRESHOLD_COLORS: Record<string, string> = {
+  success: '#22c55e',
+  warning: '#f59e0b',
+  error:   '#ef4444',
+  default: '#6366f1',
+};
+
+const gaugeColor = computed(() => {
+  const pct = gaugePercent.value;
+  if (pct == null) return THRESHOLD_COLORS.default;
+  if (!props.widget.thresholds?.length) return THRESHOLD_COLORS.default;
+  const sorted = [...props.widget.thresholds].sort((a, b) => b.value - a.value);
+  for (const t of sorted) if (pct >= t.value) return THRESHOLD_COLORS[t.color] ?? THRESHOLD_COLORS.default;
+  return THRESHOLD_COLORS.default;
+});
 
 // ── ApexCharts config ──────────────────────────────────────────
 const isDark = computed(() => colorMode.value === 'dark');
@@ -177,7 +257,9 @@ const baseOptions = computed(() => ({
   },
 }));
 
-const isKpi   = computed(() => props.widget.chart_kind === 'kpi_card');
+const isKpi   = computed(() => ['kpi_card', 'kpi_spark'].includes(props.widget.chart_kind));
+const isKpiSpark = computed(() => props.widget.chart_kind === 'kpi_spark');
+const isGauge = computed(() => props.widget.chart_kind === 'gauge');
 const isBar   = computed(() => ['bar', 'stacked_bar', 'stacked_bar_100'].includes(props.widget.chart_kind));
 const isLine  = computed(() => ['line', 'multi_line'].includes(props.widget.chart_kind));
 const isArea  = computed(() => props.widget.chart_kind === 'area');
@@ -257,6 +339,62 @@ const chartOptions = computed(() => {
     };
   }
 
+  if (isGauge.value) {
+    const pct = gaugePercent.value ?? 0;
+    const target = props.widget.target ?? 0;
+    return {
+      chart: {
+        ...baseOptions.value.chart,
+        type: 'radialBar',
+        sparkline: { enabled: false },
+      },
+      theme: apexTheme.value,
+      colors: [gaugeColor.value],
+      plotOptions: {
+        radialBar: {
+          startAngle: -135,
+          endAngle: 135,
+          hollow: { size: isCompact.value ? '58%' : '62%' },
+          track: {
+            background: isDark.value ? '#334155' : '#e2e8f0',
+            strokeWidth: '100%',
+          },
+          dataLabels: {
+            name: {
+              show: true,
+              offsetY: -6,
+              color: isDark.value ? '#94a3b8' : '#64748b',
+              fontSize: isCompact.value ? '11px' : '12px',
+            },
+            value: {
+              show: true,
+              offsetY: 4,
+              fontSize: isCompact.value ? '22px' : '28px',
+              fontWeight: 700,
+              color: isDark.value ? '#f1f5f9' : '#0f172a',
+              formatter: (val: number) => `${Math.round(val)}%`,
+            },
+            total: {
+              show: !isCompact.value,
+              label: 'Actual',
+              fontSize: '11px',
+              color: isDark.value ? '#94a3b8' : '#64748b',
+              formatter: () => `${total.value.toLocaleString()} / ${target.toLocaleString()}`,
+            },
+          },
+        },
+      },
+      labels: [props.widget.title],
+      stroke: { lineCap: 'round' },
+      tooltip: {
+        theme: isDark.value ? 'dark' : 'light',
+        y: {
+          formatter: () => `${pct}% (${total.value.toLocaleString()} of ${target.toLocaleString()})`,
+        },
+      },
+    };
+  }
+
   if (isBar.value) {
     const stacked    = props.widget.chart_kind !== 'bar';
     const horizontal = !stacked || isCompact.value;
@@ -319,6 +457,7 @@ const chartOptions = computed(() => {
 });
 
 const chartSeries = computed(() => {
+  if (isGauge.value) return [gaugePercent.value ?? 0];
   if (isTreemap.value) {
     return [{ data: rows.value.map((r) => ({ x: r.label ?? '—', y: r.value })) }];
   }
@@ -328,6 +467,7 @@ const chartSeries = computed(() => {
 });
 
 const chartType = computed(() => {
+  if (isGauge.value)        return 'radialBar';
   if (isPie.value)          return 'pie';
   if (isDonut.value)        return 'donut';
   if (isTreemap.value)      return 'treemap';
@@ -337,7 +477,9 @@ const chartType = computed(() => {
   return 'bar';
 });
 
-const isApexChart = computed(() => isBar.value || isLine.value || isArea.value || isPie.value || isDonut.value || isTreemap.value);
+const isApexChart = computed(() =>
+  isBar.value || isLine.value || isArea.value || isPie.value || isDonut.value || isTreemap.value || isGauge.value,
+);
 
 const chartRef = ref<{ chart?: { dataURI: (opts?: { scale?: number }) => Promise<{ imgURI: string }> }; $el?: HTMLElement } | null>(null);
 
@@ -427,13 +569,16 @@ const widgetIcon = computed(() => props.widget.icon || 'i-lucide-hash');
 </script>
 
 <template>
-  <!-- ── KPI Card ───────────────────────────────────────────── -->
-  <UPageCard v-if="isKpi" class="h-full">
+  <!-- ── KPI Card / KPI Spark (original KPI footprint) ─────── -->
+  <UPageCard v-if="isKpi" class="h-full relative overflow-hidden">
     <div class="flex items-start justify-between gap-4">
-      <div class="min-w-0 space-y-1">
+      <div class="min-w-0 space-y-1 flex-1">
         <p class="text-sm font-medium text-muted truncate">{{ widget.title }}</p>
         <div v-if="loading" class="h-10 w-24 rounded bg-elevated animate-pulse" />
-        <p v-else :class="['font-bold tabular-nums leading-none', isCompact ? 'text-3xl' : 'text-4xl', kpiNumberClass[kpiColor]]">
+        <p
+          v-else
+          :class="['font-bold tabular-nums leading-none', isCompact ? 'text-3xl' : 'text-4xl', kpiNumberClass[kpiColor]]"
+        >
           {{ total.toLocaleString() }}
         </p>
       </div>
@@ -441,6 +586,30 @@ const widgetIcon = computed(() => props.widget.icon || 'i-lucide-hash');
         <UIcon :name="widgetIcon" class="size-6" />
       </div>
     </div>
+
+    <div
+      v-if="isKpiSpark"
+      class="absolute inset-x-0 bottom-0 h-9 px-1 pointer-events-auto"
+    >
+      <div v-if="loading" class="h-full w-full rounded bg-elevated/80 animate-pulse" />
+      <ClientOnly v-else-if="hasSparkline">
+        <ApexChart
+          :key="`${widget.id}-spark-${sparkline.length}-${total}`"
+          width="100%"
+          :height="KPI_SPARK_SLOT_H"
+          type="area"
+          :options="sparklineOptions"
+          :series="sparklineSeries"
+        />
+      </ClientOnly>
+      <p
+        v-if="!loading && hasSparkline && sparklinePeriodLabel"
+        class="absolute right-1 bottom-0 text-[9px] text-muted leading-none pointer-events-none"
+      >
+        {{ sparklinePeriodLabel }}
+      </p>
+    </div>
+
     <div v-if="!loading && widget.target" class="mt-4 space-y-1.5">
       <div class="w-full bg-muted/50 rounded-full h-1.5 overflow-hidden">
         <div
@@ -489,9 +658,9 @@ const widgetIcon = computed(() => props.widget.icon || 'i-lucide-hash');
 
     <template v-else>
       <!-- ApexCharts: bar, stacked bar, line, area, pie, donut, treemap -->
-      <ClientOnly v-if="isBar || isLine || isArea || isPie || isDonut || isTreemap">
+      <ClientOnly v-if="isBar || isLine || isArea || isPie || isDonut || isTreemap || isGauge">
         <ApexChart
-          :key="`${widget.id}-${rows.length}-${seriesData.length}`"
+          :key="`${widget.id}-${rows.length}-${seriesData.length}-${gaugePercent}`"
           ref="chartRef"
           width="100%"
           :height="chartHeight"
