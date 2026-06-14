@@ -155,20 +155,22 @@ function levelAllowsIntake(level: Level, on: boolean) {
         @dragend="dragIndex = null; dragOverIndex = null"
       >
         <!-- Collapsed header -->
-        <div class="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none" @click="toggle(level)">
+        <div class="flex items-center flex-nowrap gap-2 px-3 py-2.5 min-w-0 cursor-pointer select-none" @click="toggle(level)">
           <UIcon name="i-lucide-grip-vertical" class="text-muted cursor-grab shrink-0" />
           <span class="text-xs text-muted w-5 shrink-0">{{ i + 1 }}.</span>
-          <span class="font-medium truncate">{{ level.label || '(unnamed level)' }}</span>
-          <UBadge v-if="level.code" size="sm" variant="subtle" color="neutral" class="font-mono">{{ level.code }}</UBadge>
-          <span v-if="parentLabel(level)" class="hidden sm:inline text-xs text-muted truncate">
-            under {{ parentLabel(level) }}
-          </span>
-          <div class="hidden sm:flex items-center gap-1">
+          <div class="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+            <span class="font-medium truncate min-w-0">{{ level.label || '(unnamed level)' }}</span>
+            <UBadge v-if="level.code" size="sm" variant="subtle" color="neutral" class="font-mono shrink-0">{{ level.code }}</UBadge>
+            <span v-if="parentLabel(level)" class="hidden md:inline text-xs text-muted truncate min-w-0">
+              under {{ parentLabel(level) }}
+            </span>
+          </div>
+          <div class="hidden sm:flex items-center gap-1 shrink-0">
             <UBadge v-if="level.allows_intake" size="sm" variant="subtle" color="primary">allows intake</UBadge>
             <UBadge v-if="level.is_confirmation_authority" size="sm" variant="subtle" color="warning">confirms closure</UBadge>
             <UBadge v-if="level.can_be_assigned" size="sm" variant="subtle" color="neutral">assignable</UBadge>
           </div>
-          <div class="ml-auto flex items-center gap-0.5 shrink-0">
+          <div class="flex items-center gap-0.5 shrink-0">
             <UButton size="xs" variant="ghost" icon="i-lucide-chevron-up" :disabled="i === 0" title="Move up" @click.stop="moveDisplayed(i, i - 1)" />
             <UButton size="xs" variant="ghost" icon="i-lucide-chevron-down" :disabled="i === displayed.length - 1" title="Move down" @click.stop="moveDisplayed(i, i + 1)" />
             <UButton
@@ -209,7 +211,7 @@ function levelAllowsIntake(level: Level, on: boolean) {
               @update:model-value="setParent(level, $event as string)"
             />
           </UFormField>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="space-y-2">
             <div class="flex items-center justify-between gap-2 text-sm">
               <span>Allows intake</span>
               <USwitch :model-value="level.allows_intake" @update:model-value="levelAllowsIntake(level, $event)" />
