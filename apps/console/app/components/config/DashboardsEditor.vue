@@ -132,12 +132,6 @@ const CATEGORY_MODES = [
   { value: 'unit_level', label: 'Admin unit level' },
 ];
 
-const DEFAULT_PACK = [
-  { title: 'Operational', icon: 'i-lucide-clipboard-list', audience: { roles: [], levels: [] }, is_main: true, is_public: false, layout: 'grid', filter_bar: { period: true, unit: true, category: false }, sections: [] },
-  { title: 'Management', icon: 'i-lucide-bar-chart-2', audience: { roles: [], levels: [] }, is_main: false, is_public: false, layout: 'grid', filter_bar: { period: true, unit: true, category: true }, sections: [] },
-  { title: 'Transparency', icon: 'i-lucide-globe', audience: { roles: [], levels: [] }, is_main: false, is_public: true, layout: 'grid', filter_bar: { period: true, unit: false, category: false }, sections: [] },
-];
-
 // ---- Props & state ----
 
 const props = defineProps<{ payload: Record<string, any>; section?: string }>();
@@ -291,17 +285,6 @@ function addDashboard() {
 function removeDashboard(dash: Dashboard) {
   props.payload.dashboards = dashboards.value.filter((d) => d.id !== dash.id);
   activeDashId.value = dashboards.value[0]?.id ?? null;
-}
-
-function loadDefaultPack() {
-  const firstId = `dash-${uid()}`;
-  let first = true;
-  for (const tpl of DEFAULT_PACK) {
-    const id = first ? firstId : `dash-${uid()}`;
-    props.payload.dashboards.push({ id, ...structuredClone(tpl) });
-    first = false;
-  }
-  activeDashId.value = firstId;
 }
 
 function addSection(dash: Dashboard) {
@@ -617,6 +600,119 @@ function onChartKindChange(w: Widget, kind: string) {
   normalizeWidgetForChart(w, kind);
 }
 
+const SEED_KPI_VARIANTS = [
+  { title: 'Total cases', filters: [] as FilterDef[] },
+  { title: 'Open cases', filters: [{ field: 'status', op: 'in', value: ['received', 'investigation'] }] },
+  { title: 'Closed', filters: [{ field: 'status', op: 'eq', value: 'closed' }] },
+  { title: 'High priority', filters: [{ field: 'priority', op: 'eq', value: 'high' }] },
+];
+const SEED_SECTION_COUNT = 2;
+
+function buildSeedWidget(kind: string, label: string, filters: FilterDef[] = []): Widget {
+  const w: Widget = {
+    id: `w-${uid()}`,
+    title: label,
+    chart_kind: kind,
+    dataset: 'cases',
+    measure: 'id',
+    aggregation: 'count',
+    metrics: [],
+    group_by: [],
+    filters: [],
+    thresholds: [],
+    size: 'standard',
+  };
+  if (filters.length) w.filters = structuredClone(filters);
+  const level = defaultWidgetUnitLevel();
+  const unitDim = level ? `unit_level:${level}` : undefined;
+
+  if (kind === 'kpi_card') {
+    w.size = 'compact';
+  } else if (['bar', 'pie', 'donut', 'table', 'treemap', 'pyramid'].includes(kind)) {
+    w.group_by = ['status'];
+  } else if (kind === 'stacked_bar' || kind === 'stacked_bar_100') {
+    w.size = 'wide';
+    if (unitDim && level) {
+      w.unit_level = level;
+      w.group_by = [unitDim, 'status'];
+    } else {
+      w.group_by = ['channel', 'status'];
+    }
+  } else if (kind === 'line') {
+    w.size = 'wide';
+    w.time_dimension = 'submitted_at';
+    w.bucket = 'month';
+  } else if (kind === 'multi_line' || kind === 'area') {
+    w.size = 'wide';
+    w.group_by = ['status'];
+    w.time_dimension = 'submitted_at';
+    w.bucket = 'month';
+  } else if (kind === 'map' && unitDim && level) {
+    w.size = 'wide';
+    w.unit_level = level;
+    w.group_by = [unitDim];
+  }
+
+  normalizeWidgetForChart(w, kind);
+  return w;
+}
+
+const seedOpen = ref(false);
+const seedDashboardCount = ref(1);
+const seedKpiCount = ref(4);
+
+function seedDashboards() {
+  const dashCount = Math.max(1, Math.min(20, Math.round(seedDashboardCount.value) || 1));
+  const kpiCount = Math.max(1, Math.min(4, Math.round(seedKpiCount.value) || 4));
+  const canBeMain = !dashboards.value.some((d) => d.is_main);
+  const topLevel = topHierarchyLevel.value;
+  const chartKinds = CHART_KINDS.filter((ck) => ck.value !== 'kpi_card');
+  let firstDashId: string | null = null;
+
+  for (let d = 0; d < dashCount; d++) {
+    const dashId = `dash-${uid()}`;
+    if (!firstDashId) firstDashId = dashId;
+
+    const sections: Section[] = [
+      { id: `sec-${uid()}`, title: 'Cards', icon: 'i-lucide-layout-grid', color: '', order: 0, widgets: [] },
+      { id: `sec-${uid()}`, title: 'Charts', icon: 'i-lucide-bar-chart-2', color: '', order: 1, widgets: [] },
+    ];
+
+    for (let i = 0; i < kpiCount; i++) {
+      const preset = SEED_KPI_VARIANTS[i] ?? SEED_KPI_VARIANTS[0]!;
+      sections[0]!.widgets.push(buildSeedWidget('kpi_card', preset.title, preset.filters));
+    }
+
+    chartKinds.forEach((ck) => {
+      sections[1]!.widgets.push(buildSeedWidget(ck.value, ck.label));
+    });
+
+    props.payload.dashboards.push({
+      id: dashId,
+      title: dashCount === 1 ? 'Sample dashboard' : `Sample dashboard ${d + 1}`,
+      icon: 'i-lucide-layout-dashboard',
+      audience: { roles: [], levels: [] },
+      is_main: canBeMain && d === 0,
+      is_public: false,
+      layout: 'grid',
+      filter_bar: {
+        period: true,
+        unit: true,
+        category: false,
+        ...(topLevel ? { unit_level: topLevel } : {}),
+      },
+      sections,
+    });
+  }
+
+  if (firstDashId) {
+    activeDashId.value = firstDashId;
+    const firstDash = dashboards.value.find((x) => x.id === firstDashId);
+    activeSectionId.value = firstDash?.sections[0]?.id ?? null;
+  }
+  seedOpen.value = false;
+}
+
 function widgetConfigIssues(w: Widget): string[] {
   const p = chartProfile(w.chart_kind);
   const issues: string[] = [];
@@ -694,10 +790,37 @@ const dashTabClass = (id: string) => [
       <div class="flex items-center justify-between mb-3">
         <span class="text-xs text-muted">{{ dashboards.length }} dashboard{{ dashboards.length !== 1 ? 's' : '' }}</span>
         <div class="flex gap-2">
-          <UButton size="xs" variant="outline" icon="i-lucide-package" @click="loadDefaultPack">Load defaults</UButton>
+          <UButton size="xs" variant="outline" icon="i-lucide-wand-sparkles" @click="seedOpen = true">Seed dashboards</UButton>
           <UButton size="xs" variant="soft" icon="i-lucide-plus" @click="addDashboard">Add</UButton>
         </div>
       </div>
+
+      <UModal
+        v-model:open="seedOpen"
+        title="Seed dashboards"
+        :description="`Two sections per dashboard: KPI cards (1–4) and one widget per chart type (${CHART_KINDS.length - 1} charts).`"
+      >
+        <template #body>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <UFormField label="Dashboards" help="How many dashboards to add (1–20).">
+              <UInput v-model.number="seedDashboardCount" type="number" min="1" max="20" class="w-full" />
+            </UFormField>
+            <UFormField label="KPI cards" help="Cards section — min 1, max 4.">
+              <UInput v-model.number="seedKpiCount" type="number" min="1" max="4" class="w-full" />
+            </UFormField>
+          </div>
+          <p class="text-xs text-muted mt-3">
+            Each dashboard gets {{ SEED_SECTION_COUNT }} sections: <span class="font-medium">Cards</span> (KPIs) and
+            <span class="font-medium">Charts</span> (bar, line, pie, table, etc.).
+          </p>
+        </template>
+        <template #footer>
+          <div class="flex justify-end gap-2 w-full">
+            <UButton variant="ghost" color="neutral" @click="seedOpen = false">Cancel</UButton>
+            <UButton icon="i-lucide-wand-sparkles" @click="seedDashboards">Seed</UButton>
+          </div>
+        </template>
+      </UModal>
 
       <div v-if="dashboards.length === 0" class="py-10 text-center text-sm text-muted">
         No dashboards yet.
