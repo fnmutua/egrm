@@ -4,6 +4,8 @@ export interface DashboardsConfig {
   dashboards: Dashboard[];
 }
 
+const TIME_CHARTS = new Set(['line', 'multi_line', 'area']);
+
 export function useDashboards() {
   const { api } = useApi();
   const { user } = useAuth();
@@ -46,22 +48,28 @@ export function useDashboards() {
     });
   });
 
-  async function fetchWidgetData(widget: Widget): Promise<{ rows: { label: string; value: number }[]; total: number }> {
+  async function fetchWidgetData(widget: Widget): Promise<{
+    rows: { label: string; value: number }[];
+    series: { name: string; data: number[] }[];
+    categories: string[];
+    total: number;
+  }> {
     try {
       return await api('/api/v1/dashboards/widget', {
         method: 'POST',
         body: {
           dataset: widget.dataset,
+          chart_kind: widget.chart_kind,
           measure: widget.measure ?? 'id',
           aggregation: widget.aggregation ?? 'count',
           group_by: widget.group_by ?? [],
-          time_dimension: widget.time_dimension,
-          bucket: widget.bucket,
+          time_dimension: TIME_CHARTS.has(widget.chart_kind) ? widget.time_dimension : undefined,
+          bucket: TIME_CHARTS.has(widget.chart_kind) ? widget.bucket : undefined,
           filters: widget.filters ?? [],
         },
       });
     } catch {
-      return { rows: [], total: 0 };
+      return { rows: [], series: [], categories: [], total: 0 };
     }
   }
 

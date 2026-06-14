@@ -1,19 +1,27 @@
 import type { FastifyInstance } from 'fastify';
 import { and, count, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import type { Cd02Hierarchy } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
 import { expandUnitSubtrees, loadUserAccess, sensitivityListFilter } from '../services/access.js';
+import { getActiveConfig } from '../services/config.js';
+import {
+  isGroupDimension,
+  pivot2D,
+  queryGrouped1D,
+  queryGrouped2D,
+  queryTimeByDimension,
+  queryTimeSeries1D,
+  SCALAR_DIMS,
+} from '../services/dashboard-queries.js';
 
-// ---- Semantic layer: dimension → DB column ----
-
-/** Columns usable for group_by (scalar text/enum). */
-const GROUP_COLUMN: Record<string, string> = {
-  status:      'status',
-  status_tag:  'status_tag',
-  channel:     'channel',
-  priority:    'priority',
-  sensitivity: 'sensitivity',
-  level_code:  'level_code',
+/** Time-dimension key → actual DB column name. */
+const TIME_COLS: Record<string, string> = {
+  submitted_at:      'created_at',
+  resolved_at:       'updated_at',
+  closed_at:         'updated_at',
+  acknowledged_at:   'updated_at',
+  first_response_at: 'updated_at',
 };
 
 /** All filterable fields with column metadata. */
@@ -29,10 +37,9 @@ const FILTERABLE: Record<string, { col: string; isArray?: true; isBool?: true }>
   category:    { col: 'categories', isArray: true },
 };
 
-// ---- Request schema ----
-
 const widgetBody = z.object({
   dataset: z.string(),
+  chart_kind: z.string().optional(),
   measure: z.string().default('id'),
   aggregation: z.enum(['count', 'count_distinct', 'sum', 'avg', 'min', 'max', 'pct']).default('count'),
   group_by: z.array(z.string()).default([]),
@@ -43,9 +50,15 @@ const widgetBody = z.object({
     .default([]),
 });
 
-// ---- Helpers ----
+const CATEGORICAL_CHARTS = new Set(['table', 'bar', 'pie', 'donut', 'treemap', 'map', 'pyramid']);
+const STACKED_CHARTS = new Set(['stacked_bar', 'stacked_bar_100']);
+const TIME_SPLIT_CHARTS = new Set(['multi_line', 'area']);
+const TIME_ONLY_CHARTS = new Set(['line']);
 
-/** Coerce a filter value to a string array (handles comma-separated strings too). */
+function primaryGroupDim(groupBy: string[]): string | undefined {
+  return groupBy.find((d) => isGroupDimension(d)) ?? groupBy[0];
+}
+
 function toArray(v: unknown): string[] {
   if (Array.isArray(v)) return v.map(String).filter(Boolean);
   if (typeof v === 'string') return v.split(',').map((s) => s.trim()).filter(Boolean);
@@ -56,14 +69,12 @@ function toBool(v: unknown): boolean {
   return v === true || v === 'true' || v === 1 || v === '1';
 }
 
-/** Build a SQL condition for a single widget filter. Returns null if the filter is unsupported/empty. */
 function buildFilterCondition(f: { field: string; op: string; value: unknown }) {
   const meta = FILTERABLE[f.field];
   if (!meta) return null;
 
   const col = sql.identifier(meta.col);
 
-  // ── Boolean column ──────────────────────────────────────────
   if (meta.isBool) {
     const bv = toBool(f.value);
     if (f.op === 'eq')  return sql`${col} = ${bv}`;
@@ -71,22 +82,18 @@ function buildFilterCondition(f: { field: string; op: string; value: unknown }) 
     return null;
   }
 
-  // ── Array column (categories: text[]) ──────────────────────
   if (meta.isArray) {
     const vals = toArray(f.value);
     if (!vals.length) return null;
     if (f.op === 'eq')  return sql`${vals[0]} = ANY(${col})`;
     if (f.op === 'neq') return sql`NOT (${vals[0]} = ANY(${col}))`;
-    // in: any of the given values appears in the array (overlap)
     if (f.op === 'in')  return sql`${col} && ${vals}::text[]`;
     if (f.op === 'nin') return sql`NOT (${col} && ${vals}::text[])`;
     return null;
   }
 
-  // ── Scalar column (text / uuid / enum) ─────────────────────
   const sv = typeof f.value === 'string' || typeof f.value === 'number' ? String(f.value) : null;
 
-  // eq/neq: if multiple values selected treat as IN / NOT IN
   if (f.op === 'eq' || f.op === 'neq') {
     const vals = toArray(f.value);
     if (!vals.length && sv === null) return null;
@@ -114,9 +121,101 @@ function buildFilterCondition(f: { field: string; op: string; value: unknown }) 
   return null;
 }
 
-// ---- Route ----
+async function buildCaseWhere(
+  tenantId: string,
+  userId: string,
+  filters: { field: string; op: string; value: unknown }[],
+) {
+  const access = await loadUserAccess(userId, tenantId);
+  const allowedUnits = access.tenantWide
+    ? null
+    : await expandUnitSubtrees(tenantId, access.jurisdictionRoots);
+
+  const conditions = [eq(schema.grmCase.tenantId, tenantId)];
+
+  if (allowedUnits !== null) {
+    conditions.push(
+      allowedUnits.size > 0
+        ? inArray(schema.grmCase.unitId, [...allowedUnits])
+        : sql`false`,
+    );
+  }
+
+  conditions.push(sensitivityListFilter(access, userId));
+
+  for (const f of filters) {
+    if (f.field === 'unit_id' && ['eq', 'in'].includes(f.op)) {
+      const roots = toArray(f.value);
+      if (!roots.length && typeof f.value === 'string' && f.value) roots.push(f.value);
+      if (roots.length) {
+        const expanded = new Set<string>();
+        for (const root of roots) {
+          for (const id of await expandUnitSubtrees(tenantId, [root])) expanded.add(id);
+        }
+        if (expanded.size) conditions.push(inArray(schema.grmCase.unitId, [...expanded]));
+      }
+      continue;
+    }
+
+    if (f.field === 'unit_id' && ['neq', 'nin'].includes(f.op)) {
+      const roots = toArray(f.value);
+      if (!roots.length && typeof f.value === 'string' && f.value) roots.push(f.value);
+      if (roots.length) {
+        const expanded = new Set<string>();
+        for (const root of roots) {
+          for (const id of await expandUnitSubtrees(tenantId, [root])) expanded.add(id);
+        }
+        if (expanded.size) conditions.push(sql`NOT (${schema.grmCase.unitId} = ANY(${[...expanded]}::uuid[]))`);
+      }
+      continue;
+    }
+
+    const cond = buildFilterCondition(f);
+    if (cond) conditions.push(cond);
+  }
+
+  return and(...conditions)!;
+}
 
 export default async function dashboardRoutes(app: FastifyInstance) {
+  app.get(
+    '/api/v1/dashboards/dimensions',
+    { onRequest: [app.authenticate] },
+    async (req) => {
+      const hierarchy = await getActiveConfig<Cd02Hierarchy>(req.tenant.id, 'cd02_hierarchy');
+      const levels = hierarchy?.levels ?? [];
+
+      const caseDimensionLabels: Record<string, string> = {
+        status: 'Status',
+        status_tag: 'Status tag',
+        channel: 'Channel',
+        priority: 'Priority',
+        sensitivity: 'Sensitivity',
+        level_code: 'Case level',
+        case_type: 'Case type',
+        assignee_id: 'Assignee',
+        party_id: 'Complainant',
+      };
+
+      const caseDimensions = Object.keys(SCALAR_DIMS).map((value) => ({
+        value,
+        label: caseDimensionLabels[value] ?? value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        group: 'case',
+      }));
+
+      const unitDimensions = [
+        { value: 'unit_id', label: 'Assigned unit', group: 'admin_units' },
+        ...[...levels].reverse().map((l) => ({
+          value: `unit_level:${l.code}`,
+          label: l.label || l.code,
+          group: 'admin_units' as const,
+        })),
+      ];
+
+      return { case_dimensions: caseDimensions, unit_dimensions: unitDimensions };
+    },
+  );
+
   app.post(
     '/api/v1/dashboards/widget',
     { onRequest: [app.authenticate] },
@@ -131,87 +230,78 @@ export default async function dashboardRoutes(app: FastifyInstance) {
         return { rows: [], total: 0, note: `Dataset '${widget.dataset}' not yet available.` };
       }
 
-      // Row-level security: jurisdiction + sensitivity.
-      const access = await loadUserAccess(req.user.sub, tenantId);
-      const allowedUnits = access.tenantWide
-        ? null
-        : await expandUnitSubtrees(tenantId, access.jurisdictionRoots);
+      const where = await buildCaseWhere(tenantId, req.user.sub, widget.filters as { field: string; op: string; value: unknown }[]);
+      const kind = widget.chart_kind ?? '';
 
-      const conditions = [eq(schema.grmCase.tenantId, tenantId)];
-
-      if (allowedUnits !== null) {
-        conditions.push(
-          allowedUnits.size > 0
-            ? inArray(schema.grmCase.unitId, [...allowedUnits])
-            : sql`false`,
-        );
+      // Table, bar, pie, etc. — always 1D rows; ignore stray time fields from old configs
+      if (CATEGORICAL_CHARTS.has(kind)) {
+        const groupDim = primaryGroupDim(widget.group_by);
+        if (groupDim && isGroupDimension(groupDim)) {
+          const rows = await queryGrouped1D(where, tenantId, groupDim);
+          if (rows) {
+            return { rows, series: [], categories: [], total: rows.reduce((s, r) => s + Number(r.value), 0) };
+          }
+        }
       }
 
-      conditions.push(sensitivityListFilter(access, req.user.sub));
-
-      // Widget-level filters.
-      for (const f of widget.filters) {
-        const cond = buildFilterCondition(f);
-        if (cond) conditions.push(cond);
+      if (STACKED_CHARTS.has(kind) && widget.group_by.length >= 2) {
+        const raw = await queryGrouped2D(where, tenantId, widget.group_by[0]!, widget.group_by[1]!);
+        if (raw) {
+          const { series, categories, total } = pivot2D(raw);
+          return { rows: [], series, categories, total };
+        }
       }
 
-      const where = and(...conditions);
-
-      // ---- Grouped query ----
-      const groupDim = widget.group_by.find((d) => GROUP_COLUMN[d]);
-
-      if (groupDim) {
-        const col = GROUP_COLUMN[groupDim]!;
-        const rows = await db
-          .select({
-            label: sql<string>`${sql.raw(col)}`,
-            value: count(schema.grmCase.id),
-          })
-          .from(schema.grmCase)
-          .where(where)
-          .groupBy(sql.raw(col))
-          .orderBy(sql`2 DESC`);
-
-        return { rows, total: rows.reduce((s, r) => s + Number(r.value), 0) };
+      if (TIME_SPLIT_CHARTS.has(kind) && widget.time_dimension && widget.bucket) {
+        const splitDim = primaryGroupDim(widget.group_by);
+        if (splitDim && isGroupDimension(splitDim)) {
+          const timeCol = TIME_COLS[widget.time_dimension] ?? 'created_at';
+          const raw = await queryTimeByDimension(where, tenantId, timeCol, widget.bucket, splitDim);
+          if (raw) {
+            const { series, categories, total } = pivot2D(raw);
+            return { rows: [], series, categories, total };
+          }
+        }
       }
 
-      // ---- Time-series query ----
+      if (widget.group_by.length >= 2) {
+        const raw = await queryGrouped2D(where, tenantId, widget.group_by[0]!, widget.group_by[1]!);
+        if (raw) {
+          const { series, categories, total } = pivot2D(raw);
+          return { rows: [], series, categories, total };
+        }
+      }
+
+      const groupDim = primaryGroupDim(widget.group_by);
+      if (groupDim && isGroupDimension(groupDim)) {
+        const rows = await queryGrouped1D(where, tenantId, groupDim);
+        if (rows) {
+          return { rows, series: [], categories: [], total: rows.reduce((s, r) => s + Number(r.value), 0) };
+        }
+      }
+
+      if (TIME_ONLY_CHARTS.has(kind) && widget.time_dimension && widget.bucket) {
+        const timeCol = TIME_COLS[widget.time_dimension] ?? 'created_at';
+        const rows = await queryTimeSeries1D(where, timeCol, widget.bucket);
+        return { rows, series: [], categories: [], total: rows.reduce((s, r) => s + Number(r.value), 0) };
+      }
+
       if (widget.time_dimension && widget.bucket) {
-        const timeDims: Record<string, string> = {
-          submitted_at:    'created_at',
-          resolved_at:     'updated_at',
-          closed_at:       'updated_at',
-          acknowledged_at: 'updated_at',
-          first_response_at: 'updated_at',
-        };
-        const timeCol = timeDims[widget.time_dimension] ?? 'created_at';
-        const trunc = widget.bucket;
-
-        const rows = await db
-          .select({
-            label: sql<string>`date_trunc(${trunc}, ${sql.raw(timeCol)})::text`,
-            value: count(schema.grmCase.id),
-          })
-          .from(schema.grmCase)
-          .where(where)
-          .groupBy(sql`date_trunc(${trunc}, ${sql.raw(timeCol)})`)
-          .orderBy(sql`1 ASC`);
-
-        return { rows, total: rows.reduce((s, r) => s + Number(r.value), 0) };
+        const timeCol = TIME_COLS[widget.time_dimension] ?? 'created_at';
+        const rows = await queryTimeSeries1D(where, timeCol, widget.bucket);
+        return { rows, series: [], categories: [], total: rows.reduce((s, r) => s + Number(r.value), 0) };
       }
 
-      // ---- Scalar (KPI card) ----
       const [row] = await db
         .select({ value: count(schema.grmCase.id) })
         .from(schema.grmCase)
         .where(where);
 
       const total = Number(row?.value ?? 0);
-      return { rows: [{ label: 'total', value: total }], total };
+      return { rows: [{ label: 'total', value: total }], series: [], categories: [], total };
     },
   );
 
-  // ---- Field value enumeration (for filter autocomplete) ----
   app.get(
     '/api/v1/dashboards/field-values',
     { onRequest: [app.authenticate] },
@@ -223,12 +313,24 @@ export default async function dashboardRoutes(app: FastifyInstance) {
 
       const tenantId = req.tenant.id;
 
+      if (field === 'unit_id') {
+        const rows = await db
+          .select({ id: schema.unit.id, name: schema.unit.name, levelCode: schema.unit.levelCode })
+          .from(schema.unit)
+          .where(and(eq(schema.unit.tenantId, tenantId), eq(schema.unit.active, true)))
+          .orderBy(schema.unit.name)
+          .limit(500);
+        return {
+          values: rows.map((r) => r.id),
+          labels: Object.fromEntries(rows.map((r) => [r.id, `${r.name} (${r.levelCode})`])),
+        };
+      }
+
       if (meta.isBool) return { values: ['true', 'false'] };
 
       const colExpr = sql.identifier(meta.col);
 
       if (meta.isArray) {
-        // unnest expands the text[] column into individual rows
         const rows = await db
           .selectDistinct({ val: sql<string>`unnest(${colExpr})` })
           .from(schema.grmCase)

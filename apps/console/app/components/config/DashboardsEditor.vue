@@ -19,7 +19,7 @@ interface Widget {
   measure: string; aggregation: string; metrics: Metric[];
   group_by: string[]; time_dimension?: string; bucket?: string;
   filters: FilterDef[]; target?: number | null;
-  thresholds: Threshold[]; drill_down?: string | null; caption?: string | null;
+  thresholds: Threshold[];
 }
 
 interface Section {
@@ -61,12 +61,21 @@ const AGGREGATIONS = [
   { value: 'sum', label: 'Sum' }, { value: 'avg', label: 'Average' },
   { value: 'min', label: 'Minimum' }, { value: 'max', label: 'Maximum' }, { value: 'pct', label: 'Percentage' },
 ];
-const DIMENSIONS = [
-  { value: 'category', label: 'Category' }, { value: 'status_tag', label: 'Status tag' },
-  { value: 'channel', label: 'Channel' }, { value: 'priority', label: 'Priority' },
-  { value: 'sensitivity', label: 'Sensitivity' },
-  { value: 'unit_level_1', label: 'Unit L1' }, { value: 'unit_level_2', label: 'Unit L2' }, { value: 'unit_level_3', label: 'Unit L3' },
-  { value: 'time_bucket', label: 'Time bucket' }, { value: 'assignee', label: 'Assignee' }, { value: 'team', label: 'Team' },
+const MEASURES = [
+  { value: 'id',          label: 'Cases (id)' },
+  { value: 'assignee_id', label: 'Assignee' },
+  { value: 'party_id',    label: 'Complainant' },
+  { value: 'unit_id',     label: 'Unit' },
+];
+const FALLBACK_GROUP_BY = [
+  { value: 'status', label: 'Status', group: 'case' },
+  { value: 'status_tag', label: 'Status tag', group: 'case' },
+  { value: 'channel', label: 'Channel', group: 'case' },
+  { value: 'priority', label: 'Priority', group: 'case' },
+  { value: 'sensitivity', label: 'Sensitivity', group: 'case' },
+  { value: 'case_type', label: 'Case type', group: 'case' },
+  { value: 'level_code', label: 'Case level', group: 'case' },
+  { value: 'unit_id', label: 'Assigned unit', group: 'admin_units' },
 ];
 const TIME_DIMENSIONS = [
   { value: 'submitted_at', label: 'Submitted at' }, { value: 'resolved_at', label: 'Resolved at' },
@@ -89,12 +98,11 @@ const FILTER_FIELDS = [
   { value: 'priority',    label: 'Priority' },
   { value: 'sensitivity', label: 'Sensitivity' },
   { value: 'category',    label: 'Category' },
-  { value: 'level_code',  label: 'Level' },
+  { value: 'level_code',  label: 'Case level' },
   { value: 'anonymous',   label: 'Anonymous' },
-  { value: 'unit_id',     label: 'Unit ID' },
+  { value: 'unit_id',     label: 'Unit (subtree)' },
 ];
-// What input type to show for each filterable field
-const FIELD_TYPE: Record<string, 'enum' | 'bool' | 'text' | 'number' | 'date'> = {
+const FIELD_TYPE: Record<string, 'enum' | 'bool' | 'text' | 'number' | 'date' | 'unit'> = {
   status:      'enum',
   status_tag:  'enum',
   channel:     'enum',
@@ -103,7 +111,7 @@ const FIELD_TYPE: Record<string, 'enum' | 'bool' | 'text' | 'number' | 'date'> =
   category:    'enum',
   level_code:  'enum',
   anonymous:   'bool',
-  unit_id:     'text',
+  unit_id:     'unit',
 };
 const LAYOUT_OPTIONS = [{ value: 'grid', label: 'Grid' }, { value: 'single_col', label: 'Single column' }];
 const THRESHOLD_COLORS = [{ value: 'success', label: 'Green' }, { value: 'warning', label: 'Amber' }, { value: 'error', label: 'Red' }];
@@ -122,14 +130,19 @@ const { api } = useApi();
 
 // Field value cache for filter autocomplete
 const fieldValuesCache = reactive<Record<string, string[]>>({});
+const fieldValueLabels = reactive<Record<string, Record<string, string>>>({});
 const fieldValuesLoading = reactive<Record<string, boolean>>({});
+const groupByOptions = ref(FALLBACK_GROUP_BY);
 
 async function ensureFieldValues(field: string) {
   if (fieldValuesCache[field] !== undefined || fieldValuesLoading[field]) return;
   fieldValuesLoading[field] = true;
   try {
-    const res = await api<{ values: string[] }>(`/api/v1/dashboards/field-values?field=${encodeURIComponent(field)}&dataset=cases`);
+    const res = await api<{ values: string[]; labels?: Record<string, string> }>(
+      `/api/v1/dashboards/field-values?field=${encodeURIComponent(field)}&dataset=cases`,
+    );
     fieldValuesCache[field] = res.values;
+    if (res.labels) fieldValueLabels[field] = res.labels;
   } catch {
     fieldValuesCache[field] = [];
   } finally {
@@ -138,6 +151,12 @@ async function ensureFieldValues(field: string) {
 }
 
 function fvItems(field: string): string[] { return fieldValuesCache[field] ?? []; }
+function fvUnitItems(field: string) {
+  return (fieldValuesCache[field] ?? []).map((id) => ({
+    value: id,
+    label: fieldValueLabels[field]?.[id] ?? id,
+  }));
+}
 function fieldType(field: string) { return FIELD_TYPE[field] ?? 'text'; }
 function valueAsArray(v: unknown): string[] {
   if (Array.isArray(v)) return v.map(String);
@@ -145,7 +164,20 @@ function valueAsArray(v: unknown): string[] {
   return [];
 }
 
-onMounted(async () => { await loadRoleNames(); ensure(); });
+onMounted(async () => {
+  await loadRoleNames();
+  ensure();
+  try {
+    const res = await api<{
+      case_dimensions: { value: string; label: string; group: string }[];
+      unit_dimensions: { value: string; label: string; group: string }[];
+    }>('/api/v1/dashboards/dimensions');
+    groupByOptions.value = [...(res.case_dimensions ?? []), ...(res.unit_dimensions ?? [])];
+  } catch {
+    groupByOptions.value = FALLBACK_GROUP_BY;
+  }
+  ensureFieldValues('unit_id');
+});
 
 function ensure() {
   props.payload.dashboards ??= [];
@@ -179,7 +211,7 @@ watchEffect(() => {
   if (!expandedWidgetId.value || !activeSection.value) return;
   const w = activeSection.value.widgets.find((x) => x.id === expandedWidgetId.value);
   for (const f of w?.filters ?? []) {
-    if (f.field && fieldType(f.field) === 'enum') ensureFieldValues(f.field);
+    if (f.field && (fieldType(f.field) === 'enum' || fieldType(f.field) === 'unit')) ensureFieldValues(f.field);
   }
 });
 
@@ -251,17 +283,218 @@ function removeWidget(sec: Section, w: Widget) {
   if (expandedWidgetId.value === w.id) expandedWidgetId.value = null;
 }
 
+function cloneWidget(sec: Section, w: Widget) {
+  const idx = sec.widgets.findIndex((x) => x.id === w.id);
+  const id = `w-${uid()}`;
+  const copy = structuredClone(w);
+  copy.id = id;
+  copy.title = w.title ? `${w.title} (copy)` : 'New widget (copy)';
+  sec.widgets.splice(idx + 1, 0, copy);
+  expandedWidgetId.value = id;
+}
+
 function toggleWidget(id: string) { expandedWidgetId.value = expandedWidgetId.value === id ? null : id; }
 
-function addMetric(w: Widget) { w.metrics.push({ measure: 'id', aggregation: 'count', label: '' }); }
-function removeMetric(w: Widget, i: number) { w.metrics.splice(i, 1); }
 function addFilter(w: Widget) { w.filters.push({ field: 'status', op: 'eq', value: '' }); ensureFieldValues('status'); }
 function removeFilter(w: Widget, i: number) { w.filters.splice(i, 1); }
 function addThreshold(w: Widget) { w.thresholds.push({ value: 0, color: 'warning', label: '' }); }
 function removeThreshold(w: Widget, i: number) { w.thresholds.splice(i, 1); }
 
-const isMultiSeries = (k: string) => ['multi_line', 'stacked_bar', 'stacked_bar_100', 'area'].includes(k);
-const needsTimeDim = (k: string) => ['line', 'multi_line', 'area'].includes(k);
+// ---- Chart-type profiles: which data fields each renderer needs ----
+
+interface DimSlot {
+  show: boolean;
+  label: string;
+  required: boolean;
+  help: string;
+}
+
+interface ChartProfile {
+  hint: string;
+  measure: boolean;
+  aggregation: boolean;
+  categories: DimSlot;
+  series: DimSlot;
+  time: { show: boolean; required: boolean };
+  filters: boolean;
+  kpiDisplay: boolean;
+}
+
+const CHART_PROFILES: Record<string, ChartProfile> = {
+  kpi_card: {
+    hint: 'Single total with optional target and colour thresholds.',
+    measure: true, aggregation: true,
+    categories: { show: false, label: '', required: false, help: '' },
+    series: { show: false, label: '', required: false, help: '' },
+    time: { show: false, required: false },
+    filters: true, kpiDisplay: true,
+  },
+  bar: {
+    hint: 'Bars compare one measure across a category dimension.',
+    measure: true, aggregation: true,
+    categories: { show: true, label: 'Categories', required: true, help: 'Labels on the axis — e.g. County, Status, Channel.' },
+    series: { show: false, label: '', required: false, help: '' },
+    time: { show: false, required: false },
+    filters: true, kpiDisplay: false,
+  },
+  pie: {
+    hint: 'Each slice is a share of the total for one category dimension.',
+    measure: true, aggregation: true,
+    categories: { show: true, label: 'Slices', required: true, help: 'Dimension that defines each slice.' },
+    series: { show: false, label: '', required: false, help: '' },
+    time: { show: false, required: false },
+    filters: true, kpiDisplay: false,
+  },
+  donut: {
+    hint: 'Same as pie — slices from one category dimension.',
+    measure: true, aggregation: true,
+    categories: { show: true, label: 'Slices', required: true, help: 'Dimension that defines each slice.' },
+    series: { show: false, label: '', required: false, help: '' },
+    time: { show: false, required: false },
+    filters: true, kpiDisplay: false,
+  },
+  table: {
+    hint: 'Rows from one category dimension with a numeric value column.',
+    measure: true, aggregation: true,
+    categories: { show: true, label: 'Rows', required: true, help: 'Dimension listed in the first column.' },
+    series: { show: false, label: '', required: false, help: '' },
+    time: { show: false, required: false },
+    filters: true, kpiDisplay: false,
+  },
+  stacked_bar: {
+    hint: 'Stacked bars: categories on the axis, coloured stacks from a second dimension.',
+    measure: true, aggregation: true,
+    categories: { show: true, label: 'Categories (axis)', required: true, help: 'Primary axis labels — e.g. County, Month.' },
+    series: { show: true, label: 'Series (stacks)', required: true, help: 'Second dimension — each value becomes a coloured stack.' },
+    time: { show: false, required: false },
+    filters: true, kpiDisplay: false,
+  },
+  stacked_bar_100: {
+    hint: '100% stacked bars — same as stacked bar but normalised to percentages.',
+    measure: true, aggregation: true,
+    categories: { show: true, label: 'Categories (axis)', required: true, help: 'Primary axis labels.' },
+    series: { show: true, label: 'Series (stacks)', required: true, help: 'Second dimension for stack segments.' },
+    time: { show: false, required: false },
+    filters: true, kpiDisplay: false,
+  },
+  line: {
+    hint: 'Trend over time — one line, no series split.',
+    measure: true, aggregation: true,
+    categories: { show: false, label: '', required: false, help: '' },
+    series: { show: false, label: '', required: false, help: '' },
+    time: { show: true, required: true },
+    filters: true, kpiDisplay: false,
+  },
+  multi_line: {
+    hint: 'Multiple lines over time — pick a series dimension to split lines.',
+    measure: true, aggregation: true,
+    categories: { show: false, label: '', required: false, help: '' },
+    series: { show: true, label: 'Series (lines)', required: true, help: 'Each value becomes a separate line — e.g. Status, Priority.' },
+    time: { show: true, required: true },
+    filters: true, kpiDisplay: false,
+  },
+  area: {
+    hint: 'Stacked area over time — series dimension fills the chart.',
+    measure: true, aggregation: true,
+    categories: { show: false, label: '', required: false, help: '' },
+    series: { show: true, label: 'Series (areas)', required: true, help: 'Each value becomes a stacked area band.' },
+    time: { show: true, required: true },
+    filters: true, kpiDisplay: false,
+  },
+  treemap: {
+    hint: 'Treemap renderer — configure like a bar chart (not yet live).',
+    measure: true, aggregation: true,
+    categories: { show: true, label: 'Tiles', required: true, help: 'Dimension that defines each tile.' },
+    series: { show: false, label: '', required: false, help: '' },
+    time: { show: false, required: false },
+    filters: true, kpiDisplay: false,
+  },
+  map: {
+    hint: 'Map renderer — group by an admin-unit level (not yet live).',
+    measure: true, aggregation: true,
+    categories: { show: true, label: 'Region', required: true, help: 'Admin-unit level for map regions — e.g. County, Ward.' },
+    series: { show: false, label: '', required: false, help: '' },
+    time: { show: false, required: false },
+    filters: true, kpiDisplay: false,
+  },
+  pyramid: {
+    hint: 'Pyramid renderer — one category dimension (not yet live).',
+    measure: true, aggregation: true,
+    categories: { show: true, label: 'Categories', required: true, help: 'Dimension for pyramid tiers.' },
+    series: { show: false, label: '', required: false, help: '' },
+    time: { show: false, required: false },
+    filters: true, kpiDisplay: false,
+  },
+};
+
+const DEFAULT_PROFILE: ChartProfile = CHART_PROFILES.bar!;
+
+function chartProfile(kind: string): ChartProfile {
+  return CHART_PROFILES[kind] ?? DEFAULT_PROFILE;
+}
+
+function categoryDim(w: Widget): string | undefined { return w.group_by[0]; }
+function seriesDim(w: Widget): string | undefined { return w.group_by[1]; }
+
+function setCategoryDim(w: Widget, v: string | undefined) {
+  const series = w.group_by[1];
+  w.group_by = v ? (series ? [v, series] : [v]) : (series ? [series] : []);
+}
+
+function setSeriesDim(w: Widget, v: string | undefined) {
+  const cat = w.group_by[0];
+  if (chartProfile(w.chart_kind).categories.show) {
+    w.group_by = cat ? (v ? [cat, v] : [cat]) : (v ? [v] : []);
+  } else {
+    w.group_by = v ? [v] : [];
+  }
+}
+
+function normalizeWidgetForChart(w: Widget, kind: string) {
+  const p = chartProfile(kind);
+  if (!p.categories.show && !p.series.show) w.group_by = [];
+  else if (p.categories.show && !p.series.show) w.group_by = w.group_by.slice(0, 1);
+  else if (p.categories.show && p.series.show) w.group_by = w.group_by.slice(0, 2);
+  else if (!p.categories.show && p.series.show) w.group_by = w.group_by[1] ? [w.group_by[1]!] : w.group_by.slice(0, 1);
+
+  if (!p.time.show) {
+    delete w.time_dimension;
+    delete w.bucket;
+  } else if (!w.time_dimension) {
+    w.time_dimension = 'submitted_at';
+    w.bucket = w.bucket ?? 'month';
+  }
+
+  if (!p.measure) {
+    w.measure = 'id';
+    w.aggregation = 'count';
+  }
+
+  w.metrics = [];
+}
+
+function onChartKindChange(w: Widget, kind: string) {
+  w.chart_kind = kind;
+  normalizeWidgetForChart(w, kind);
+}
+
+function widgetConfigIssues(w: Widget): string[] {
+  const p = chartProfile(w.chart_kind);
+  const issues: string[] = [];
+  if (p.categories.required && !categoryDim(w)) issues.push(`${p.categories.label} is required`);
+  if (p.series.required) {
+    const hasSeries = p.categories.show ? seriesDim(w) : categoryDim(w);
+    if (!hasSeries) issues.push(`${p.series.label} is required`);
+  }
+  if (p.time.required && (!w.time_dimension || !w.bucket)) issues.push('Time dimension and bucket are required');
+  return issues;
+}
+
+const mapGroupByOptions = computed(() =>
+  groupByOptions.value.filter((o) => o.group === 'admin_units' || o.value.startsWith('unit_level:')),
+);
+
+const isKpiCard = (k: string) => chartProfile(k).kpiDisplay;
 const chartIcon = (k: string) => CHART_KINDS.find((c) => c.value === k)?.icon ?? 'i-lucide-bar-chart-2';
 const datasetLabel = (v: string) => DATASETS.find((d) => d.value === v)?.label ?? v;
 
@@ -477,6 +710,7 @@ const dashTabClass = (id: string) => [
                 <span class="text-sm font-medium flex-1 truncate">{{ widget.title || '(untitled)' }}</span>
                 <span class="text-xs text-muted shrink-0">{{ widget.chart_kind }}</span>
                 <span class="text-xs text-muted shrink-0">{{ datasetLabel(widget.dataset) }}</span>
+                <UButton size="xs" variant="ghost" icon="i-lucide-copy" title="Clone widget" @click.stop="cloneWidget(activeSection, widget)" />
                 <UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click.stop="removeWidget(activeSection, widget)" />
                 <UIcon :name="expandedWidgetId === widget.id ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="size-4 text-muted shrink-0" />
               </div>
@@ -491,48 +725,82 @@ const dashTabClass = (id: string) => [
                     <IconPicker v-model="widget.icon" placeholder="i-lucide-hash" />
                   </UFormField>
                   <UFormField label="Chart type">
-                    <USelectMenu v-model="widget.chart_kind" :items="CHART_KINDS" value-key="value" label-key="label" class="w-full" />
+                    <USelectMenu
+                      :model-value="widget.chart_kind"
+                      :items="CHART_KINDS"
+                      value-key="value"
+                      label-key="label"
+                      class="w-full"
+                      @update:model-value="(v: string) => onChartKindChange(widget, v)"
+                    />
                   </UFormField>
                   <UFormField label="Dataset">
                     <USelectMenu v-model="widget.dataset" :items="DATASETS" value-key="value" label-key="label" class="w-full" />
                   </UFormField>
                 </div>
 
-                <!-- Data -->
+                <!-- Data (chart-type aware) -->
                 <div class="space-y-3 pt-4 border-t border-default/60">
-                  <p class="text-[11px] font-semibold text-muted uppercase tracking-wider">Data</p>
-                  <template v-if="!isMultiSeries(widget.chart_kind)">
+                  <div class="flex items-start justify-between gap-3">
+                    <p class="text-[11px] font-semibold text-muted uppercase tracking-wider">Data</p>
+                    <p class="text-[11px] text-muted text-right max-w-sm">{{ chartProfile(widget.chart_kind).hint }}</p>
+                  </div>
+
+                  <div v-if="widgetConfigIssues(widget).length" class="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                    <span class="font-medium">Required: </span>{{ widgetConfigIssues(widget).join(' · ') }}
+                  </div>
+
+                  <template v-if="chartProfile(widget.chart_kind).measure">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <UFormField label="Measure" help="e.g. id, resolution_hours">
-                        <UInput v-model="widget.measure" class="w-full font-mono" placeholder="id" />
+                      <UFormField label="Measure" help="Count cases with 'Cases (id)'.">
+                        <USelectMenu v-model="widget.measure" :items="MEASURES" value-key="value" label-key="label" class="w-full" />
                       </UFormField>
-                      <UFormField label="Aggregation">
+                      <UFormField v-if="chartProfile(widget.chart_kind).aggregation" label="Aggregation">
                         <USelectMenu v-model="widget.aggregation" :items="AGGREGATIONS" value-key="value" label-key="label" class="w-full" />
                       </UFormField>
                     </div>
                   </template>
-                  <template v-else>
-                    <div class="flex items-center justify-between">
-                      <span class="text-xs text-muted">Series</span>
-                      <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addMetric(widget)">Add series</UButton>
-                    </div>
-                    <p v-if="widget.metrics.length === 0" class="text-xs text-muted italic">No series yet.</p>
-                    <div v-for="(m, mi) in widget.metrics" :key="mi" class="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end p-2 rounded border border-default/50">
-                      <UFormField label="Measure"><UInput v-model="m.measure" class="w-full font-mono text-xs" placeholder="id" /></UFormField>
-                      <UFormField label="Aggregation"><USelectMenu v-model="m.aggregation" :items="AGGREGATIONS" value-key="value" label-key="label" class="w-full" /></UFormField>
-                      <UFormField label="Label"><UInput v-model="m.label" class="w-full" placeholder="e.g. Resolved" /></UFormField>
-                      <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" class="mb-0.5" @click="removeMetric(widget, mi)" />
-                    </div>
-                  </template>
-                  <UFormField label="Group by" help="Split results by dimension.">
-                    <USelectMenu v-model="widget.group_by" :items="DIMENSIONS" value-key="value" label-key="label" multiple placeholder="No grouping — aggregate all" class="w-full" />
+
+                  <UFormField
+                    v-if="chartProfile(widget.chart_kind).categories.show"
+                    :label="chartProfile(widget.chart_kind).categories.label"
+                    :help="chartProfile(widget.chart_kind).categories.help"
+                    :required="chartProfile(widget.chart_kind).categories.required"
+                  >
+                    <USelectMenu
+                      :model-value="categoryDim(widget)"
+                      :items="widget.chart_kind === 'map' ? mapGroupByOptions : groupByOptions"
+                      value-key="value"
+                      label-key="label"
+                      placeholder="Pick dimension…"
+                      class="w-full"
+                      @update:model-value="(v: string) => setCategoryDim(widget, v)"
+                    />
                   </UFormField>
-                  <template v-if="needsTimeDim(widget.chart_kind)">
+
+                  <UFormField
+                    v-if="chartProfile(widget.chart_kind).series.show"
+                    :label="chartProfile(widget.chart_kind).series.label"
+                    :help="chartProfile(widget.chart_kind).series.help"
+                    :required="chartProfile(widget.chart_kind).series.required"
+                  >
+                    <USelectMenu
+                      :model-value="chartProfile(widget.chart_kind).categories.show ? seriesDim(widget) : categoryDim(widget)"
+                      :items="groupByOptions"
+                      value-key="value"
+                      label-key="label"
+                      placeholder="Pick dimension…"
+                      class="w-full"
+                      @update:model-value="(v: string) => chartProfile(widget.chart_kind).categories.show ? setSeriesDim(widget, v) : setCategoryDim(widget, v)"
+                    />
+                  </UFormField>
+
+                  <template v-if="chartProfile(widget.chart_kind).time.show">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <UFormField label="Time dimension">
+                      <UFormField label="Time dimension" :required="chartProfile(widget.chart_kind).time.required" help="X-axis for trend charts.">
                         <USelectMenu v-model="widget.time_dimension" :items="TIME_DIMENSIONS" value-key="value" label-key="label" class="w-full" />
                       </UFormField>
-                      <UFormField label="Bucket">
+                      <UFormField label="Bucket" :required="chartProfile(widget.chart_kind).time.required" help="How dates are grouped.">
                         <USelectMenu v-model="widget.bucket" :items="TIME_BUCKETS" value-key="value" label-key="label" class="w-full" />
                       </UFormField>
                     </div>
@@ -540,7 +808,7 @@ const dashTabClass = (id: string) => [
                 </div>
 
                 <!-- Filters -->
-                <div class="space-y-2 pt-4 border-t border-default/60">
+                <div v-if="chartProfile(widget.chart_kind).filters" class="space-y-2 pt-4 border-t border-default/60">
                   <div class="flex items-center justify-between">
                     <p class="text-[11px] font-semibold text-muted uppercase tracking-wider">Filters</p>
                     <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addFilter(widget)">Add</UButton>
@@ -554,7 +822,7 @@ const dashTabClass = (id: string) => [
                         value-key="value"
                         label-key="label"
                         class="w-full"
-                        @update:model-value="(v) => { f.value = ''; if (fieldType(v) === 'enum') ensureFieldValues(v); }"
+                        @update:model-value="(v) => { f.value = ''; if (fieldType(v) === 'enum' || fieldType(v) === 'unit') ensureFieldValues(v); }"
                       />
                     </UFormField>
                     <UFormField label="Operator">
@@ -580,6 +848,18 @@ const dashTabClass = (id: string) => [
                           @update:model-value="f.value = $event"
                         />
                       </template>
+                      <!-- UNIT: pick from jurisdiction tree (filter includes subtree) -->
+                      <USelectMenu
+                        v-else-if="fieldType(f.field) === 'unit'"
+                        :model-value="valueAsArray(f.value)"
+                        :items="fvUnitItems(f.field)"
+                        value-key="value"
+                        label-key="label"
+                        :multiple="!['lt', 'gt', 'between'].includes(f.op)"
+                        placeholder="Pick unit(s)…"
+                        class="w-full"
+                        @update:model-value="(v: string | string[]) => (f.value = Array.isArray(v) ? v : v ? [v] : [])"
+                      />
                       <!-- BOOL: always a static true/false select -->
                       <USelectMenu
                         v-else-if="fieldType(f.field) === 'bool'"
@@ -652,20 +932,12 @@ const dashTabClass = (id: string) => [
                   </div>
                 </div>
 
-                <!-- Display -->
-                <div class="space-y-3 pt-4 border-t border-default/60">
+                <!-- KPI display options -->
+                <div v-if="isKpiCard(widget.chart_kind)" class="space-y-3 pt-4 border-t border-default/60">
                   <p class="text-[11px] font-semibold text-muted uppercase tracking-wider">Display</p>
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <UFormField label="Target" help="Numeric goal shown as progress.">
-                      <UInput v-model.number="widget.target" type="number" class="w-full" placeholder="e.g. 30" />
-                    </UFormField>
-                    <UFormField label="Drill-down URL">
-                      <UInput v-model="widget.drill_down" class="w-full font-mono text-xs" placeholder="/cases?filter=…" />
-                    </UFormField>
-                    <UFormField label="Caption" class="sm:col-span-2">
-                      <UInput v-model="widget.caption" class="w-full" placeholder="Source note shown below widget" />
-                    </UFormField>
-                  </div>
+                  <UFormField label="Target" help="Numeric goal shown as progress.">
+                    <UInput v-model.number="widget.target" type="number" class="w-full" placeholder="e.g. 30" />
+                  </UFormField>
                   <div class="space-y-2">
                     <div class="flex items-center justify-between">
                       <span class="text-xs text-muted">Thresholds</span>

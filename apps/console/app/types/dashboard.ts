@@ -31,8 +31,6 @@ export interface Widget {
   filters?: FilterDef[];
   target?: number | null;
   thresholds?: Threshold[];
-  drill_down?: string | null;
-  caption?: string | null;
 }
 
 export interface Section {

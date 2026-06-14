@@ -13,7 +13,9 @@
     "@egrm/config-schemas": "workspace:*",
     "@egrm/core": "workspace:*",
     "@nuxt/ui": "^4.0.0",
-    "nuxt": "^4.0.0"
+    "apexcharts": "^5.15.0",
+    "nuxt": "^4.0.0",
+    "vue3-apexcharts": "^1.11.1"
   },
   "devDependencies": {
     "typescript": "^5.7.0"
