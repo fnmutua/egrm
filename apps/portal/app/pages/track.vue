@@ -128,89 +128,129 @@ async function doReply() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-elevated/50 py-6 sm:py-10 px-4">
-    <div class="max-w-xl mx-auto">
-      <NuxtLink to="/" class="text-sm text-muted hover:underline">&larr; Back to home</NuxtLink>
-      <h1 class="text-2xl font-bold mt-2 mb-6">Track your case</h1>
+  <div class="min-h-screen flex flex-col bg-elevated/30">
+    <PortalPageHeader>
+      <NuxtLink to="/" class="text-sm text-muted hover:text-highlighted transition-colors">&larr; Home</NuxtLink>
+    </PortalPageHeader>
 
-      <UCard>
-        <form class="space-y-4" @submit.prevent="doTrack">
-          <UFormField label="Reference number" required>
-            <UInput v-model="reference" placeholder="GRM-2026-0001" class="w-full font-mono" />
-          </UFormField>
-          <UFormField label="Phone, email or tracking PIN" required help="The phone/email you submitted with, or the PIN issued for anonymous cases.">
-            <UInput v-model="verifier" class="w-full" />
-          </UFormField>
-          <UAlert v-if="error" color="error" :title="error" />
-          <UButton type="submit" block :loading="loading">Check status</UButton>
-        </form>
-      </UCard>
+    <!-- Page intro band -->
+    <div class="border-b border-default bg-default">
+      <div class="max-w-xl mx-auto px-4 py-4">
+        <div class="flex items-center gap-2.5">
+          <UIcon name="i-lucide-search" class="text-xl text-primary shrink-0" />
+          <h1 class="text-xl font-bold">Track your case</h1>
+        </div>
+        <p class="text-muted text-sm mt-1 ml-8">
+          Enter your reference number and the phone, email, or PIN you used when submitting.
+        </p>
+      </div>
+    </div>
 
-      <UCard v-if="result" class="mt-6">
-        <template #header>
-          <div class="flex items-center justify-between">
-            <span class="font-mono font-semibold">{{ result.reference }}</span>
-            <UBadge :color="(tagColor[result.status_tag] as any) ?? 'neutral'" variant="subtle">{{ result.status }}</UBadge>
-          </div>
-        </template>
-        <div class="space-y-6">
-          <div class="text-sm text-muted">
-            Submitted {{ new Date(result.submitted_at).toLocaleDateString() }} — currently handled at
-            <span class="font-medium">{{ result.level }}</span> level.
-          </div>
+    <main class="flex-1 py-6 px-4">
+      <div class="max-w-xl mx-auto space-y-6">
 
-          <div v-if="result.messages?.length">
-            <div class="text-sm font-medium mb-2">Messages</div>
-            <p class="text-xs text-muted mb-3">Tap a message to read the full text.</p>
-            <PortalThreadTree :nodes="messageTree" :entry-by-id="messageById" />
-          </div>
-
-          <div v-if="result.reply_allowed" class="pt-4 border-t border-default space-y-3">
-            <div class="text-sm font-medium">Send a reply</div>
-            <UFormField label="Your message">
-              <UTextarea
-                v-model="replyBody"
-                :rows="4"
-                class="w-full"
-                :maxlength="correspondence?.max_body_length"
-                placeholder="Add information or respond to a request from the GRM office…"
-              />
+        <!-- Lookup form -->
+        <UCard>
+          <template #header>
+            <div class="flex items-center gap-2">
+              <UIcon name="i-lucide-search" class="text-primary" />
+              <span class="font-semibold">Look up a case</span>
+            </div>
+          </template>
+          <form class="space-y-4" @submit.prevent="doTrack">
+            <UFormField label="Reference number" required>
+              <UInput v-model="reference" placeholder="GRM-2026-0001" class="w-full font-mono" />
             </UFormField>
-            <div v-if="replyAttachmentsEnabled" class="space-y-2">
-              <div class="flex flex-wrap items-center gap-2">
-                <USelectMenu
-                  v-if="replyKindItems.length > 1"
-                  v-model="replyKind"
-                  :items="replyKindItems"
-                  value-key="value"
-                  label-key="label"
-                  size="sm"
-                />
-                <input
-                  ref="replyInput"
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
-                  class="hidden"
-                  @change="onReplyFileChange"
-                />
-                <UButton size="sm" variant="outline" icon="i-lucide-paperclip" @click="replyInput?.click()">
-                  Attach file
+            <UFormField label="Phone, email or tracking PIN" required help="The phone/email you submitted with, or the PIN issued for anonymous cases.">
+              <UInput v-model="verifier" class="w-full" />
+            </UFormField>
+            <UAlert v-if="error" color="error" :title="error" />
+            <UButton type="submit" block :loading="loading">Check status</UButton>
+          </form>
+        </UCard>
+
+        <!-- Result -->
+        <UCard v-if="result">
+          <template #header>
+            <div class="space-y-1">
+              <div class="flex items-center justify-between gap-2 flex-wrap">
+                <span class="font-mono text-lg font-bold tracking-wide">{{ result.reference }}</span>
+                <UBadge :color="(tagColor[result.status_tag] as any) ?? 'neutral'" variant="subtle" size="lg">
+                  {{ result.status }}
+                </UBadge>
+              </div>
+              <div class="text-xs text-muted">
+                Submitted {{ new Date(result.submitted_at).toLocaleDateString() }} · handled at
+                <span class="font-medium text-highlighted">{{ result.level }}</span> level
+              </div>
+            </div>
+          </template>
+
+          <div class="space-y-6">
+            <!-- Messages -->
+            <div v-if="result.messages?.length">
+              <div class="flex items-center gap-2 mb-3">
+                <UIcon name="i-lucide-message-circle" class="text-primary" />
+                <span class="text-sm font-semibold">Messages</span>
+              </div>
+              <p class="text-xs text-muted mb-3">Tap a message to read the full text.</p>
+              <PortalThreadTree :nodes="messageTree" :entry-by-id="messageById" />
+            </div>
+
+            <!-- Reply -->
+            <div v-if="result.reply_allowed" class="pt-4 border-t border-default">
+              <div class="flex items-center gap-2 mb-4">
+                <UIcon name="i-lucide-reply" class="text-primary" />
+                <span class="text-sm font-semibold">Send a reply</span>
+              </div>
+              <div class="space-y-3">
+                <UFormField label="Your message">
+                  <UTextarea
+                    v-model="replyBody"
+                    :rows="4"
+                    class="w-full"
+                    :maxlength="correspondence?.max_body_length"
+                    placeholder="Add information or respond to a request from the GRM office…"
+                  />
+                </UFormField>
+                <div v-if="replyAttachmentsEnabled" class="space-y-2">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <USelectMenu
+                      v-if="replyKindItems.length > 1"
+                      v-model="replyKind"
+                      :items="replyKindItems"
+                      value-key="value"
+                      label-key="label"
+                      size="sm"
+                    />
+                    <input
+                      ref="replyInput"
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                      class="hidden"
+                      @change="onReplyFileChange"
+                    />
+                    <UButton size="sm" variant="outline" icon="i-lucide-paperclip" @click="replyInput?.click()">
+                      Attach file
+                    </UButton>
+                  </div>
+                  <ul v-if="replyFiles.length" class="text-sm space-y-1">
+                    <li v-for="f in replyFiles" :key="f.id" class="flex items-center justify-between gap-2">
+                      <span class="truncate">{{ f.file.name }} ({{ formatFileSize(f.file.size) }})</span>
+                      <UButton size="xs" variant="ghost" color="error" @click="removeReplyFile(f.id)">Remove</UButton>
+                    </li>
+                  </ul>
+                </div>
+                <UAlert v-if="replyError" color="error" :title="replyError" />
+                <UButton :loading="replyLoading" :disabled="!replyBody.trim()" block @click="doReply">
+                  Send reply
                 </UButton>
               </div>
-              <ul v-if="replyFiles.length" class="text-sm space-y-1">
-                <li v-for="f in replyFiles" :key="f.id" class="flex items-center justify-between gap-2">
-                  <span class="truncate">{{ f.file.name }} ({{ formatFileSize(f.file.size) }})</span>
-                  <UButton size="xs" variant="ghost" color="error" @click="removeReplyFile(f.id)">Remove</UButton>
-                </li>
-              </ul>
             </div>
-            <UAlert v-if="replyError" color="error" :title="replyError" />
-            <UButton :loading="replyLoading" :disabled="!replyBody.trim()" block @click="doReply">
-              Send reply
-            </UButton>
           </div>
-        </div>
-      </UCard>
-    </div>
+        </UCard>
+
+      </div>
+    </main>
   </div>
 </template>
