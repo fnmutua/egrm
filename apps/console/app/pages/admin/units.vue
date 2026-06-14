@@ -109,13 +109,6 @@ async function toggleExpand(id: string) {
   }
   expanded.value = new Set(expanded.value);
 }
-function expandAll() {
-  toast.add({
-    title: 'Expand all disabled for large trees',
-    description: 'Expand counties or wards individually to load children on demand.',
-    color: 'neutral',
-  });
-}
 function collapseAll() {
   expanded.value = new Set();
 }
@@ -208,11 +201,75 @@ async function save() {
   }
 }
 
-async function toggleActive(u: Unit) {
-  await api(`/api/v1/units/${u.id}`, { method: 'PATCH', body: { active: !u.active } });
-  invalidateBranch(u.parentId);
-  if (u.parentId) await fetchChildren(u.parentId, true);
-  else await fetchChildren(null, true);
+const togglingActive = ref<Set<string>>(new Set());
+
+function patchUnit(u: Unit, patch: Partial<Unit>) {
+  Object.assign(u, patch);
+  const key = u.parentId ?? 'root';
+  const siblings = childrenCache.value.get(key);
+  if (siblings) {
+    const next = new Map(childrenCache.value);
+    next.set(key, siblings.map((s) => (s.id === u.id ? { ...s, ...patch } : s)));
+    childrenCache.value = next;
+  }
+  const idx = new Map(unitIndex.value);
+  idx.set(u.id, { ...u, ...patch });
+  unitIndex.value = idx;
+}
+
+async function setActive(u: Unit, active: boolean) {
+  if (u.active === active || togglingActive.value.has(u.id)) return;
+  togglingActive.value.add(u.id);
+  try {
+    await api(`/api/v1/units/${u.id}`, { method: 'PATCH', body: { active } });
+    patchUnit(u, { active });
+    toast.add({
+      title: active ? `"${u.name}" is active` : `"${u.name}" deactivated`,
+      description: active
+        ? 'Available for intake and routing.'
+        : 'Hidden from intake and new assignments; existing cases keep their link.',
+      color: 'success',
+    });
+  } catch (e: unknown) {
+    const data = (e as { data?: { error?: string } }).data;
+    toast.add({ title: data?.error ?? 'Update failed', color: 'error' });
+  } finally {
+    togglingActive.value.delete(u.id);
+    togglingActive.value = new Set(togglingActive.value);
+  }
+}
+
+function rowActions(row: { unit: Unit; childCount: number }) {
+  const u = row.unit;
+  const items: { label: string; icon: string; disabled?: boolean; onSelect?: () => void }[] = [];
+
+  if (levelIndex(u.levelCode) < levels.value.length - 1) {
+    items.push({
+      label: canPromote(u)
+        ? `Move up to ${levelLabel(levels.value[levelIndex(u.levelCode) + 1]!.code)}`
+        : promoteTooltip(u),
+      icon: 'i-lucide-arrow-big-up',
+      disabled: !canPromote(u),
+      onSelect: () => promote(u),
+    });
+  }
+
+  if (canDemote(u)) {
+    items.push({
+      label: `Move down to ${levelLabel(levels.value[levelIndex(u.levelCode) - 1]!.code)}`,
+      icon: 'i-lucide-arrow-big-down',
+      onSelect: () => openDemote(u),
+    });
+  }
+
+  items.push({
+    label: row.childCount > 0 ? 'Delete (has child units)' : 'Delete unit',
+    icon: 'i-lucide-trash-2',
+    disabled: row.childCount > 0,
+    onSelect: () => openDelete(u),
+  });
+
+  return [items];
 }
 
 /** Only one top-level unit may exist (single-root rule). */
@@ -471,13 +528,24 @@ onMounted(async () => {
 
     <p v-if="summary && summary.total > 0" class="text-sm text-muted mb-4">
       {{ summary.total.toLocaleString() }} units loaded —
-      expand a row to fetch children on demand (faster for large imports).
+      use the arrow on each row to load children on demand (faster for large imports).
     </p>
+
+    <UAlert
+      v-if="summary && summary.total > 0"
+      color="neutral"
+      variant="subtle"
+      icon="i-lucide-info"
+      class="mb-4"
+      title="Reading this table"
+      description="▶ Arrow — show child units. Active switch — on means the unit appears in intake and routing; off hides it without deleting. ⋮ More — move a unit up/down the hierarchy or delete a leaf unit."
+    />
 
     <UCard :ui="{ body: 'p-0 sm:p-0' }">
       <div class="flex items-center justify-end gap-1 px-4 pt-3">
-        <UButton size="xs" variant="ghost" color="neutral" @click="expandAll">Expand all</UButton>
-        <UButton size="xs" variant="ghost" color="neutral" @click="collapseAll">Collapse all</UButton>
+        <UButton size="xs" variant="ghost" color="neutral" title="Hide all expanded branches" @click="collapseAll">
+          Collapse all
+        </UButton>
       </div>
       <div class="overflow-x-auto p-4 pt-2">
         <table class="w-full min-w-[640px] text-sm">
@@ -486,8 +554,8 @@ onMounted(async () => {
               <th class="py-2 pr-4">Unit</th>
               <th class="py-2 pr-4">Level</th>
               <th class="py-2 pr-4">Code</th>
-              <th class="py-2 pr-4">Status</th>
-              <th class="py-2 text-right">Actions</th>
+              <th class="py-2 pr-4">Active</th>
+              <th class="py-2 text-right w-40">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -506,7 +574,8 @@ onMounted(async () => {
                     size="xs" variant="ghost" color="neutral"
                     :icon="expanded.has(row.unit.id) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
                     :loading="loadingChildren.has(row.unit.id)"
-                    :title="row.childCount > 0 ? `${row.childCount} child unit(s)` : 'Expand to load children'"
+                    :aria-label="expanded.has(row.unit.id) ? 'Collapse children' : 'Expand children'"
+                    :title="row.childCount > 0 ? `Show ${row.childCount} child unit(s)` : 'Expand to load children'"
                     @click="toggleExpand(row.unit.id)"
                   />
                   <span v-else class="inline-block w-6" />
@@ -521,45 +590,36 @@ onMounted(async () => {
               <td class="py-2 pr-4 capitalize">{{ levelLabel(row.unit.levelCode) }}</td>
               <td class="py-2 pr-4 font-mono text-xs">{{ row.unit.code }}</td>
               <td class="py-2 pr-4">
-                <UBadge size="sm" variant="subtle" :color="row.unit.active ? 'success' : 'neutral'">
-                  {{ row.unit.active ? 'active' : 'inactive' }}
-                </UBadge>
+                <div
+                  class="flex items-center gap-2"
+                  :title="row.unit.active
+                    ? 'On — available for intake and routing'
+                    : 'Off — hidden from intake; existing cases keep their link'"
+                >
+                  <USwitch
+                    :model-value="row.unit.active"
+                    :loading="togglingActive.has(row.unit.id)"
+                    size="sm"
+                    :aria-label="`${row.unit.name}: ${row.unit.active ? 'active' : 'inactive'}`"
+                    @update:model-value="setActive(row.unit, $event)"
+                  />
+                  <span class="text-xs text-muted w-6">{{ row.unit.active ? 'On' : 'Off' }}</span>
+                </div>
               </td>
               <td class="py-2">
-                <div class="flex items-center justify-end gap-0.5">
+                <div class="flex items-center justify-end gap-1">
                   <UButton
                     v-if="childLevelOf(row.unit.levelCode)"
                     size="xs" variant="soft" icon="i-lucide-plus"
                     :title="`Add ${childLevelOf(row.unit.levelCode)!.label} under ${row.unit.name}`"
                     @click="openCreate(row.unit)"
                   >
-                    <span class="hidden md:inline">{{ childLevelOf(row.unit.levelCode)!.label }}</span>
+                    <span class="hidden lg:inline">{{ childLevelOf(row.unit.levelCode)!.label }}</span>
                   </UButton>
-                  <UButton size="xs" variant="ghost" icon="i-lucide-pencil" title="Edit" @click="openEdit(row.unit)" />
-                  <UButton
-                    size="xs" variant="ghost" icon="i-lucide-arrow-big-up"
-                    :disabled="!canPromote(row.unit)"
-                    :title="promoteTooltip(row.unit)"
-                    @click="promote(row.unit)"
-                  />
-                  <UButton
-                    size="xs" variant="ghost" icon="i-lucide-arrow-big-down"
-                    :disabled="!canDemote(row.unit)"
-                    :title="canDemote(row.unit) ? `Demote to ${levels[levelIndex(row.unit.levelCode) - 1]?.label} under a new parent` : 'Cannot demote: would fall below the lowest level or no parent available'"
-                    @click="openDemote(row.unit)"
-                  />
-                  <UButton
-                    size="xs" variant="ghost"
-                    :icon="row.unit.active ? 'i-lucide-eye-off' : 'i-lucide-eye'"
-                    :title="row.unit.active ? 'Deactivate' : 'Reactivate'"
-                    @click="toggleActive(row.unit)"
-                  />
-                  <UButton
-                    size="xs" variant="ghost" color="error" icon="i-lucide-trash-2"
-                    :disabled="row.childCount > 0"
-                    :title="row.childCount > 0 ? 'Cannot delete: has child units' : 'Delete'"
-                    @click="openDelete(row.unit)"
-                  />
+                  <UButton size="xs" variant="ghost" icon="i-lucide-pencil" title="Edit name and code" @click="openEdit(row.unit)" />
+                  <UDropdownMenu :items="rowActions(row)">
+                    <UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-ellipsis-vertical" aria-label="More actions" title="Move level or delete" />
+                  </UDropdownMenu>
                 </div>
               </td>
             </tr>
