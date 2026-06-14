@@ -82,6 +82,29 @@ const FILTER_OPS = [
   { value: 'in', label: 'in list' }, { value: 'nin', label: 'not in list' },
   { value: 'lt', label: '< less than' }, { value: 'gt', label: '> greater than' }, { value: 'between', label: 'between' },
 ];
+const FILTER_FIELDS = [
+  { value: 'status',      label: 'Status' },
+  { value: 'status_tag',  label: 'Status tag' },
+  { value: 'channel',     label: 'Channel' },
+  { value: 'priority',    label: 'Priority' },
+  { value: 'sensitivity', label: 'Sensitivity' },
+  { value: 'category',    label: 'Category' },
+  { value: 'level_code',  label: 'Level' },
+  { value: 'anonymous',   label: 'Anonymous' },
+  { value: 'unit_id',     label: 'Unit ID' },
+];
+// What input type to show for each filterable field
+const FIELD_TYPE: Record<string, 'enum' | 'bool' | 'text' | 'number' | 'date'> = {
+  status:      'enum',
+  status_tag:  'enum',
+  channel:     'enum',
+  priority:    'enum',
+  sensitivity: 'enum',
+  category:    'enum',
+  level_code:  'enum',
+  anonymous:   'bool',
+  unit_id:     'text',
+};
 const LAYOUT_OPTIONS = [{ value: 'grid', label: 'Grid' }, { value: 'single_col', label: 'Single column' }];
 const THRESHOLD_COLORS = [{ value: 'success', label: 'Green' }, { value: 'warning', label: 'Amber' }, { value: 'error', label: 'Red' }];
 
@@ -95,6 +118,33 @@ const DEFAULT_PACK = [
 
 const props = defineProps<{ payload: Record<string, any>; section?: string }>();
 const { roleNames, loadRoleNames } = useTenantRoles();
+const { api } = useApi();
+
+// Field value cache for filter autocomplete
+const fieldValuesCache = reactive<Record<string, string[]>>({});
+const fieldValuesLoading = reactive<Record<string, boolean>>({});
+
+async function ensureFieldValues(field: string) {
+  if (fieldValuesCache[field] !== undefined || fieldValuesLoading[field]) return;
+  fieldValuesLoading[field] = true;
+  try {
+    const res = await api<{ values: string[] }>(`/api/v1/dashboards/field-values?field=${encodeURIComponent(field)}&dataset=cases`);
+    fieldValuesCache[field] = res.values;
+  } catch {
+    fieldValuesCache[field] = [];
+  } finally {
+    fieldValuesLoading[field] = false;
+  }
+}
+
+function fvItems(field: string): string[] { return fieldValuesCache[field] ?? []; }
+function fieldType(field: string) { return FIELD_TYPE[field] ?? 'text'; }
+function valueAsArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map(String);
+  if (typeof v === 'string' && v) return v.split(',').map((s) => s.trim()).filter(Boolean);
+  return [];
+}
+
 onMounted(async () => { await loadRoleNames(); ensure(); });
 
 function ensure() {
@@ -123,6 +173,15 @@ const expandedWidgetId = ref<string | null>(null);
 
 const activeDash = computed(() => dashboards.value.find((d) => d.id === activeDashId.value) ?? dashboards.value[0] ?? null);
 const activeSection = computed(() => activeDash.value?.sections.find((s) => s.id === activeSectionId.value) ?? activeDash.value?.sections[0] ?? null);
+
+// Pre-load enum values reactively whenever the expanded widget's filters change
+watchEffect(() => {
+  if (!expandedWidgetId.value || !activeSection.value) return;
+  const w = activeSection.value.widgets.find((x) => x.id === expandedWidgetId.value);
+  for (const f of w?.filters ?? []) {
+    if (f.field && fieldType(f.field) === 'enum') ensureFieldValues(f.field);
+  }
+});
 
 watch(dashboards, (ds) => {
   if (!activeDashId.value && ds.length) activeDashId.value = ds[0].id;
@@ -196,7 +255,7 @@ function toggleWidget(id: string) { expandedWidgetId.value = expandedWidgetId.va
 
 function addMetric(w: Widget) { w.metrics.push({ measure: 'id', aggregation: 'count', label: '' }); }
 function removeMetric(w: Widget, i: number) { w.metrics.splice(i, 1); }
-function addFilter(w: Widget) { w.filters.push({ field: 'category', op: 'eq', value: '' }); }
+function addFilter(w: Widget) { w.filters.push({ field: 'status', op: 'eq', value: '' }); ensureFieldValues('status'); }
 function removeFilter(w: Widget, i: number) { w.filters.splice(i, 1); }
 function addThreshold(w: Widget) { w.thresholds.push({ value: 0, color: 'warning', label: '' }); }
 function removeThreshold(w: Widget, i: number) { w.thresholds.splice(i, 1); }
@@ -485,10 +544,114 @@ const dashTabClass = (id: string) => [
                   </div>
                   <p v-if="widget.filters.length === 0" class="text-xs text-muted italic">No filters — widget shows all records.</p>
                   <div v-for="(f, fi) in widget.filters" :key="fi" class="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end p-2 rounded border border-default/50">
-                    <UFormField label="Field"><UInput v-model="f.field" class="w-full font-mono text-xs" placeholder="category" /></UFormField>
-                    <UFormField label="Operator"><USelectMenu v-model="f.op" :items="FILTER_OPS" value-key="value" label-key="label" class="w-full" /></UFormField>
+                    <UFormField label="Field">
+                      <USelectMenu
+                        v-model="f.field"
+                        :items="FILTER_FIELDS"
+                        value-key="value"
+                        label-key="label"
+                        class="w-full"
+                        @update:model-value="(v) => { f.value = ''; if (fieldType(v) === 'enum') ensureFieldValues(v); }"
+                      />
+                    </UFormField>
+                    <UFormField label="Operator">
+                      <USelectMenu v-model="f.op" :items="FILTER_OPS" value-key="value" label-key="label" class="w-full" />
+                    </UFormField>
                     <UFormField label="Value">
-                      <UInput :model-value="String(f.value ?? '')" class="w-full text-xs" placeholder="value" @update:model-value="f.value = $event" />
+                      <!-- ENUM: multi-select for in/nin, single-select for eq/neq, text for lt/gt/between -->
+                      <template v-if="fieldType(f.field) === 'enum'">
+                        <USelectMenu
+                          v-if="['in', 'nin'].includes(f.op)"
+                          :model-value="valueAsArray(f.value)"
+                          :items="fvItems(f.field)"
+                          multiple
+                          placeholder="Pick values…"
+                          class="w-full"
+                          @update:model-value="(v: string[]) => (f.value = v)"
+                        />
+                        <USelectMenu
+                          v-else-if="['eq', 'neq'].includes(f.op)"
+                          :model-value="f.value != null && f.value !== '' ? String(f.value) : undefined"
+                          :items="fvItems(f.field)"
+                          placeholder="Pick a value…"
+                          class="w-full"
+                          @update:model-value="(v: string) => (f.value = v)"
+                        />
+                        <UInput
+                          v-else
+                          :model-value="String(f.value ?? '')"
+                          class="w-full text-xs"
+                          placeholder="value"
+                          @update:model-value="f.value = $event"
+                        />
+                      </template>
+                      <!-- BOOL: always a static true/false select -->
+                      <USelectMenu
+                        v-else-if="fieldType(f.field) === 'bool'"
+                        :model-value="f.value != null && f.value !== '' ? String(f.value) : undefined"
+                        :items="['true', 'false']"
+                        placeholder="Pick…"
+                        class="w-full"
+                        @update:model-value="(v: string) => (f.value = v)"
+                      />
+                      <!-- DATE: date picker for eq/neq/lt/gt, two dates for between -->
+                      <template v-else-if="fieldType(f.field) === 'date'">
+                        <div v-if="f.op === 'between'" class="flex gap-1">
+                          <UInput
+                            :model-value="valueAsArray(f.value)[0] ?? ''"
+                            type="date"
+                            class="w-full text-xs"
+                            @update:model-value="(v) => (f.value = [v, valueAsArray(f.value)[1] ?? ''])"
+                          />
+                          <UInput
+                            :model-value="valueAsArray(f.value)[1] ?? ''"
+                            type="date"
+                            class="w-full text-xs"
+                            @update:model-value="(v) => (f.value = [valueAsArray(f.value)[0] ?? '', v])"
+                          />
+                        </div>
+                        <UInput
+                          v-else
+                          :model-value="String(f.value ?? '')"
+                          type="date"
+                          class="w-full text-xs"
+                          @update:model-value="f.value = $event"
+                        />
+                      </template>
+                      <!-- NUMBER -->
+                      <template v-else-if="fieldType(f.field) === 'number'">
+                        <div v-if="f.op === 'between'" class="flex gap-1">
+                          <UInput
+                            :model-value="valueAsArray(f.value)[0] ?? ''"
+                            type="number"
+                            class="w-full text-xs"
+                            placeholder="min"
+                            @update:model-value="(v) => (f.value = [v, valueAsArray(f.value)[1] ?? ''])"
+                          />
+                          <UInput
+                            :model-value="valueAsArray(f.value)[1] ?? ''"
+                            type="number"
+                            class="w-full text-xs"
+                            placeholder="max"
+                            @update:model-value="(v) => (f.value = [valueAsArray(f.value)[0] ?? '', v])"
+                          />
+                        </div>
+                        <UInput
+                          v-else
+                          :model-value="f.value != null ? String(f.value) : ''"
+                          type="number"
+                          class="w-full text-xs"
+                          @update:model-value="f.value = $event ? Number($event) : ''"
+                        />
+                      </template>
+                      <!-- TEXT / UUID fallback -->
+                      <UInput
+                        v-else
+                        :model-value="Array.isArray(f.value) ? f.value.join(',') : String(f.value ?? '')"
+                        class="w-full text-xs"
+                        placeholder="value"
+                        @update:model-value="f.value = $event"
+                      />
                     </UFormField>
                     <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" class="mb-0.5" @click="removeFilter(widget, fi)" />
                   </div>
