@@ -83,13 +83,13 @@ function unitLevelCte(tenantId: string, levelCode: string, caseWhere: SQL) {
   return sql`
     WITH RECURSIVE case_unit_chain AS (
       SELECT
-        c.id AS case_id,
+        grm_case.id AS case_id,
         u.id AS unit_id,
         u.parent_id,
         lower(u.level_code) AS level_code,
         u.name
-      FROM grm_case c
-      INNER JOIN unit u ON u.id = c.unit_id AND u.tenant_id = ${tenantId}
+      FROM grm_case
+      INNER JOIN unit u ON u.id = grm_case.unit_id AND u.tenant_id = ${tenantId}
       WHERE ${caseWhere}
       UNION ALL
       SELECT
@@ -125,19 +125,19 @@ async function query2DWithUnitLevel(
     const col = other.column;
     const query = levelOnAxis === 'cat'
       ? sql`${cte}
-          SELECT m.label AS cat, c.${sql.raw(col)} AS grp, count(c.id) AS val
-          FROM grm_case c
-          INNER JOIN unit_level_map m ON m.case_id = c.id
+          SELECT m.label AS cat, grm_case.${sql.raw(col)} AS grp, count(grm_case.id) AS val
+          FROM grm_case
+          INNER JOIN unit_level_map m ON m.case_id = grm_case.id
           WHERE ${caseWhere}
-          GROUP BY m.label, c.${sql.raw(col)}
-          ORDER BY m.label, c.${sql.raw(col)}`
+          GROUP BY m.label, grm_case.${sql.raw(col)}
+          ORDER BY m.label, grm_case.${sql.raw(col)}`
       : sql`${cte}
-          SELECT c.${sql.raw(col)} AS cat, m.label AS grp, count(c.id) AS val
-          FROM grm_case c
-          INNER JOIN unit_level_map m ON m.case_id = c.id
+          SELECT grm_case.${sql.raw(col)} AS cat, m.label AS grp, count(grm_case.id) AS val
+          FROM grm_case
+          INNER JOIN unit_level_map m ON m.case_id = grm_case.id
           WHERE ${caseWhere}
-          GROUP BY c.${sql.raw(col)}, m.label
-          ORDER BY c.${sql.raw(col)}, m.label`;
+          GROUP BY grm_case.${sql.raw(col)}, m.label
+          ORDER BY grm_case.${sql.raw(col)}, m.label`;
 
     const result = await db.execute(query);
     return (result.rows as Row2D[]).map((r) => ({
@@ -150,18 +150,18 @@ async function query2DWithUnitLevel(
   if (other.type === 'unit_direct') {
     const query = levelOnAxis === 'cat'
       ? sql`${cte}
-          SELECT m.label AS cat, coalesce(u.name, '—') AS grp, count(c.id) AS val
-          FROM grm_case c
-          INNER JOIN unit_level_map m ON m.case_id = c.id
-          LEFT JOIN unit u ON u.id = c.unit_id
+          SELECT m.label AS cat, coalesce(u.name, '—') AS grp, count(grm_case.id) AS val
+          FROM grm_case
+          INNER JOIN unit_level_map m ON m.case_id = grm_case.id
+          LEFT JOIN unit u ON u.id = grm_case.unit_id
           WHERE ${caseWhere}
           GROUP BY m.label, u.name
           ORDER BY m.label, u.name`
       : sql`${cte}
-          SELECT coalesce(u.name, '—') AS cat, m.label AS grp, count(c.id) AS val
-          FROM grm_case c
-          INNER JOIN unit_level_map m ON m.case_id = c.id
-          LEFT JOIN unit u ON u.id = c.unit_id
+          SELECT coalesce(u.name, '—') AS cat, m.label AS grp, count(grm_case.id) AS val
+          FROM grm_case
+          INNER JOIN unit_level_map m ON m.case_id = grm_case.id
+          LEFT JOIN unit u ON u.id = grm_case.unit_id
           WHERE ${caseWhere}
           GROUP BY u.name, m.label
           ORDER BY u.name, m.label`;
@@ -271,9 +271,9 @@ export async function queryTimeByDimension(
   if (dim.type === 'unit_level') {
     const cte = unitLevelCte(tenantId, dim.levelCode, caseWhere);
     const query = sql`${cte}
-      SELECT ${timeExpr}::text AS cat, m.label AS grp, count(c.id) AS val
-      FROM grm_case c
-      INNER JOIN unit_level_map m ON m.case_id = c.id
+      SELECT ${timeExpr}::text AS cat, m.label AS grp, count(grm_case.id) AS val
+      FROM grm_case
+      INNER JOIN unit_level_map m ON m.case_id = grm_case.id
       WHERE ${caseWhere}
       GROUP BY ${timeExpr}, m.label
       ORDER BY ${timeExpr}, m.label`;

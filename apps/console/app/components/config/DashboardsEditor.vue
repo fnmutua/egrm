@@ -241,7 +241,6 @@ function ensure() {
       for (const w of s.widgets) {
         w.metrics ??= []; w.group_by ??= []; w.filters ??= []; w.thresholds ??= [];
         w.size ??= 'standard';
-        syncWidgetUnitLevelFromGroupBy(w);
       }
     }
   }
@@ -425,18 +424,18 @@ const CHART_PROFILES: Record<string, ChartProfile> = {
     filters: true, kpiDisplay: false,
   },
   stacked_bar: {
-    hint: 'Stacked bars from two case fields — axis and stacks both come from the cases table.',
+    hint: 'Stacked bars from two fields — pick a unit level (County, Ward…) on the axis, not individual settlements.',
     measure: true, aggregation: true,
-    categories: { show: true, label: 'Categories (axis)', required: true, help: 'Case field on the axis — e.g. Unit, Channel, Priority.' },
-    series: { show: true, label: 'Series (stacks)', required: true, help: 'Second case field — each value becomes a coloured stack (e.g. Status).' },
+    categories: { show: true, label: 'Categories (axis)', required: true, help: 'Axis labels — case field or unit level (County, Ward, etc.).' },
+    series: { show: true, label: 'Series (stacks)', required: true, help: 'Second field for stack segments — e.g. Status, Channel.' },
     time: { show: false, required: false },
     filters: true, kpiDisplay: false,
   },
   stacked_bar_100: {
-    hint: '100% stacked bars from two case table fields.',
+    hint: '100% stacked bars from two fields.',
     measure: true, aggregation: true,
-    categories: { show: true, label: 'Categories (axis)', required: true, help: 'Case field on the axis.' },
-    series: { show: true, label: 'Series (stacks)', required: true, help: 'Second case field for stack segments.' },
+    categories: { show: true, label: 'Categories (axis)', required: true, help: 'Axis labels — case field or unit level.' },
+    series: { show: true, label: 'Series (stacks)', required: true, help: 'Second field for stack segments.' },
     time: { show: false, required: false },
     filters: true, kpiDisplay: false,
   },
@@ -500,22 +499,14 @@ function defaultWidgetUnitLevel(): string | undefined {
   return activeDash.value?.filter_bar?.unit_level ?? topHierarchyLevel.value;
 }
 
-function syncWidgetUnitLevelFromGroupBy(w: Widget) {
-  const cat = w.group_by[0];
-  if (cat?.startsWith('unit_level:')) {
-    w.unit_level = cat.slice('unit_level:'.length);
-  }
-}
-
 function supportsGeoCategory(kind: string): boolean {
-  const p = chartProfile(kind);
-  return p.categories.show && !usesCaseFieldsOnly(kind) && kind !== 'map';
+  return chartProfile(kind).categories.show && kind !== 'map' && !isStackedChart(kind);
 }
 
 function widgetCategoryMode(w: Widget): 'field' | 'unit_level' {
   if (w.chart_kind === 'map') return 'unit_level';
   const cat = categoryDim(w);
-  if (cat?.startsWith('unit_level:') || w.unit_level) return 'unit_level';
+  if (cat === 'unit_id' || cat?.startsWith('unit_level:') || w.unit_level) return 'unit_level';
   return 'field';
 }
 
@@ -568,9 +559,11 @@ function setSeriesDim(w: Widget, v: string | undefined) {
 
 function normalizeWidgetForChart(w: Widget, kind: string) {
   const p = chartProfile(kind);
+  const stackedScalars = stackedCaseFieldOptions().map((o) => o.value);
+  const unitRollupValues = unitRollupOptions.value.map((o) => o.value);
   const allowed = new Set(
-    usesCaseFieldsOnly(kind)
-      ? caseFieldOptions.value.map((o) => o.value)
+    isStackedChart(kind)
+      ? [...stackedScalars, ...unitRollupValues]
       : groupByOptions.value.map((o) => o.value),
   );
   w.group_by = w.group_by.filter((d) => allowed.has(d));
@@ -600,6 +593,9 @@ function normalizeWidgetForChart(w: Widget, kind: string) {
       w.unit_level = level;
       w.group_by = [`unit_level:${level}`];
     }
+  } else if (isStackedChart(kind) && w.group_by[0] === 'unit_id') {
+    const level = w.unit_level ?? defaultWidgetUnitLevel();
+    if (level) onWidgetUnitLevelChange(w, level);
   } else if (w.unit_level && supportsGeoCategory(kind)) {
     const dim = `unit_level:${w.unit_level}`;
     const series = w.group_by[1];
@@ -632,21 +628,31 @@ function widgetConfigIssues(w: Widget): string[] {
 
 const STACKED_CHARTS = new Set(['stacked_bar', 'stacked_bar_100']);
 
-function usesCaseFieldsOnly(kind: string) {
+function isStackedChart(kind: string) {
   return STACKED_CHARTS.has(kind);
+}
+
+function stackedCaseFieldOptions() {
+  return caseFieldOptions.value.filter((o) => o.value !== 'unit_id');
+}
+
+function stackedCategoryOptions() {
+  return [...stackedCaseFieldOptions(), ...unitRollupOptions.value];
 }
 
 function categoryFieldOptions(w: Widget) {
   if (w.chart_kind === 'map') return unitRollupOptions.value;
-  if (usesCaseFieldsOnly(w.chart_kind)) return caseFieldOptions.value;
+  if (isStackedChart(w.chart_kind)) return stackedCategoryOptions();
   if (widgetCategoryMode(w) === 'unit_level') return unitRollupOptions.value;
   return caseFieldOptions.value;
 }
 
 function seriesFieldOptions(w: Widget) {
-  const items = usesCaseFieldsOnly(w.chart_kind) ? caseFieldOptions.value : groupByOptions.value;
+  const items = isStackedChart(w.chart_kind)
+    ? stackedCaseFieldOptions()
+    : groupByOptions.value;
   const cat = categoryDim(w);
-  return cat ? items.filter((o) => o.value !== cat) : items;
+  return cat ? items.filter((o) => o.value !== cat && !o.value.startsWith('unit_level:')) : items;
 }
 
 const mapGroupByOptions = computed(() => unitRollupOptions.value);
@@ -1000,7 +1006,7 @@ const dashTabClass = (id: string) => [
                   </UFormField>
 
                   <UFormField
-                    v-if="chartProfile(widget.chart_kind).categories.show && widgetCategoryMode(widget) === 'field'"
+                    v-if="chartProfile(widget.chart_kind).categories.show && (isStackedChart(widget.chart_kind) || widgetCategoryMode(widget) === 'field')"
                     :label="chartProfile(widget.chart_kind).categories.label"
                     :help="chartProfile(widget.chart_kind).categories.help"
                     :required="chartProfile(widget.chart_kind).categories.required"
@@ -1010,7 +1016,7 @@ const dashTabClass = (id: string) => [
                       :items="categoryFieldOptions(widget)"
                       value-key="value"
                       label-key="label"
-                      placeholder="Pick case field…"
+                      :placeholder="isStackedChart(widget.chart_kind) ? 'Pick field or unit level…' : 'Pick case field…'"
                       class="w-full"
                       @update:model-value="(v: string) => setCategoryDim(widget, v)"
                     />

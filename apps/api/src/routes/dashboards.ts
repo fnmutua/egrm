@@ -44,6 +44,7 @@ const widgetBody = z.object({
   measure: z.string().default('id'),
   aggregation: z.enum(['count', 'count_distinct', 'sum', 'avg', 'min', 'max', 'pct']).default('count'),
   group_by: z.array(z.string()).default([]),
+  unit_level: z.string().optional(),
   time_dimension: z.string().optional(),
   bucket: z.enum(['day', 'week', 'month', 'quarter', 'year']).optional(),
   filters: z
@@ -58,6 +59,14 @@ const TIME_ONLY_CHARTS = new Set(['line']);
 
 function primaryGroupDim(groupBy: string[]): string | undefined {
   return groupBy.find((d) => isGroupDimension(d)) ?? groupBy[0];
+}
+
+function resolveWidgetGroupBy(groupBy: string[], unitLevel?: string): string[] {
+  const gb = [...groupBy];
+  const first = gb[0];
+  if (first && isGroupDimension(first)) return gb;
+  if (unitLevel) gb[0] = `unit_level:${unitLevel}`;
+  return gb;
 }
 
 function toArray(v: unknown): string[] {
@@ -179,6 +188,13 @@ async function buildCaseWhere(
 }
 
 export default async function dashboardRoutes(app: FastifyInstance) {
+  /** Active dashboard layout for the home page — any signed-in user, no admin config permission required. */
+  app.get('/api/v1/dashboards/layout', { onRequest: [app.authenticate] }, async (req, reply) => {
+    const payload = await getActiveConfig<{ dashboards?: unknown[] }>(req.tenant.id, 'cd15_dashboards');
+    if (!payload) return reply.code(404).send({ error: 'no_active_dashboards' });
+    return { payload };
+  });
+
   app.get(
     '/api/v1/dashboards/dimensions',
     { onRequest: [app.authenticate] },
@@ -240,6 +256,7 @@ export default async function dashboardRoutes(app: FastifyInstance) {
 
       const widget = parsed.data;
       const tenantId = req.tenant.id;
+      const groupBy = resolveWidgetGroupBy(widget.group_by, widget.unit_level);
 
       if (widget.dataset !== 'cases') {
         return { rows: [], total: 0, note: `Dataset '${widget.dataset}' not yet available.` };
@@ -250,9 +267,9 @@ export default async function dashboardRoutes(app: FastifyInstance) {
 
       // Stacked bars — always 2D; never fall through to 1D or time-series paths
       if (STACKED_CHARTS.has(kind)) {
-        if (widget.group_by.length >= 2) {
-          const dim0 = widget.group_by[0]!;
-          const dim1 = widget.group_by[1]!;
+        if (groupBy.length >= 2) {
+          const dim0 = groupBy[0]!;
+          const dim1 = groupBy[1]!;
           if (isGroupDimension(dim0) && isGroupDimension(dim1)) {
             const raw = await queryGrouped2D(where, tenantId, dim0, dim1);
             if (raw?.length) {
@@ -266,7 +283,7 @@ export default async function dashboardRoutes(app: FastifyInstance) {
 
       // Table, bar, pie, etc. — always 1D rows; ignore stray time fields from old configs
       if (CATEGORICAL_CHARTS.has(kind)) {
-        const groupDim = primaryGroupDim(widget.group_by);
+        const groupDim = primaryGroupDim(groupBy);
         if (groupDim && isGroupDimension(groupDim)) {
           const rows = await queryGrouped1D(where, tenantId, groupDim);
           if (rows) {
@@ -276,7 +293,7 @@ export default async function dashboardRoutes(app: FastifyInstance) {
       }
 
       if (TIME_SPLIT_CHARTS.has(kind) && widget.time_dimension && widget.bucket) {
-        const splitDim = primaryGroupDim(widget.group_by);
+        const splitDim = primaryGroupDim(groupBy);
         if (splitDim && isGroupDimension(splitDim)) {
           const timeCol = TIME_COLS[widget.time_dimension] ?? 'created_at';
           const raw = await queryTimeByDimension(where, tenantId, timeCol, widget.bucket, splitDim);
@@ -287,15 +304,15 @@ export default async function dashboardRoutes(app: FastifyInstance) {
         }
       }
 
-      if (widget.group_by.length >= 2) {
-        const raw = await queryGrouped2D(where, tenantId, widget.group_by[0]!, widget.group_by[1]!);
+      if (groupBy.length >= 2) {
+        const raw = await queryGrouped2D(where, tenantId, groupBy[0]!, groupBy[1]!);
         if (raw) {
           const { series, categories, total } = pivot2D(raw);
           return { rows: [], series, categories, total };
         }
       }
 
-      const groupDim = primaryGroupDim(widget.group_by);
+      const groupDim = primaryGroupDim(groupBy);
       if (groupDim && isGroupDimension(groupDim)) {
         const rows = await queryGrouped1D(where, tenantId, groupDim);
         if (rows) {

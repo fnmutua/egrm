@@ -18,7 +18,7 @@ export function useDashboards() {
     loading.value = true;
     error.value = null;
     try {
-      const res = await api<{ payload: DashboardsConfig }>('/api/v1/config/cd15_dashboards');
+      const res = await api<{ payload: DashboardsConfig }>('/api/v1/dashboards/layout');
       dashboards.value = res.payload?.dashboards ?? [];
     } catch {
       dashboards.value = [];
@@ -54,6 +54,10 @@ export function useDashboards() {
     categories: string[];
     total: number;
   }> {
+    const groupBy = [...(widget.group_by ?? [])];
+    if ((!groupBy[0] || !groupBy[0].startsWith('unit_level:')) && widget.unit_level) {
+      groupBy[0] = `unit_level:${widget.unit_level}`;
+    }
     try {
       return await api('/api/v1/dashboards/widget', {
         method: 'POST',
@@ -62,7 +66,8 @@ export function useDashboards() {
           chart_kind: widget.chart_kind,
           measure: widget.measure ?? 'id',
           aggregation: widget.aggregation ?? 'count',
-          group_by: widget.group_by ?? [],
+          group_by: groupBy,
+          unit_level: widget.unit_level,
           time_dimension: TIME_CHARTS.has(widget.chart_kind) ? widget.time_dimension : undefined,
           bucket: TIME_CHARTS.has(widget.chart_kind) ? widget.bucket : undefined,
           filters: widget.filters ?? [],
