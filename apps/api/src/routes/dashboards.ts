@@ -86,8 +86,16 @@ function buildFilterCondition(f: { field: string; op: string; value: unknown }) 
   // ── Scalar column (text / uuid / enum) ─────────────────────
   const sv = typeof f.value === 'string' || typeof f.value === 'number' ? String(f.value) : null;
 
-  if (f.op === 'eq'  && sv !== null) return sql`${col} = ${sv}`;
-  if (f.op === 'neq' && sv !== null) return sql`${col} != ${sv}`;
+  // eq/neq: if multiple values selected treat as IN / NOT IN
+  if (f.op === 'eq' || f.op === 'neq') {
+    const vals = toArray(f.value);
+    if (!vals.length && sv === null) return null;
+    const list = vals.length ? vals : (sv ? [sv] : []);
+    if (!list.length) return null;
+    if (f.op === 'eq')  return list.length === 1 ? sql`${col} = ${list[0]}` : sql`${col} = ANY(${list}::text[])`;
+    if (f.op === 'neq') return list.length === 1 ? sql`${col} != ${list[0]}` : sql`${col} != ALL(${list}::text[])`;
+  }
+
   if (f.op === 'lt'  && sv !== null) return sql`${col} < ${sv}`;
   if (f.op === 'gt'  && sv !== null) return sql`${col} > ${sv}`;
 

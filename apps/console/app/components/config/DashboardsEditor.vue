@@ -313,8 +313,8 @@ const dashTabClass = (id: string) => [
               <UFormField label="Title" help="One word, max 20 chars">
                 <UInput v-model="dash.title" maxlength="20" @input="dash.title = dash.title.replace(/\s+/g, '')" />
               </UFormField>
-              <UFormField label="Icon" help="Lucide token, e.g. i-lucide-bar-chart-2">
-                <UInput v-model="dash.icon" class="font-mono text-xs" placeholder="i-lucide-layout-dashboard" />
+              <UFormField label="Icon">
+                <IconPicker v-model="dash.icon" placeholder="i-lucide-layout-dashboard" />
               </UFormField>
               <UFormField label="Layout">
                 <USelectMenu v-model="dash.layout" :items="LAYOUT_OPTIONS" value-key="value" label-key="label" class="w-full" />
@@ -399,8 +399,8 @@ const dashTabClass = (id: string) => [
 
               <!-- Expanded appearance -->
               <div v-if="activeSectionId === sec.id" class="py-4 grid grid-cols-1 sm:grid-cols-2 gap-4" @click.stop>
-                <UFormField label="Icon" help="Lucide token">
-                  <UInput v-model="sec.icon" class="w-full font-mono text-xs" placeholder="i-lucide-rows-3" />
+                <UFormField label="Icon">
+                  <IconPicker v-model="sec.icon" placeholder="i-lucide-rows-3" />
                 </UFormField>
                 <UFormField label="Accent color">
                   <UInput v-model="sec.color" class="w-full" placeholder="primary / #hex" />
@@ -485,8 +485,11 @@ const dashTabClass = (id: string) => [
               <div v-if="expandedWidgetId === widget.id" class="py-4 space-y-4">
 
                 <!-- Identity -->
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <UFormField label="Title"><UInput v-model="widget.title" class="w-full" /></UFormField>
+                  <UFormField label="Icon">
+                    <IconPicker v-model="widget.icon" placeholder="i-lucide-hash" />
+                  </UFormField>
                   <UFormField label="Chart type">
                     <USelectMenu v-model="widget.chart_kind" :items="CHART_KINDS" value-key="value" label-key="label" class="w-full" />
                   </UFormField>
@@ -558,24 +561,16 @@ const dashTabClass = (id: string) => [
                       <USelectMenu v-model="f.op" :items="FILTER_OPS" value-key="value" label-key="label" class="w-full" />
                     </UFormField>
                     <UFormField label="Value">
-                      <!-- ENUM: multi-select for in/nin, single-select for eq/neq, text for lt/gt/between -->
+                      <!-- ENUM: multi-select for all ops except lt/gt/between -->
                       <template v-if="fieldType(f.field) === 'enum'">
                         <USelectMenu
-                          v-if="['in', 'nin'].includes(f.op)"
+                          v-if="!['lt', 'gt', 'between'].includes(f.op)"
                           :model-value="valueAsArray(f.value)"
                           :items="fvItems(f.field)"
                           multiple
-                          placeholder="Pick values…"
+                          placeholder="Pick value(s)…"
                           class="w-full"
                           @update:model-value="(v: string[]) => (f.value = v)"
-                        />
-                        <USelectMenu
-                          v-else-if="['eq', 'neq'].includes(f.op)"
-                          :model-value="f.value != null && f.value !== '' ? String(f.value) : undefined"
-                          :items="fvItems(f.field)"
-                          placeholder="Pick a value…"
-                          class="w-full"
-                          @update:model-value="(v: string) => (f.value = v)"
                         />
                         <UInput
                           v-else

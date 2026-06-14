@@ -19,6 +19,7 @@ export interface Metric {
 export interface Widget {
   id: string;
   title: string;
+  icon?: string | null;
   chart_kind: string;
   dataset: string;
   measure?: string;
