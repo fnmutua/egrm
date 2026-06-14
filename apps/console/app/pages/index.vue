@@ -61,8 +61,10 @@ function switchDashboard(id: string) {
 
       <!-- Dashboard viewer -->
       <template v-else>
-        <!-- Dashboard tabs (if more than one) -->
-        <div class="flex items-center gap-3 mb-6 flex-wrap">
+        <!-- Dashboard tabs — sticky while scrolling -->
+        <div
+          class="sticky top-0 z-20 -mx-4 sm:-mx-8 px-4 sm:px-8 py-3 mb-4 flex items-center gap-3 flex-wrap border-b border-default/70 bg-default/95 backdrop-blur supports-[backdrop-filter]:bg-default/80"
+        >
           <div v-if="visibleDashboards.length > 1" class="flex gap-1 flex-wrap">
             <UButton
               v-for="d in visibleDashboards"
