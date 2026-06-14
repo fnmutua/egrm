@@ -311,12 +311,29 @@ async function exportChartSvg() {
   );
 }
 
-function exportTableCsv() {
-  const header = [tableCategoryLabel.value, tableValueLabel.value];
-  const csvRows = rows.value.map((r) =>
-    [`"${String(r.label).replace(/"/g, '""')}"`, r.value].join(','),
-  );
-  const csv = [header.join(','), ...csvRows].join('\r\n');
+function escapeCsvCell(v: unknown): string {
+  return `"${String(v ?? '').replace(/"/g, '""')}"`;
+}
+
+function exportDataCsv() {
+  let header: string[];
+  let lines: string[];
+
+  if (isMulti.value && categories.value.length) {
+    header = ['Category', ...seriesData.value.map((s) => s.name)];
+    lines = categories.value.map((cat, i) =>
+      [escapeCsvCell(cat), ...seriesData.value.map((s) => s.data[i] ?? 0)].join(','),
+    );
+  } else {
+    const labelCol = isTable.value
+      ? tableCategoryLabel.value
+      : (dimLabel(props.widget.group_by?.[0]) || 'Label');
+    const valueCol = tableValueLabel.value;
+    header = [labelCol, valueCol];
+    lines = rows.value.map((r) => [escapeCsvCell(r.label), r.value].join(','));
+  }
+
+  const csv = [header.join(','), ...lines].join('\r\n');
   triggerBlobDownload(
     new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }),
     `${exportFileBase()}.csv`,
@@ -330,9 +347,10 @@ const exportMenuItems = computed(() => {
     items.push(
       { label: 'Download PNG', icon: 'i-lucide-image-down', onSelect: () => { void exportChartPng(); } },
       { label: 'Download SVG', icon: 'i-lucide-file-image', onSelect: () => { void exportChartSvg(); } },
+      { label: 'Download CSV', icon: 'i-lucide-sheet', onSelect: exportDataCsv },
     );
   } else if (isTable.value) {
-    items.push({ label: 'Download CSV', icon: 'i-lucide-sheet', onSelect: exportTableCsv });
+    items.push({ label: 'Download CSV', icon: 'i-lucide-sheet', onSelect: exportDataCsv });
   }
   return items;
 });
