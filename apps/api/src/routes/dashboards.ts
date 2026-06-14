@@ -13,6 +13,7 @@ import {
   queryTimeByDimension,
   queryTimeSeries1D,
   SCALAR_DIMS,
+  sumWidgetRows,
 } from '../services/dashboard-queries.js';
 
 /** Time-dimension key → actual DB column name. */
@@ -262,7 +263,7 @@ export default async function dashboardRoutes(app: FastifyInstance) {
         if (groupDim && isGroupDimension(groupDim)) {
           const rows = await queryGrouped1D(where, tenantId, groupDim);
           if (rows) {
-            return { rows, series: [], categories: [], total: rows.reduce((s, r) => s + Number(r.value), 0) };
+            return { rows, series: [], categories: [], total: sumWidgetRows(rows) };
           }
         }
       }
@@ -291,20 +292,20 @@ export default async function dashboardRoutes(app: FastifyInstance) {
       if (groupDim && isGroupDimension(groupDim)) {
         const rows = await queryGrouped1D(where, tenantId, groupDim);
         if (rows) {
-          return { rows, series: [], categories: [], total: rows.reduce((s, r) => s + Number(r.value), 0) };
+          return { rows, series: [], categories: [], total: sumWidgetRows(rows) };
         }
       }
 
       if (TIME_ONLY_CHARTS.has(kind) && widget.time_dimension && widget.bucket) {
         const timeCol = TIME_COLS[widget.time_dimension] ?? 'created_at';
         const rows = await queryTimeSeries1D(where, timeCol, widget.bucket);
-        return { rows, series: [], categories: [], total: rows.reduce((s, r) => s + Number(r.value), 0) };
+        return { rows, series: [], categories: [], total: sumWidgetRows(rows) };
       }
 
       if (widget.time_dimension && widget.bucket) {
         const timeCol = TIME_COLS[widget.time_dimension] ?? 'created_at';
         const rows = await queryTimeSeries1D(where, timeCol, widget.bucket);
-        return { rows, series: [], categories: [], total: rows.reduce((s, r) => s + Number(r.value), 0) };
+        return { rows, series: [], categories: [], total: sumWidgetRows(rows) };
       }
 
       const [row] = await db

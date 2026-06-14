@@ -3,6 +3,10 @@ definePageMeta({ layout: 'shell' });
 
 const { api } = useApi();
 const { user, fetchMe } = useAuth();
+const { canAdmin } = usePermissions();
+const toast = useToast();
+
+const isAdmin = computed(() => canAdmin());
 
 interface CaseRow {
   id: string;
@@ -37,6 +41,12 @@ const filterUnits = ref<FilterUnit[]>([]);
 const tenantWide = ref(true);
 const defaultUnitId = ref<string | undefined>(undefined);
 const filtersReady = ref(false);
+const seedCount = ref(50);
+const seedCasesTotal = ref(0);
+const seedOpen = ref(false);
+const clearSeedOpen = ref(false);
+const seeding = ref(false);
+const clearingSeed = ref(false);
 
 const unitItems = computed(() => {
   const items = filterUnits.value.map((u) => ({ value: u.id, label: `${u.name} (${u.level_code})` }));
@@ -64,6 +74,58 @@ async function loadFilterUnits() {
     unitId.value = res.default_unit_id;
   }
   filtersReady.value = true;
+}
+
+async function loadSeedCount() {
+  if (!isAdmin.value) return;
+  try {
+    const res = await api<{ count: number }>('/api/v1/cases/seed/count');
+    seedCasesTotal.value = res.count;
+  } catch {
+    seedCasesTotal.value = 0;
+  }
+}
+
+async function confirmSeed() {
+  seeding.value = true;
+  try {
+    const res = await api<{ created: number; by_status: Record<string, number> }>('/api/v1/cases/seed', {
+      method: 'POST',
+      body: { count: seedCount.value },
+    });
+    seedOpen.value = false;
+    page.value = 1;
+    await Promise.all([load(), loadSeedCount()]);
+    toast.add({
+      title: `${res.created} seed case(s) created`,
+      description: 'No notifications were sent. Cases are tagged with channel “seed”.',
+      color: 'success',
+    });
+  } catch (e: unknown) {
+    const err = e as { data?: { error?: string } };
+    toast.add({ title: err.data?.error ?? 'Seed failed', color: 'error' });
+  } finally {
+    seeding.value = false;
+  }
+}
+
+async function confirmClearSeed() {
+  clearingSeed.value = true;
+  try {
+    const res = await api<{ cases: number }>('/api/v1/cases/seed/clear', { method: 'POST' });
+    clearSeedOpen.value = false;
+    page.value = 1;
+    await Promise.all([load(), loadSeedCount()]);
+    toast.add({
+      title: res.cases ? `${res.cases} seed case(s) removed` : 'No seed cases to remove',
+      color: 'success',
+    });
+  } catch (e: unknown) {
+    const err = e as { data?: { error?: string } };
+    toast.add({ title: err.data?.error ?? 'Clear failed', color: 'error' });
+  } finally {
+    clearingSeed.value = false;
+  }
 }
 
 function clearFilters() {
@@ -94,7 +156,7 @@ async function load() {
 onMounted(async () => {
   if (!(await fetchMe())) return navigateTo('/login');
   await loadFilterUnits();
-  await load();
+  await Promise.all([load(), loadSeedCount()]);
 });
 
 watch([q, status, unitId], () => {
@@ -190,6 +252,26 @@ async function downloadExcel() {
         >
           Export
         </UButton>
+        <template v-if="isAdmin">
+          <UButton
+            variant="outline"
+            icon="i-lucide-flask-conical"
+            size="sm"
+            @click="seedOpen = true"
+          >
+            Seed cases
+          </UButton>
+          <UButton
+            variant="outline"
+            color="error"
+            icon="i-lucide-trash-2"
+            size="sm"
+            :disabled="seedCasesTotal === 0"
+            @click="clearSeedOpen = true"
+          >
+            Clear seed ({{ seedCasesTotal }})
+          </UButton>
+        </template>
       </div>
     </div>
 
@@ -238,5 +320,36 @@ async function downloadExcel() {
       <span>{{ (page - 1) * 20 + 1 }}–{{ Math.min(page * 20, total) }} of {{ total }}</span>
       <UPagination v-model:page="page" :total="total" :items-per-page="20" />
     </div>
+
+    <UModal
+      v-model:open="seedOpen"
+      title="Seed test cases"
+      description="Creates synthetic cases across all workflow statuses with varied categories, priorities, and locations. No email, SMS, or WhatsApp messages are sent."
+    >
+      <template #body>
+        <UFormField label="Number of cases" hint="1–500, spread evenly across statuses">
+          <UInput v-model.number="seedCount" type="number" min="1" max="500" class="w-full" />
+        </UFormField>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-2 w-full">
+          <UButton variant="ghost" color="neutral" @click="seedOpen = false">Cancel</UButton>
+          <UButton :loading="seeding" @click="confirmSeed">Create seed cases</UButton>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal
+      v-model:open="clearSeedOpen"
+      title="Clear seed cases?"
+      :description="`Permanently deletes ${seedCasesTotal} seed case(s) and their parties. Real cases submitted through intake are not affected.`"
+    >
+      <template #footer>
+        <div class="flex justify-end gap-2 w-full">
+          <UButton variant="ghost" color="neutral" @click="clearSeedOpen = false">Cancel</UButton>
+          <UButton :loading="clearingSeed" color="error" @click="confirmClearSeed">Clear seed data</UButton>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>

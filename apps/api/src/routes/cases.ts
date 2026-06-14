@@ -25,6 +25,7 @@ import {
   stageCaseAttachment,
 } from '../services/attachments.js';
 import { createStaffThreadMessage, listCaseThread } from '../services/correspondence.js';
+import { clearSeedCases, countSeedCases, seedCases } from '../services/seed-cases.js';
 import multipart from '@fastify/multipart';
 
 const listQuery = z.object({
@@ -66,6 +67,10 @@ const threadBody = z.object({
   visibility: z.enum(['public', 'staff']).optional(),
   attachment_ids: z.array(z.string().uuid()).optional(),
   in_reply_to_id: z.string().uuid().optional(),
+});
+
+const seedCasesBody = z.object({
+  count: z.coerce.number().int().min(1).max(500).default(50),
 });
 
 /** Staff case endpoints with jurisdiction-subtree scoping (spec 07 §2.2). */
@@ -159,6 +164,45 @@ export default async function caseRoutes(app: FastifyInstance) {
     ]);
 
     return { cases: rows, total: count?.n ?? 0, page, page_size };
+  });
+
+  app.get('/api/v1/cases/seed/count', { onRequest: [app.requireAdminConsole] }, async (req) => {
+    const count = await countSeedCases(req.tenant.id);
+    return { count };
+  });
+
+  app.post('/api/v1/cases/seed', { onRequest: [app.requireAdminConsole] }, async (req, reply) => {
+    const parsed = seedCasesBody.safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+
+    try {
+      const result = await seedCases(req.tenant.id, parsed.data.count, req.user.sub);
+      await writeAudit({
+        tenantId: req.tenant.id,
+        actorId: req.user.sub,
+        action: 'case.seed',
+        entity: 'grm_case',
+        entityId: req.tenant.id,
+        data: result,
+      });
+      return reply.code(201).send({ ok: true, ...result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'seed_failed';
+      return reply.code(503).send({ error: message });
+    }
+  });
+
+  app.post('/api/v1/cases/seed/clear', { onRequest: [app.requireAdminConsole] }, async (req, reply) => {
+    const result = await clearSeedCases(req.tenant.id);
+    await writeAudit({
+      tenantId: req.tenant.id,
+      actorId: req.user.sub,
+      action: 'case.seed_clear',
+      entity: 'grm_case',
+      entityId: req.tenant.id,
+      data: result,
+    });
+    return { ok: true, ...result };
   });
 
   app.get('/api/v1/cases/:id', { onRequest: [app.requirePermission('case:read')] }, async (req, reply) => {

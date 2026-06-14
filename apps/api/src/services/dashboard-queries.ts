@@ -1,7 +1,13 @@
-import { and, count, eq, sql, type SQL } from 'drizzle-orm';
+import { count, eq, sql, type SQL } from 'drizzle-orm';
 import { db, schema } from '../db/client.js';
 
 /** Scalar columns on grm_case usable for group_by. */
+export type WidgetDataRow = { label: string; value: number };
+
+export function sumWidgetRows(rows: WidgetDataRow[]): number {
+  return rows.reduce((sum, row) => sum + Number(row.value), 0);
+}
+
 export const SCALAR_DIMS: Record<string, string> = {
   status: 'status',
   status_tag: 'status_tag',
@@ -322,7 +328,7 @@ export async function queryGrouped1D(
   caseWhere: SQL,
   tenantId: string,
   dim: string,
-): Promise<{ label: string; value: number }[] | null> {
+): Promise<WidgetDataRow[] | null> {
   const parsed = parseGroupDimension(dim);
   if (!parsed) return null;
 
@@ -376,7 +382,7 @@ export async function queryTimeSeries1D(
   caseWhere: SQL,
   timeCol: string,
   bucket: string,
-): Promise<{ label: string; value: number }[]> {
+): Promise<WidgetDataRow[]> {
   const rows = await db
     .select({
       label: sql<string>`date_trunc(${bucket}, ${sql.raw(timeCol)})::text`,
