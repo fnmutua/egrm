@@ -241,6 +241,7 @@ function ensure() {
       for (const w of s.widgets) {
         w.metrics ??= []; w.group_by ??= []; w.filters ??= []; w.thresholds ??= [];
         w.size ??= 'standard';
+        normalizeWidgetForChart(w, w.chart_kind);
       }
     }
   }
@@ -538,6 +539,14 @@ function widgetUnitLevelHelp(w: Widget): string {
 function categoryDim(w: Widget): string | undefined { return w.group_by[0]; }
 function seriesDim(w: Widget): string | undefined { return w.group_by[1]; }
 
+function seriesValue(w: Widget): string | undefined {
+  return chartProfile(w.chart_kind).categories.show ? seriesDim(w) : categoryDim(w);
+}
+
+function setSeriesValue(w: Widget, v: string | undefined) {
+  setSeriesDim(w, v);
+}
+
 function setCategoryDim(w: Widget, v: string | undefined) {
   const series = w.group_by[1];
   w.group_by = v ? (series ? [v, series] : [v]) : (series ? [series] : []);
@@ -619,8 +628,7 @@ function widgetConfigIssues(w: Widget): string[] {
     }
   }
   if (p.series.required) {
-    const hasSeries = p.categories.show ? seriesDim(w) : categoryDim(w);
-    if (!hasSeries) issues.push(`${p.series.label} is required`);
+    if (!seriesValue(w)) issues.push(`${p.series.label} is required`);
   }
   if (p.time.required && (!w.time_dimension || !w.bucket)) issues.push('Time dimension and bucket are required');
   return issues;
@@ -647,10 +655,16 @@ function categoryFieldOptions(w: Widget) {
   return caseFieldOptions.value;
 }
 
+function isTimeSplitChart(kind: string) {
+  return kind === 'multi_line' || kind === 'area';
+}
+
 function seriesFieldOptions(w: Widget) {
   const items = isStackedChart(w.chart_kind)
     ? stackedCaseFieldOptions()
-    : groupByOptions.value;
+    : isTimeSplitChart(w.chart_kind)
+      ? caseFieldOptions.value
+      : groupByOptions.value;
   const cat = categoryDim(w);
   return cat ? items.filter((o) => o.value !== cat && !o.value.startsWith('unit_level:')) : items;
 }
@@ -1029,13 +1043,13 @@ const dashTabClass = (id: string) => [
                     :required="chartProfile(widget.chart_kind).series.required"
                   >
                     <USelectMenu
-                      :model-value="chartProfile(widget.chart_kind).categories.show ? seriesDim(widget) : categoryDim(widget)"
+                      :model-value="seriesValue(widget)"
                       :items="seriesFieldOptions(widget)"
                       value-key="value"
                       label-key="label"
                       placeholder="Pick case field…"
                       class="w-full"
-                      @update:model-value="(v: string) => chartProfile(widget.chart_kind).categories.show ? setSeriesDim(widget, v) : setCategoryDim(widget, v)"
+                      @update:model-value="(v: string) => setSeriesValue(widget, v)"
                     />
                   </UFormField>
 

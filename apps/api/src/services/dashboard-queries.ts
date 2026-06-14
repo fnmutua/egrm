@@ -40,11 +40,42 @@ export function isGroupDimension(dim: string): boolean {
   return parseGroupDimension(dim) !== null;
 }
 
+const ALLOWED_TIME_COLS = new Set(['created_at', 'updated_at']);
+const ALLOWED_BUCKETS = new Set(['day', 'week', 'month', 'quarter', 'year']);
+
+/** Inline date_trunc — Drizzle re-binds ${bucket} per clause, which breaks GROUP BY. */
+function timeTruncExpr(timeCol: string, bucket: string) {
+  if (!ALLOWED_TIME_COLS.has(timeCol) || !ALLOWED_BUCKETS.has(bucket)) {
+    throw new Error(`invalid time column or bucket: ${timeCol} / ${bucket}`);
+  }
+  return sql.raw(`date_trunc('${bucket}', grm_case.${timeCol})`);
+}
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export function formatTimeBucket(rawDate: string, bucket: string): string {
-  const d = new Date(rawDate.replace(' ', 'T'));
-  if (isNaN(d.getTime())) return rawDate;
+  const trimmed = rawDate.trim();
+  // Postgres timestamptz text, e.g. "2026-02-01 00:00:00+03"
+  const normalized = trimmed.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00');
+  const d = new Date(normalized);
+  if (isNaN(d.getTime())) {
+    const m = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) {
+      const yr = Number(m[1]);
+      const mo = Number(m[2]) - 1;
+      const day = Number(m[3]);
+      const monthLabel = MONTHS[mo] ?? m[2];
+      switch (bucket) {
+        case 'day':     return `${monthLabel} ${day}`;
+        case 'week':    return `${monthLabel} ${day}`;
+        case 'month':   return `${monthLabel} ${yr}`;
+        case 'quarter': return `Q${Math.floor(mo / 3) + 1} ${yr}`;
+        case 'year':    return String(yr);
+        default:        return trimmed;
+      }
+    }
+    return trimmed;
+  }
   const yr = d.getUTCFullYear();
   const mo = MONTHS[d.getUTCMonth()]!;
   const day = d.getUTCDate();
@@ -54,7 +85,7 @@ export function formatTimeBucket(rawDate: string, bucket: string): string {
     case 'month':   return `${mo} ${yr}`;
     case 'quarter': return `Q${Math.floor(d.getUTCMonth() / 3) + 1} ${yr}`;
     case 'year':    return String(yr);
-    default:        return rawDate;
+    default:        return trimmed;
   }
 }
 
@@ -266,7 +297,7 @@ export async function queryTimeByDimension(
   const dim = parseGroupDimension(splitDim);
   if (!dim) return null;
 
-  const timeExpr = sql`date_trunc(${bucket}, ${sql.raw(timeCol)})`;
+  const timeExpr = timeTruncExpr(timeCol, bucket);
 
   if (dim.type === 'unit_level') {
     const cte = unitLevelCte(tenantId, dim.levelCode, caseWhere);
@@ -383,15 +414,16 @@ export async function queryTimeSeries1D(
   timeCol: string,
   bucket: string,
 ): Promise<WidgetDataRow[]> {
+  const timeExpr = timeTruncExpr(timeCol, bucket);
   const rows = await db
     .select({
-      label: sql<string>`date_trunc(${bucket}, ${sql.raw(timeCol)})::text`,
+      label: sql<string>`${timeExpr}::text`,
       value: count(schema.grmCase.id),
     })
     .from(schema.grmCase)
     .where(caseWhere)
-    .groupBy(sql`date_trunc(${bucket}, ${sql.raw(timeCol)})`)
-    .orderBy(sql`1 ASC`);
+    .groupBy(timeExpr)
+    .orderBy(timeExpr);
 
   return rows.map((r) => ({
     label: formatTimeBucket(String(r.label ?? ''), bucket),

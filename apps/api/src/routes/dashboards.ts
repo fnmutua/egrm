@@ -302,6 +302,13 @@ export default async function dashboardRoutes(app: FastifyInstance) {
             return { rows: [], series, categories, total };
           }
         }
+        return { rows: [], series: [], categories: [], total: 0 };
+      }
+
+      if (TIME_ONLY_CHARTS.has(kind) && widget.time_dimension && widget.bucket) {
+        const timeCol = TIME_COLS[widget.time_dimension] ?? 'created_at';
+        const rows = await queryTimeSeries1D(where, timeCol, widget.bucket);
+        return { rows, series: [], categories: [], total: sumWidgetRows(rows) };
       }
 
       if (groupBy.length >= 2) {
@@ -318,12 +325,6 @@ export default async function dashboardRoutes(app: FastifyInstance) {
         if (rows) {
           return { rows, series: [], categories: [], total: sumWidgetRows(rows) };
         }
-      }
-
-      if (TIME_ONLY_CHARTS.has(kind) && widget.time_dimension && widget.bucket) {
-        const timeCol = TIME_COLS[widget.time_dimension] ?? 'created_at';
-        const rows = await queryTimeSeries1D(where, timeCol, widget.bucket);
-        return { rows, series: [], categories: [], total: sumWidgetRows(rows) };
       }
 
       if (widget.time_dimension && widget.bucket) {

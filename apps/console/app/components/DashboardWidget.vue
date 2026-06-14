@@ -134,7 +134,7 @@ const PALETTE = [
 
 const apexTheme = computed(() => ({
   mode: isDark.value ? 'dark' : 'light',
-  palette: 'palette1',
+  monochrome: { enabled: false },
 }));
 
 const baseOptions = computed(() => ({
@@ -147,6 +147,14 @@ const baseOptions = computed(() => ({
   },
   theme: apexTheme.value,
   colors: PALETTE,
+  fill: {
+    type: 'solid',
+    colors: PALETTE,
+  },
+  stroke: {
+    width: 2,
+    colors: PALETTE,
+  },
   grid: {
     borderColor: isDark.value ? '#334155' : '#e2e8f0',
     strokeDashArray: 4,
@@ -239,15 +247,32 @@ const chartOptions = computed(() => {
   }
 
   if (isLine.value || isArea.value) {
+    const lineOnly = !isArea.value;
+    const { fill: _baseFill, ...lineBase } = baseOptions.value;
     return {
-      ...baseOptions.value,
-      chart: { ...baseOptions.value.chart, type: isArea.value ? 'area' : 'line' },
-      stroke: { curve: 'smooth', width: isCompact.value ? 1.5 : 2 },
-      markers: { size: isCompact.value ? 0 : 3 },
-      legend: isMulti.value ? compactLegend.value : baseOptions.value.legend,
-      fill: isArea.value ? { type: 'gradient', gradient: { opacityFrom: 0.4, opacityTo: 0.05 } } : undefined,
-      xaxis: { categories: axisLabels, labels: compactXaxisLabels.value },
-      yaxis: { labels: { style: labelStyle.value } },
+      ...lineBase,
+      chart: { ...lineBase.chart, type: isArea.value ? 'area' : 'line' },
+      stroke: {
+        show: true,
+        curve: 'smooth',
+        width: isCompact.value ? 2 : 3,
+        colors: PALETTE,
+        lineCap: 'round',
+      },
+      markers: {
+        size: lineOnly ? 0 : (isCompact.value ? 3 : 4),
+        strokeWidth: 0,
+        hover: { size: lineOnly ? 4 : 6 },
+      },
+      legend: isMulti.value ? compactLegend.value : { show: false },
+      ...(isArea.value
+        ? { fill: { type: 'gradient', colors: PALETTE, gradient: { opacityFrom: 0.4, opacityTo: 0.05 } } }
+        : {}),
+      plotOptions: {
+        line: { isSlopeChart: false },
+      },
+      xaxis: { type: 'category', categories: axisLabels, labels: compactXaxisLabels.value },
+      yaxis: { labels: { style: labelStyle.value }, min: 0 },
     };
   }
 
@@ -423,6 +448,7 @@ const widgetIcon = computed(() => props.widget.icon || 'i-lucide-hash');
       <!-- ApexCharts: bar, stacked bar, line, area, pie, donut -->
       <ClientOnly v-if="isBar || isLine || isArea || isPie || isDonut">
         <ApexChart
+          :key="`${widget.id}-${rows.length}-${seriesData.length}`"
           ref="chartRef"
           width="100%"
           :height="chartHeight"
