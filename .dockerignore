@@ -4,10 +4,8 @@ node_modules
 **/dist
 .git
 .cursor
-# Spec docs — keep adminunits Excel sources for API image (KISIP import template build)
-specs/*
-!specs/adminunits
-!specs/adminunits/**
+# Spec docs (not needed in Docker images — KISIP template is committed under apps/api/data)
+specs
 reference
 **/.env
 **/.env.*
