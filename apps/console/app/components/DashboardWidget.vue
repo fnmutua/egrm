@@ -39,7 +39,7 @@ const hasData = computed(() => {
     return seriesData.value.length > 0 && categories.value.length > 0;
   }
   if (kind === 'line') return rows.value.length > 0;
-  if (kind === 'pie' || kind === 'donut' || kind === 'bar') return rows.value.length > 0;
+  if (kind === 'pie' || kind === 'donut' || kind === 'bar' || kind === 'treemap') return rows.value.length > 0;
   return rows.value.length > 0 || isMulti.value;
 });
 
@@ -66,6 +66,7 @@ const chartEmptyHint = computed(() => {
     if (!props.widget.time_dimension || !props.widget.bucket) return 'Set Time dimension and Bucket in the widget config.';
     return 'No matching cases for the current filters.';
   }
+  if (kind === 'treemap' && !gb[0]) return 'Set Tiles dimension in the widget config.';
   return '';
 });
 
@@ -172,6 +173,7 @@ const isLine  = computed(() => ['line', 'multi_line'].includes(props.widget.char
 const isArea  = computed(() => props.widget.chart_kind === 'area');
 const isPie   = computed(() => props.widget.chart_kind === 'pie');
 const isDonut = computed(() => props.widget.chart_kind === 'donut');
+const isTreemap = computed(() => props.widget.chart_kind === 'treemap');
 const isTable = computed(() => props.widget.chart_kind === 'table');
 
 // X-axis labels: multi-series response provides `categories`; single-series uses row labels
@@ -214,6 +216,33 @@ const chartOptions = computed(() => {
         pie: {
           donut: { size: isCompact.value ? '55%' : '65%', labels: { show: isDonut.value && !isCompact.value, total: { show: !isCompact.value, label: 'Total', formatter: () => String(total.value) } } },
         },
+      },
+    };
+  }
+
+  if (isTreemap.value) {
+    return {
+      ...baseOptions.value,
+      chart: { ...baseOptions.value.chart, type: 'treemap' },
+      legend: { show: false },
+      dataLabels: {
+        enabled: true,
+        style: {
+          fontSize: isCompact.value ? '10px' : '11px',
+          fontWeight: 500,
+          colors: [isDark.value ? '#f1f5f9' : '#1e293b'],
+        },
+      },
+      plotOptions: {
+        treemap: {
+          distributed: true,
+          enableShades: true,
+          shadeIntensity: 0.45,
+        },
+      },
+      tooltip: {
+        ...baseOptions.value.tooltip,
+        y: { formatter: (v: number) => Number(v).toLocaleString() },
       },
     };
   }
@@ -280,6 +309,9 @@ const chartOptions = computed(() => {
 });
 
 const chartSeries = computed(() => {
+  if (isTreemap.value) {
+    return [{ data: rows.value.map((r) => ({ x: r.label ?? '—', y: r.value })) }];
+  }
   if (isPie.value || isDonut.value) return rows.value.map((r) => r.value);
   if (isMulti.value) return seriesData.value;
   return [{ name: props.widget.title, data: rows.value.map((r) => r.value) }];
@@ -288,13 +320,14 @@ const chartSeries = computed(() => {
 const chartType = computed(() => {
   if (isPie.value)          return 'pie';
   if (isDonut.value)        return 'donut';
+  if (isTreemap.value)      return 'treemap';
   if (isBar.value)          return 'bar';
   if (isLine.value)         return 'line';
   if (isArea.value)         return 'area';
   return 'bar';
 });
 
-const isApexChart = computed(() => isBar.value || isLine.value || isArea.value || isPie.value || isDonut.value);
+const isApexChart = computed(() => isBar.value || isLine.value || isArea.value || isPie.value || isDonut.value || isTreemap.value);
 
 const chartRef = ref<{ chart?: { dataURI: (opts?: { scale?: number }) => Promise<{ imgURI: string }> }; $el?: HTMLElement } | null>(null);
 
@@ -445,8 +478,8 @@ const widgetIcon = computed(() => props.widget.icon || 'i-lucide-hash');
     </div>
 
     <template v-else>
-      <!-- ApexCharts: bar, stacked bar, line, area, pie, donut -->
-      <ClientOnly v-if="isBar || isLine || isArea || isPie || isDonut">
+      <!-- ApexCharts: bar, stacked bar, line, area, pie, donut, treemap -->
+      <ClientOnly v-if="isBar || isLine || isArea || isPie || isDonut || isTreemap">
         <ApexChart
           :key="`${widget.id}-${rows.length}-${seriesData.length}`"
           ref="chartRef"

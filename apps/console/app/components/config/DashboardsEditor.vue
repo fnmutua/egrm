@@ -22,6 +22,7 @@ interface Widget {
   thresholds: Threshold[];
   size?: 'compact' | 'standard' | 'wide' | 'full';
   unit_level?: string;
+  icon?: string;
 }
 
 interface Section {
@@ -448,7 +449,7 @@ const CHART_PROFILES: Record<string, ChartProfile> = {
     filters: true, kpiDisplay: false,
   },
   treemap: {
-    hint: 'Treemap renderer — configure like a bar chart (not yet live).',
+    hint: 'Treemap tiles sized by value — one category dimension.',
     measure: true, aggregation: true,
     categories: { show: true, label: 'Tiles', required: true, help: 'Dimension that defines each tile.' },
     series: { show: false, label: '', required: false, help: '' },
@@ -601,18 +602,26 @@ function onChartKindChange(w: Widget, kind: string) {
 }
 
 const SEED_KPI_VARIANTS = [
-  { title: 'Total cases', filters: [] as FilterDef[] },
-  { title: 'Open cases', filters: [{ field: 'status', op: 'in', value: ['received', 'investigation'] }] },
-  { title: 'Closed', filters: [{ field: 'status', op: 'eq', value: 'closed' }] },
-  { title: 'High priority', filters: [{ field: 'priority', op: 'eq', value: 'high' }] },
+  { title: 'Total cases', icon: 'i-lucide-hash', filters: [] as FilterDef[] },
+  { title: 'Open cases', icon: 'i-lucide-inbox', filters: [{ field: 'status', op: 'in', value: ['received', 'investigation'] }] },
+  { title: 'Closed', icon: 'i-lucide-check-circle-2', filters: [{ field: 'status', op: 'eq', value: 'closed' }] },
+  { title: 'High priority', icon: 'i-lucide-alert-triangle', filters: [{ field: 'priority', op: 'eq', value: 'high' }] },
 ];
-const SEED_SECTION_COUNT = 2;
+const SEED_SECTIONS = [
+  { title: 'Cards', icon: 'i-lucide-square-dashed' },
+  { title: 'Charts', icon: 'i-lucide-chart-area' },
+] as const;
 
-function buildSeedWidget(kind: string, label: string, filters: FilterDef[] = []): Widget {
+function seedChartIcon(kind: string): string {
+  return CHART_KINDS.find((c) => c.value === kind)?.icon ?? 'i-lucide-bar-chart-2';
+}
+
+function buildSeedWidget(kind: string, label: string, filters: FilterDef[] = [], icon?: string): Widget {
   const w: Widget = {
     id: `w-${uid()}`,
     title: label,
     chart_kind: kind,
+    icon: icon ?? seedChartIcon(kind),
     dataset: 'cases',
     measure: 'id',
     aggregation: 'count',
@@ -673,18 +682,22 @@ function seedDashboards() {
     const dashId = `dash-${uid()}`;
     if (!firstDashId) firstDashId = dashId;
 
-    const sections: Section[] = [
-      { id: `sec-${uid()}`, title: 'Cards', icon: 'i-lucide-layout-grid', color: '', order: 0, widgets: [] },
-      { id: `sec-${uid()}`, title: 'Charts', icon: 'i-lucide-bar-chart-2', color: '', order: 1, widgets: [] },
-    ];
+    const sections: Section[] = SEED_SECTIONS.map((sec, order) => ({
+      id: `sec-${uid()}`,
+      title: sec.title,
+      icon: sec.icon,
+      color: '',
+      order,
+      widgets: [],
+    }));
 
     for (let i = 0; i < kpiCount; i++) {
       const preset = SEED_KPI_VARIANTS[i] ?? SEED_KPI_VARIANTS[0]!;
-      sections[0]!.widgets.push(buildSeedWidget('kpi_card', preset.title, preset.filters));
+      sections[0]!.widgets.push(buildSeedWidget('kpi_card', preset.title, preset.filters, preset.icon));
     }
 
     chartKinds.forEach((ck) => {
-      sections[1]!.widgets.push(buildSeedWidget(ck.value, ck.label));
+      sections[1]!.widgets.push(buildSeedWidget(ck.value, ck.label, [], ck.icon));
     });
 
     props.payload.dashboards.push({
@@ -810,7 +823,7 @@ const dashTabClass = (id: string) => [
             </UFormField>
           </div>
           <p class="text-xs text-muted mt-3">
-            Each dashboard gets {{ SEED_SECTION_COUNT }} sections: <span class="font-medium">Cards</span> (KPIs) and
+            Each dashboard gets {{ SEED_SECTIONS.length }} sections: <span class="font-medium">Cards</span> (KPIs) and
             <span class="font-medium">Charts</span> (bar, line, pie, table, etc.).
           </p>
         </template>
