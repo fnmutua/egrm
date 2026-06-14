@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'admin' });
+definePageMeta({ layout: 'shell' });
 
 const route = useRoute();
 const { api } = useApi();
@@ -129,7 +129,7 @@ const activeSectionLabel = computed(
 );
 // Jump back to the top of the pane when switching panels.
 watch(activeSection, () => {
-  document.querySelector('main')?.scrollTo({ top: 0 });
+  window.scrollTo({ top: 0 });
 });
 
 onMounted(async () => {

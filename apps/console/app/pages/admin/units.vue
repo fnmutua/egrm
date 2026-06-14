@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'admin' });
+definePageMeta({ layout: 'shell' });
 
 const { api } = useApi();
 const { downloadTemplate, downloadExport, importFile, resetAll } = useUnitsImport();

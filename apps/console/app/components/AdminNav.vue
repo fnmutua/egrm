@@ -7,6 +7,8 @@ import type { AdminEntry } from '~/utils/config-domains';
 import type { ConfigDomain } from '@egrm/core';
 import { canAccessAdminPage, canAccessConfigDomain } from '@egrm/core';
 
+const props = defineProps<{ compact?: boolean }>();
+
 const route = useRoute();
 const { user } = useAuth();
 
@@ -74,15 +76,19 @@ function entryActive(entry: AdminEntry) {
   return domainOpen(entry.domain) && !route.hash;
 }
 
-const groupSummaryClass =
-  'flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1.5 text-sm font-semibold text-default hover:bg-elevated/60 [&::-webkit-details-marker]:hidden';
+const groupSummaryClass = computed(() =>
+  `flex cursor-pointer list-none items-center gap-2 rounded-md px-2 ${props.compact ? 'py-1 text-xs' : 'py-1.5 text-sm'} font-semibold text-default hover:bg-elevated/60 [&::-webkit-details-marker]:hidden`,
+);
 
 const nestedListClass = 'mt-0.5 ml-2 space-y-0.5 border-l border-default pl-2';
 
 const linkClass = (active: boolean, size: 'md' | 'sm' = 'md') =>
   [
-    'flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors w-full text-left',
-    size === 'md' ? 'text-sm font-medium' : 'text-xs font-normal',
+    'flex items-center gap-2 rounded-md px-2 transition-colors w-full text-left',
+    props.compact ? 'py-1' : 'py-1.5',
+    props.compact
+      ? (size === 'md' ? 'text-xs font-medium' : 'text-[11px] font-normal')
+      : (size === 'md' ? 'text-sm font-medium' : 'text-xs font-normal'),
     active ? 'bg-primary/10 text-primary' : 'text-muted hover:bg-elevated/80 hover:text-highlighted',
   ].join(' ');
 </script>

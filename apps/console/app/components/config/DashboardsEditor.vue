@@ -172,7 +172,7 @@ const DEFAULT_DASHBOARD_PACK: Omit<Dashboard, 'id'>[] = [
     sections: [],
   },
   {
-    title: 'Public Transparency',
+    title: 'Transparency',
     icon: 'i-lucide-globe',
     audience: { roles: [], levels: [] },
     is_main: false,
@@ -234,7 +234,7 @@ function addDashboard() {
   const id = `dash-${uid()}`;
   props.payload.dashboards.push({
     id,
-    title: 'New dashboard',
+    title: 'Dashboard',
     icon: 'i-lucide-layout-dashboard',
     audience: { roles: [], levels: [] },
     is_main: false,
@@ -380,8 +380,13 @@ const datasetLabel = (val: string) => DATASETS.find((d) => d.value === val)?.lab
           <p class="text-xs font-semibold text-muted uppercase tracking-wide">Dashboard settings</p>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            <UFormField label="Title">
-              <UInput v-model="dash.title" class="w-full" />
+            <UFormField label="Title" help="One word, max 20 chars — shown in the sidebar nav.">
+              <UInput
+                v-model="dash.title"
+                class="w-full"
+                maxlength="20"
+                @input="dash.title = dash.title.replace(/\s+/g, '')"
+              />
             </UFormField>
             <UFormField label="Icon" help="Lucide icon token, e.g. i-lucide-bar-chart-2">
               <UInput v-model="dash.icon" class="w-full font-mono text-xs" placeholder="i-lucide-layout-dashboard" />

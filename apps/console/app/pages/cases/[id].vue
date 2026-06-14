@@ -3,6 +3,8 @@ import type { TimelineItem } from '@nuxt/ui';
 import { kindsForChannel, threadChannelLabel } from '@egrm/config-schemas';
 import { buildThreadTree, hasPermission } from '@egrm/core';
 
+definePageMeta({ layout: 'shell' });
+
 const route = useRoute();
 const { api } = useApi();
 const { user, fetchMe } = useAuth();
