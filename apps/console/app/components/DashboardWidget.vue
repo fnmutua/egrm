@@ -149,8 +149,8 @@ const hasSparkline = computed(
   () => isKpiSpark.value && sparkline.value.length > 0,
 );
 
-/** Fixed spark slot so KPI Card and KPI Spark share the same footprint when mixed. */
-const KPI_SPARK_SLOT_H = 32;
+/** Fixed spark slot so KPI Spark stays inside the card. */
+const KPI_SPARK_SLOT_H = 28;
 
 const sparklineOptions = computed(() => ({
   chart: {
@@ -159,19 +159,19 @@ const sparklineOptions = computed(() => ({
     animations: { enabled: true, speed: 500 },
     background: 'transparent',
     fontFamily: 'inherit',
+    parentHeightOffset: 0,
+    offsetX: 0,
+    offsetY: 0,
   },
+  grid: { padding: { left: 0, right: 0, top: 0, bottom: 0 } },
   theme: { mode: colorMode.value === 'dark' ? 'dark' : 'light' },
-  stroke: { curve: 'smooth' as const, width: 2, colors: [sparklineColor.value] },
+  stroke: { curve: 'smooth' as const, width: 1.5, colors: [sparklineColor.value] },
   fill: {
     type: 'gradient' as const,
     colors: [sparklineColor.value],
-    gradient: { shadeIntensity: 0.9, opacityFrom: 0.45, opacityTo: 0.05, stops: [0, 100] },
+    gradient: { shadeIntensity: 0.9, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] },
   },
-  tooltip: {
-    theme: colorMode.value === 'dark' ? 'dark' : 'light',
-    x: { show: true },
-    y: { formatter: (v: number) => String(Math.round(v)) },
-  },
+  tooltip: { enabled: false },
 }));
 
 const sparklineSeries = computed(() => [
@@ -569,42 +569,47 @@ const widgetIcon = computed(() => props.widget.icon || 'i-lucide-hash');
 </script>
 
 <template>
-  <!-- ── KPI Card / KPI Spark (original KPI footprint) ─────── -->
-  <UPageCard v-if="isKpi" class="h-full relative overflow-hidden">
-    <div class="flex items-start justify-between gap-4">
-      <div class="min-w-0 space-y-1 flex-1">
-        <p class="text-sm font-medium text-muted truncate">{{ widget.title }}</p>
-        <div v-if="loading" class="h-10 w-24 rounded bg-elevated animate-pulse" />
-        <p
-          v-else
-          :class="['font-bold tabular-nums leading-none', isCompact ? 'text-3xl' : 'text-4xl', kpiNumberClass[kpiColor]]"
-        >
-          {{ total.toLocaleString() }}
-        </p>
-      </div>
-      <div :class="['size-12 rounded-xl flex items-center justify-center shrink-0', kpiIconBg[kpiColor]]">
-        <UIcon :name="widgetIcon" class="size-6" />
-      </div>
-    </div>
+  <!-- ── KPI Card / KPI Spark ─────────────────────────────── -->
+  <UPageCard v-if="isKpi" class="h-full overflow-hidden">
+    <div class="min-w-0 overflow-hidden">
+      <p class="text-sm font-medium text-muted truncate">{{ widget.title }}</p>
+      <div class="mt-1 flex items-end gap-2 min-w-0" :class="isKpiSpark ? '' : 'justify-between'">
+        <div class="shrink-0">
+          <div v-if="loading" class="h-10 w-20 rounded bg-elevated animate-pulse" />
+          <p
+            v-else
+            :class="['font-bold tabular-nums leading-none', isCompact ? 'text-3xl' : 'text-4xl', kpiNumberClass[kpiColor]]"
+          >
+            {{ total.toLocaleString() }}
+          </p>
+        </div>
 
-    <div
-      v-if="isKpiSpark"
-      class="absolute inset-x-0 bottom-0 h-9 px-1 pointer-events-auto"
-    >
-      <div v-if="loading" class="h-full w-full rounded bg-elevated/80 animate-pulse" />
-      <ClientOnly v-else-if="hasSparkline">
-        <ApexChart
-          :key="`${widget.id}-spark-${sparkline.length}-${total}`"
-          width="100%"
-          :height="KPI_SPARK_SLOT_H"
-          type="area"
-          :options="sparklineOptions"
-          :series="sparklineSeries"
-        />
-      </ClientOnly>
+        <div
+          v-if="isKpiSpark"
+          class="flex-1 min-w-0 overflow-hidden h-7"
+        >
+          <div v-if="loading" class="h-full w-full rounded bg-elevated animate-pulse" />
+          <div v-else-if="hasSparkline" class="h-full w-full overflow-hidden">
+            <ClientOnly>
+              <ApexChart
+                :key="`${widget.id}-spark-${sparkline.length}-${total}`"
+                width="100%"
+                :height="KPI_SPARK_SLOT_H"
+                type="area"
+                :options="sparklineOptions"
+                :series="sparklineSeries"
+              />
+            </ClientOnly>
+          </div>
+        </div>
+
+        <div :class="['size-12 rounded-xl flex items-center justify-center shrink-0', kpiIconBg[kpiColor]]">
+          <UIcon :name="widgetIcon" class="size-6" />
+        </div>
+      </div>
       <p
-        v-if="!loading && hasSparkline && sparklinePeriodLabel"
-        class="absolute right-1 bottom-0 text-[9px] text-muted leading-none pointer-events-none"
+        v-if="isKpiSpark && !loading && hasSparkline && sparklinePeriodLabel"
+        class="mt-1 text-[9px] text-muted leading-none truncate"
       >
         {{ sparklinePeriodLabel }}
       </p>
