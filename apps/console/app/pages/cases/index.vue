@@ -1,10 +1,15 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'shell' });
 
+import { useDashboardUnitFilter } from '~/composables/useDashboardUnitFilter';
+import { CASE_LIST_FILTER_OPTIONS, useCaseListFilterPrefs } from '~/composables/useCaseListFilterPrefs';
+
 const { api } = useApi();
 const { user, fetchMe } = useAuth();
 const { canAdmin } = usePermissions();
 const toast = useToast();
+const { prefs, setFilter, activeCount } = useCaseListFilterPrefs();
+const { effectiveUnitId, hasActiveFilter, resetFilter: resetUnitFilter, setEnabled } = useDashboardUnitFilter('cases');
 
 const isAdmin = computed(() => canAdmin());
 
@@ -23,23 +28,15 @@ interface CaseRow {
   unitName: string | null;
 }
 
-interface FilterUnit {
-  id: string;
-  name: string;
-  level_code: string;
-}
-
 const q = ref('');
-const status = ref<string | undefined>(undefined);
-const unitId = ref<string | null | undefined>(undefined);
+const STATUS_ALL = '__all__';
+const status = ref<string>(STATUS_ALL);
 const page = ref(1);
 const rows = ref<CaseRow[]>([]);
 const total = ref(0);
 const loading = ref(false);
 const downloading = ref(false);
-const filterUnits = ref<FilterUnit[]>([]);
-const tenantWide = ref(true);
-const defaultUnitId = ref<string | undefined>(undefined);
+const statusItems = ref<{ value: string; label: string }[]>([]);
 const filtersReady = ref(false);
 const seedCount = ref(50);
 const seedCasesTotal = ref(0);
@@ -48,32 +45,28 @@ const clearSeedOpen = ref(false);
 const seeding = ref(false);
 const clearingSeed = ref(false);
 
-const unitItems = computed(() => {
-  const items = filterUnits.value.map((u) => ({ value: u.id, label: `${u.name} (${u.level_code})` }));
-  if (!tenantWide.value && filterUnits.value.length > 1) {
-    return [{ value: null, label: 'All my jurisdictions' }, ...items];
-  }
-  return items;
-});
+const statusSelectItems = computed(() => [
+  { value: STATUS_ALL, label: 'All statuses' },
+  ...statusItems.value,
+]);
 
 const tagColor: Record<string, string> = {
   open: 'info', in_progress: 'warning', resolved: 'success',
   closed: 'neutral', rejected: 'error', on_hold: 'neutral', appeal: 'warning',
 };
 
-async function loadFilterUnits() {
-  const res = await api<{
-    tenant_wide: boolean;
-    units: FilterUnit[];
-    default_unit_id: string | null;
-  }>('/api/v1/cases/filter-units');
-  filterUnits.value = res.units;
-  tenantWide.value = res.tenant_wide;
-  defaultUnitId.value = res.default_unit_id ?? undefined;
-  if (!res.tenant_wide && res.default_unit_id) {
-    unitId.value = res.default_unit_id;
+const hasActiveFilters = computed(() =>
+  Boolean(q.value || (prefs.value.status && status.value !== STATUS_ALL) || hasActiveFilter.value),
+);
+
+async function loadStatusOptions() {
+  try {
+    const res = await api<{ payload?: { statuses?: { name: string }[] } }>('/api/v1/config/cd04_workflow');
+    const names = (res.payload?.statuses ?? []).map((s) => s.name).filter(Boolean);
+    statusItems.value = names.map((name) => ({ value: name, label: name }));
+  } catch {
+    statusItems.value = [];
   }
-  filtersReady.value = true;
 }
 
 async function loadSeedCount() {
@@ -129,8 +122,9 @@ async function confirmClearSeed() {
 }
 
 function clearFilters() {
-  status.value = undefined;
-  unitId.value = tenantWide.value ? undefined : defaultUnitId.value;
+  q.value = '';
+  status.value = STATUS_ALL;
+  resetUnitFilter();
 }
 
 async function load() {
@@ -139,9 +133,9 @@ async function load() {
   try {
     const res = await api<{ cases: CaseRow[]; total: number }>('/api/v1/cases', {
       query: {
-        q: q.value || undefined,
-        status: status.value,
-        unit_id: unitId.value ?? undefined,
+        q: prefs.value.search && q.value ? q.value : undefined,
+        status: prefs.value.status && status.value !== STATUS_ALL ? status.value : undefined,
+        unit_id: prefs.value.unit ? effectiveUnitId.value ?? undefined : undefined,
         page: page.value,
         page_size: 20,
       },
@@ -155,14 +149,20 @@ async function load() {
 
 onMounted(async () => {
   if (!(await fetchMe())) return navigateTo('/login');
-  await loadFilterUnits();
+  setEnabled(true);
+  await loadStatusOptions();
+  filtersReady.value = true;
   await Promise.all([load(), loadSeedCount()]);
 });
 
-watch([q, status, unitId], () => {
+onBeforeUnmount(() => {
+  setEnabled(false);
+});
+
+watch([q, status, effectiveUnitId], () => {
   page.value = 1;
 });
-watch([q, status, unitId, page], () => load());
+watch([q, status, effectiveUnitId, page, prefs], () => load(), { deep: true });
 
 function escapeCell(v: unknown): string {
   const s = String(v ?? '');
@@ -174,9 +174,9 @@ async function downloadExcel() {
   try {
     const res = await api<{ cases: CaseRow[] }>('/api/v1/cases', {
       query: {
-        q: q.value || undefined,
-        status: status.value,
-        unit_id: unitId.value ?? undefined,
+        q: prefs.value.search && q.value ? q.value : undefined,
+        status: prefs.value.status && status.value !== STATUS_ALL ? status.value : undefined,
+        unit_id: prefs.value.unit ? effectiveUnitId.value ?? undefined : undefined,
         page: 1,
         page_size: 5000,
       },
@@ -215,63 +215,95 @@ async function downloadExcel() {
       <div>
         <h1 class="text-xl font-semibold">Cases</h1>
         <p class="text-muted text-sm">
-          {{ total }} case(s)<span v-if="!tenantWide && unitId"> · jurisdiction filter active</span>
+          {{ total }} case(s)<span v-if="hasActiveFilter"> · unit filter active</span>
         </p>
       </div>
     </div>
 
     <!-- Toolbar -->
-    <div class="flex flex-col sm:flex-row gap-2 mb-4">
-      <UInput v-model="q" placeholder="Search reference or summary…" icon="i-lucide-search" class="w-full sm:w-72" />
-      <div class="flex gap-2 sm:ml-auto flex-wrap">
-        <USelectMenu
-          v-if="filterUnits.length"
-          v-model="unitId"
-          :items="unitItems"
-          value-key="value"
-          label-key="label"
-          placeholder="All jurisdictions"
-          class="w-full sm:w-52"
-        />
-        <USelectMenu
-          v-model="status"
-          :items="['Sorting', 'Investigation', 'Escalated', 'Returned', 'Resolved', 'Closed', 'Rejected', 'In Court']"
-          placeholder="All statuses"
-          class="w-full sm:w-44"
-        />
-        <UButton v-if="status || (unitId && unitId !== defaultUnitId)" variant="ghost" size="sm" @click="clearFilters">
-          Clear
-        </UButton>
-        <UButton
-          variant="outline"
-          icon="i-lucide-download"
-          size="sm"
-          :loading="downloading"
-          :disabled="total === 0"
-          @click="downloadExcel"
-        >
-          Export
-        </UButton>
-        <template v-if="isAdmin">
-          <UButton
-            variant="outline"
-            icon="i-lucide-flask-conical"
-            size="sm"
-            @click="seedOpen = true"
-          >
-            Seed cases
+    <div class="flex flex-col sm:flex-row gap-2 flex-wrap items-center mb-4">
+      <UInput
+        v-if="prefs.search"
+        v-model="q"
+        placeholder="Search reference or summary…"
+        icon="i-lucide-search"
+        class="w-full sm:w-72"
+      />
+      <USelectMenu
+        v-if="prefs.status"
+        v-model="status"
+        :items="statusSelectItems"
+        value-key="value"
+        label-key="label"
+        class="w-full sm:w-44"
+      />
+      <DashboardUnitFilter v-if="prefs.unit" scope="cases" auto-skip-top />
+      <div class="flex gap-2 sm:ml-auto flex-wrap items-center">
+          <USelectMenu
+            v-if="prefs.status"
+            v-model="status"
+            :items="statusSelectItems"
+            value-key="value"
+            label-key="label"
+            class="w-full sm:w-44"
+          />
+          <UPopover :content="{ side: 'bottom', align: 'end' }">
+            <UButton
+              variant="outline"
+              size="sm"
+              icon="i-lucide-sliders-horizontal"
+              :label="`Filters (${activeCount})`"
+            />
+            <template #content>
+              <div class="p-3 space-y-2 min-w-48">
+                <p class="text-xs font-medium text-muted uppercase tracking-wide">Show filters</p>
+                <label
+                  v-for="opt in CASE_LIST_FILTER_OPTIONS"
+                  :key="opt.key"
+                  class="flex items-center gap-2 text-sm cursor-pointer"
+                >
+                  <UCheckbox
+                    :model-value="prefs[opt.key]"
+                    @update:model-value="setFilter(opt.key, $event as boolean)"
+                  />
+                  {{ opt.label }}
+                </label>
+              </div>
+            </template>
+          </UPopover>
+          <UButton v-if="hasActiveFilters" variant="ghost" size="sm" @click="clearFilters">
+            Clear
           </UButton>
           <UButton
             variant="outline"
-            color="error"
-            icon="i-lucide-trash-2"
+            icon="i-lucide-download"
             size="sm"
-            :disabled="seedCasesTotal === 0"
-            @click="clearSeedOpen = true"
+            :loading="downloading"
+            :disabled="total === 0"
+            @click="downloadExcel"
           >
-            Clear seed ({{ seedCasesTotal }})
+            Export
           </UButton>
-        </template>
+          <template v-if="isAdmin">
+            <UButton
+              variant="outline"
+              icon="i-lucide-flask-conical"
+              size="sm"
+              @click="seedOpen = true"
+            >
+              Seed cases
+            </UButton>
+            <UButton
+              variant="outline"
+              color="error"
+              icon="i-lucide-trash-2"
+              size="sm"
+              :disabled="seedCasesTotal === 0"
+              @click="clearSeedOpen = true"
+            >
+              Clear seed ({{ seedCasesTotal }})
+            </UButton>
+          </template>
       </div>
     </div>
 
