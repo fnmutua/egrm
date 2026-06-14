@@ -6,6 +6,17 @@
       "outputs": ["dist/**", ".output/**"]
     },
     "dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "@egrm/console#dev": {
+      "dependsOn": ["@egrm/api#dev", "^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "@egrm/portal#dev": {
+      "dependsOn": ["@egrm/api#dev", "^build"],
       "cache": false,
       "persistent": true
     },

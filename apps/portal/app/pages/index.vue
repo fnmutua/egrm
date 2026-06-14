@@ -23,11 +23,12 @@ interface IdentityPayload {
   footer?: { address?: string; phone?: string; email?: string; privacy_note?: L10n };
 }
 
+const apiBase = usePublicApiBase();
 const config = useRuntimeConfig();
 
 // Tenant branding & landing content come from the config registry (CD-01) — not from code.
 const { data: identity } = await useFetch<{ payload: IdentityPayload }>('/api/v1/config/cd01_identity', {
-  baseURL: config.public.apiBase,
+  baseURL: apiBase.value,
   headers: { 'x-tenant': config.public.tenant },
 });
 
@@ -40,7 +41,7 @@ const { data: channelsConfig } = await useFetch<{
     };
   };
 }>('/api/v1/config/cd08_channels', {
-  baseURL: config.public.apiBase,
+  baseURL: apiBase.value,
   headers: { 'x-tenant': config.public.tenant },
   ignoreResponseError: true,
 });

@@ -155,6 +155,7 @@ function intakeUnitSelectItems(meta: IntakeMeta): IntakeSelectItem[] {
 }
 
 export function useIntake() {
+  const apiBase = usePublicApiBase();
   const config = useRuntimeConfig();
   const headers = { 'x-tenant': config.public.tenant };
 
@@ -163,7 +164,7 @@ export function useIntake() {
   async function loadMeta() {
     if (meta.value) return meta.value;
     meta.value = await $fetch<IntakeMeta>('/api/v1/public/intake-meta', {
-      baseURL: config.public.apiBase,
+      baseURL: apiBase.value,
       headers,
     });
     return meta.value;
@@ -208,7 +209,7 @@ export function useIntake() {
         tracking_pin?: string;
         possible_duplicates: number;
       }>('/api/v1/public/cases', {
-        baseURL: config.public.apiBase,
+        baseURL: apiBase.value,
         method: 'POST',
         headers,
         body: form,
@@ -221,7 +222,7 @@ export function useIntake() {
       tracking_pin?: string;
       possible_duplicates: number;
     }>('/api/v1/public/cases', {
-      baseURL: config.public.apiBase,
+      baseURL: apiBase.value,
       method: 'POST',
       headers,
       body,
@@ -248,7 +249,7 @@ export function useIntake() {
       }[];
       reply_allowed: boolean;
     }>('/api/v1/public/cases/track', {
-      baseURL: config.public.apiBase,
+      baseURL: apiBase.value,
       method: 'POST',
       headers,
       body: { reference, verifier },
@@ -275,7 +276,7 @@ export function useIntake() {
         form.append('kinds', item.kind);
       }
       return await $fetch<{ ok: boolean; id: string }>(`/api/v1/public/cases/${payload.reference}/reply`, {
-        baseURL: config.public.apiBase,
+        baseURL: apiBase.value,
         method: 'POST',
         headers,
         body: form,
@@ -283,7 +284,7 @@ export function useIntake() {
     }
 
     return await $fetch<{ ok: boolean; id: string }>(`/api/v1/public/cases/${payload.reference}/reply`, {
-      baseURL: config.public.apiBase,
+      baseURL: apiBase.value,
       method: 'POST',
       headers,
       body,

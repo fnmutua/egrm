@@ -11,6 +11,7 @@ interface AuthUser {
 }
 
 export function useAuth() {
+  const apiBase = usePublicApiBase();
   const config = useRuntimeConfig();
   const token = useCookie<string | null>('egrm_token', {
     sameSite: 'lax',
@@ -28,7 +29,7 @@ export function useAuth() {
       refresh_token: string;
       user: AuthUser;
     }>('/api/v1/auth/login', {
-      baseURL: config.public.apiBase,
+      baseURL: apiBase.value,
       method: 'POST',
       headers: { 'x-tenant': config.public.tenant },
       body: { email, password },
@@ -43,7 +44,7 @@ export function useAuth() {
     if (!refreshToken.value) return null;
     try {
       const res = await $fetch<{ token: string; refresh_token: string }>('/api/v1/auth/refresh', {
-        baseURL: config.public.apiBase,
+        baseURL: apiBase.value,
         method: 'POST',
         headers: { 'x-tenant': config.public.tenant },
         body: { refresh_token: refreshToken.value },
@@ -66,7 +67,7 @@ export function useAuth() {
     if (!token.value) return null;
     try {
       const res = await $fetch<{ user: AuthUser }>('/api/v1/me', {
-        baseURL: config.public.apiBase,
+        baseURL: apiBase.value,
         headers: { authorization: `Bearer ${token.value}`, 'x-tenant': config.public.tenant },
       });
       user.value = res.user;
@@ -76,7 +77,7 @@ export function useAuth() {
       if (!refreshed) return null;
       try {
         const res = await $fetch<{ user: AuthUser }>('/api/v1/me', {
-          baseURL: config.public.apiBase,
+          baseURL: apiBase.value,
           headers: { authorization: `Bearer ${refreshed}`, 'x-tenant': config.public.tenant },
         });
         user.value = res.user;

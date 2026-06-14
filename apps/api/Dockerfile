@@ -7,7 +7,10 @@ FROM base AS build
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
 COPY packages packages
 COPY apps/api apps/api
+COPY scripts scripts
+COPY specs/adminunits specs/adminunits
 RUN pnpm install --frozen-lockfile
+RUN node scripts/build-kisip-units-template.mjs
 RUN pnpm --filter @egrm/core build \
  && pnpm --filter @egrm/config-schemas build \
  && pnpm --filter @egrm/notifications build \
@@ -21,6 +24,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=build /app/packages ./packages
+COPY --from=build /app/apps/api/data ./apps/api/data
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/drizzle ./apps/api/drizzle
 COPY --from=build /app/apps/api/package.json ./apps/api/package.json

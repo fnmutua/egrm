@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import bcrypt from 'bcryptjs';
 import { and, eq, sql } from 'drizzle-orm';
 import type { ConfigDomain } from '@egrm/core';
-import { validateConfig, defaultNotificationPack, defaultStaffProfileFields, DEFAULT_ATTACHMENT_KINDS, DEFAULT_ATTACHMENT_POLICY, DEFAULT_CORRESPONDENCE_POLICY, mergeMissingNotificationItems } from '@egrm/config-schemas';
+import { validateConfig, defaultNotificationPack, defaultStaffProfileFields, DEFAULT_ATTACHMENT_KINDS, DEFAULT_ATTACHMENT_POLICY, DEFAULT_CORRESPONDENCE_POLICY, mergeMissingNotificationItems, mergeMissingIntakeFormDefaults, type Cd06IntakeForms } from '@egrm/config-schemas';
 import type { Cd09Notifications } from '@egrm/config-schemas';
 import { db, pool, schema } from './client.js';
 import { syncRolesFromOrgAccess } from '../services/org-access.js';
@@ -204,6 +204,62 @@ async function ensureCd09Notifications(tenantId: string, freshPack: Cd09Notifica
   console.log('[seed] merged thread notification templates/rules into active CD-09');
 }
 
+/** Backfill attachment_policy / document kinds on CD-06 configs created before spec 14 shipped. */
+async function ensureCd06IntakeForms(tenantId: string, changedBy: string) {
+  const [active] = await db
+    .select({
+      id: schema.configVersion.id,
+      payload: schema.configVersion.payload,
+    })
+    .from(schema.configVersion)
+    .where(
+      and(
+        eq(schema.configVersion.tenantId, tenantId),
+        eq(schema.configVersion.domain, 'cd06_intake_forms'),
+        eq(schema.configVersion.status, 'active'),
+      ),
+    )
+    .limit(1);
+
+  if (!active) return;
+
+  const current = active.payload as Cd06IntakeForms;
+  const { merged, changed } = mergeMissingIntakeFormDefaults(current);
+  if (!changed) return;
+
+  const parsed = validateConfig('cd06_intake_forms', merged);
+  if (!parsed.success) {
+    throw new Error(`CD-06 merge invalid: ${JSON.stringify(parsed.error.issues, null, 2)}`);
+  }
+
+  const [maxRow] = await db
+    .select({ max: sql<number>`coalesce(max(${schema.configVersion.version}), 0)::int` })
+    .from(schema.configVersion)
+    .where(and(eq(schema.configVersion.tenantId, tenantId), eq(schema.configVersion.domain, 'cd06_intake_forms')));
+
+  const nextVersion = (maxRow?.max ?? 0) + 1;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.configVersion)
+      .set({ status: 'retired' })
+      .where(eq(schema.configVersion.id, active.id));
+
+    await tx.insert(schema.configVersion).values({
+      tenantId,
+      domain: 'cd06_intake_forms',
+      version: nextVersion,
+      status: 'active',
+      payload: parsed.data,
+      changeNote: 'seed: merge attachment_policy and document kinds',
+      changedBy,
+      activatedAt: new Date(),
+    });
+  });
+
+  console.log('[seed] merged attachment_policy and document kinds into active CD-06');
+}
+
 /** Full landing-page branding for the KISIP reference tenant (CD-01). */
 export const kisipIdentity = {
   name: 'KISIP GRM',
@@ -388,8 +444,10 @@ export async function runSeed() {
 
   await upsertActiveConfig(kisip!.id, 'cd02_hierarchy', {
     levels: [
-      { code: 'settlement', label: 'Settlement', parent_code: 'county', allows_intake: true, is_confirmation_authority: false, can_be_assigned: true },
-      { code: 'county', label: 'County', parent_code: 'national', allows_intake: true, is_confirmation_authority: false, can_be_assigned: true },
+      { code: 'settlement', label: 'Settlement', parent_code: 'ward', allows_intake: true, is_confirmation_authority: false, can_be_assigned: true },
+      { code: 'ward', label: 'Ward', parent_code: 'subcounty', allows_intake: false, is_confirmation_authority: false, can_be_assigned: true },
+      { code: 'subcounty', label: 'Sub-county', parent_code: 'county', allows_intake: false, is_confirmation_authority: false, can_be_assigned: true },
+      { code: 'county', label: 'County', parent_code: 'national', allows_intake: false, is_confirmation_authority: false, can_be_assigned: true },
       { code: 'national', label: 'National', parent_code: null, allows_intake: false, is_confirmation_authority: true, can_be_assigned: true },
     ],
   }, admin!.id);
@@ -537,6 +595,7 @@ export async function runSeed() {
     attachment_kinds: DEFAULT_ATTACHMENT_KINDS,
     attachment_policy: DEFAULT_ATTACHMENT_POLICY,
   }, admin!.id);
+  await ensureCd06IntakeForms(kisip!.id, admin!.id);
 
   await upsertActiveConfig(kisip!.id, 'cd07_numbering', {
     pattern: 'GRM-{YYYY}-{seq:4}',
@@ -592,18 +651,7 @@ export async function runSeed() {
     correspondence_policy: DEFAULT_CORRESPONDENCE_POLICY,
   }, admin!.id);
 
-  // Sample unit tree: national → 2 counties → 3 settlements
-  const existingUnits = await db.select({ id: schema.unit.id }).from(schema.unit).where(eq(schema.unit.tenantId, kisip!.id)).limit(1);
-  if (existingUnits.length === 0) {
-    const [national] = await db.insert(schema.unit).values({ tenantId: kisip!.id, levelCode: 'national', name: 'National', code: 'KE' }).returning();
-    const [nairobi] = await db.insert(schema.unit).values({ tenantId: kisip!.id, levelCode: 'county', parentId: national!.id, name: 'Nairobi', code: 'KE-047' }).returning();
-    const [mombasa] = await db.insert(schema.unit).values({ tenantId: kisip!.id, levelCode: 'county', parentId: national!.id, name: 'Mombasa', code: 'KE-001' }).returning();
-    await db.insert(schema.unit).values([
-      { tenantId: kisip!.id, levelCode: 'settlement', parentId: nairobi!.id, name: 'Mukuru kwa Njenga', code: 'SET-001' },
-      { tenantId: kisip!.id, levelCode: 'settlement', parentId: nairobi!.id, name: 'Kibera Soweto East', code: 'SET-002' },
-      { tenantId: kisip!.id, levelCode: 'settlement', parentId: mombasa!.id, name: 'Likoni', code: 'SET-003' },
-    ]);
-  }
+  // Jurisdiction units are NOT seeded — import via Admin → Units (template generated from CD-02).
 
   await upsertActiveConfig(kisip!.id, 'cd14_features', {
     appeals: true,

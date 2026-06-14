@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 import multipart from '@fastify/multipart';
 import type { Cd01Identity, Cd02Hierarchy, Cd03Taxonomy, Cd06IntakeForms } from '../types.js';
 import type { Cd09Notifications } from '@egrm/config-schemas';
-import { configuredPartyNotificationChannels, kindsForChannel } from '@egrm/config-schemas';
+import { configuredPartyNotificationChannels, kindsForChannel, normalizeCd06IntakeForms } from '@egrm/config-schemas';
 import type { Cd10OrgAccess } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
 import { getActiveConfig } from '../services/config.js';
@@ -67,7 +67,7 @@ export default async function publicRoutes(app: FastifyInstance) {
 
   // Everything the portal needs to render the configured intake form.
   app.get('/api/v1/public/intake-meta', { config: rateLimit }, async (req, reply) => {
-    const [identity, form, hierarchy, taxonomy, notifications, correspondence] = await Promise.all([
+    const [identity, formRaw, hierarchy, taxonomy, notifications, correspondence] = await Promise.all([
       getActiveConfig<Cd01Identity>(req.tenant.id, 'cd01_identity'),
       getActiveConfig<Cd06IntakeForms>(req.tenant.id, 'cd06_intake_forms'),
       getActiveConfig<Cd02Hierarchy>(req.tenant.id, 'cd02_hierarchy'),
@@ -75,6 +75,7 @@ export default async function publicRoutes(app: FastifyInstance) {
       getActiveConfig<Cd09Notifications>(req.tenant.id, 'cd09_notifications'),
       loadCorrespondenceConfig(req.tenant.id),
     ]);
+    const form = formRaw ? normalizeCd06IntakeForms(formRaw) : null;
     if (!form || !hierarchy) return reply.code(503).send({ error: 'tenant_not_configured' });
 
     const units = await db

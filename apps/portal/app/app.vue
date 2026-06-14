@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const apiBase = usePublicApiBase();
 const config = useRuntimeConfig();
 const appConfig = useAppConfig();
 
@@ -9,7 +10,7 @@ const { data: identity } = await useFetch<{
     branding: { favicon_url?: string; primary?: string; secondary?: string; neutral?: string };
   };
 }>('/api/v1/config/cd01_identity', {
-  baseURL: config.public.apiBase,
+  baseURL: apiBase.value,
   headers: { 'x-tenant': config.public.tenant },
 });
 

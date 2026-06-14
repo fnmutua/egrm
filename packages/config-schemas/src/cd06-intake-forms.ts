@@ -61,4 +61,21 @@ export const cd06IntakeForms = z.object({
 
 export type Cd06IntakeForms = z.infer<typeof cd06IntakeForms>;
 export type IntakeFieldDef = z.infer<typeof fieldDef>;
+
+/** Backfill attachment defaults for configs saved before CD-06 document types shipped. */
+export function normalizeCd06IntakeForms(form: Cd06IntakeForms): Cd06IntakeForms {
+  return {
+    ...form,
+    attachment_kinds: mergeDefaultAttachmentKinds(form.attachment_kinds),
+    attachment_policy: { ...DEFAULT_ATTACHMENT_POLICY, ...(form.attachment_policy ?? {}) },
+  };
+}
+
+export function mergeMissingIntakeFormDefaults(current: Cd06IntakeForms): { merged: Cd06IntakeForms; changed: boolean } {
+  const merged = normalizeCd06IntakeForms(current);
+  const kindsChanged = merged.attachment_kinds.length !== (current.attachment_kinds?.length ?? 0);
+  const policyChanged = !current.attachment_policy;
+  return { merged, changed: kindsChanged || policyChanged };
+}
+
 export { mergeDefaultAttachmentKinds };

@@ -18,6 +18,7 @@ interface RegisterMeta {
   };
 }
 
+const apiBase = usePublicApiBase();
 const config = useRuntimeConfig();
 
 const meta = ref<RegisterMeta | null>(null);
@@ -47,7 +48,7 @@ const extraFields = computed(() => {
 onMounted(async () => {
   try {
     meta.value = await $fetch<RegisterMeta>('/api/v1/public/staff-register-meta', {
-      baseURL: config.public.apiBase,
+      baseURL: apiBase.value,
       headers: { 'x-tenant': config.public.tenant },
     });
     if (!meta.value?.enabled) await navigateTo('/login');
@@ -88,7 +89,7 @@ async function submit() {
     }
 
     const res = await $fetch<{ status: string; message: string }>('/api/v1/public/staff-register', {
-      baseURL: config.public.apiBase,
+      baseURL: apiBase.value,
       method: 'POST',
       headers: { 'x-tenant': config.public.tenant },
       body: {

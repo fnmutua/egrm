@@ -17,7 +17,11 @@
     "db:setup": "pnpm --filter @egrm/api db:setup",
     "db:migrate": "pnpm --filter @egrm/api db:migrate",
     "db:seed": "pnpm --filter @egrm/api db:seed",
-    "db:bootstrap": "pnpm --filter @egrm/api db:bootstrap"
+    "db:reset-cases": "pnpm --filter @egrm/api db:reset-cases",
+    "db:reset-units": "pnpm --filter @egrm/api db:reset-units",
+    "db:bootstrap": "pnpm --filter @egrm/api db:bootstrap",
+    "build:kisip-units-template": "node scripts/build-kisip-units-template.mjs",
+    "dev:check-api": "node scripts/wait-for-api.mjs"
   },
   "devDependencies": {
     "turbo": "^2.3.0",

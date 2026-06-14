@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Cd06IntakeForms } from '@egrm/config-schemas';
 import type { AttachmentChannel } from '@egrm/config-schemas';
-import { kindsForChannel, mergeDefaultAttachmentKinds } from '@egrm/config-schemas';
+import { kindsForChannel, mergeDefaultAttachmentKinds, normalizeCd06IntakeForms } from '@egrm/config-schemas';
 import { hasPermission } from '@egrm/core';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { db, schema } from '../db/client.js';
@@ -38,10 +38,7 @@ export interface AttachmentRow {
 export async function loadAttachmentConfig(tenantId: string): Promise<Cd06IntakeForms> {
   const cfg = await getActiveConfig<Cd06IntakeForms>(tenantId, 'cd06_intake_forms');
   if (!cfg) throw new Error('tenant_not_configured');
-  return {
-    ...cfg,
-    attachment_kinds: mergeDefaultAttachmentKinds(cfg.attachment_kinds),
-  };
+  return normalizeCd06IntakeForms(cfg);
 }
 
 function kindByCode(cfg: Cd06IntakeForms, code: string, channel: 'console' | 'intake' = 'console') {

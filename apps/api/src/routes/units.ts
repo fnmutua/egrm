@@ -1,10 +1,18 @@
 import type { FastifyInstance } from 'fastify';
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import multipart from '@fastify/multipart';
 import type { Cd02Hierarchy } from '../types.js';
 import { db, schema } from '../db/client.js';
 import { getActiveConfig } from '../services/config.js';
 import { writeAudit } from '../services/audit.js';
+import {
+  buildUnitsExport,
+  buildUnitsImportTemplate,
+  importUnitsFromRows,
+  parseUnitsWorkbook,
+} from '../services/units-import.js';
+import { resetUnits } from '../db/reset-units.js';
 
 const createBody = z.object({
   level_code: z.string().min(1),
@@ -51,13 +59,156 @@ function descendantsOf(all: UnitRow[], rootId: string): UnitRow[] {
 
 /** Jurisdiction unit tree management (CD-02 instances; GEN-CFG-10). */
 export default async function unitRoutes(app: FastifyInstance) {
+  await app.register(multipart, { limits: { fileSize: 20 * 1024 * 1024, files: 1 } });
+
+  app.get('/api/v1/units/summary', { onRequest: [app.requirePermission('admin:hierarchy')] }, async (req) => {
+    const [totalRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.unit)
+      .where(eq(schema.unit.tenantId, req.tenant.id));
+
+    const [rootsRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.unit)
+      .where(and(eq(schema.unit.tenantId, req.tenant.id), isNull(schema.unit.parentId)));
+
+    const byLevel = await db
+      .select({
+        levelCode: schema.unit.levelCode,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(schema.unit)
+      .where(eq(schema.unit.tenantId, req.tenant.id))
+      .groupBy(schema.unit.levelCode);
+
+    return {
+      total: totalRow?.count ?? 0,
+      roots: rootsRow?.count ?? 0,
+      by_level: Object.fromEntries(byLevel.map((r) => [r.levelCode, r.count])),
+    };
+  });
+
   app.get('/api/v1/units', { onRequest: [app.requirePermission('admin:hierarchy')] }, async (req) => {
+    const q = req.query as { roots?: string; parent_id?: string; level_code?: string; all?: string };
+    const conditions = [eq(schema.unit.tenantId, req.tenant.id)];
+
+    if (q.all === '1' || q.all === 'true') {
+      // Full tree (e.g. user role scoping) — avoid for large imports; use filtered queries instead.
+    } else if (q.roots === '1' || q.roots === 'true') {
+      conditions.push(isNull(schema.unit.parentId));
+    } else if (q.parent_id) {
+      conditions.push(eq(schema.unit.parentId, q.parent_id));
+    } else if (!q.level_code) {
+      conditions.push(isNull(schema.unit.parentId));
+    }
+    if (q.level_code) {
+      conditions.push(sql`lower(${schema.unit.levelCode}) = ${q.level_code.toLowerCase()}`);
+    }
+
+    const rows = await db
+      .select({
+        id: schema.unit.id,
+        tenantId: schema.unit.tenantId,
+        levelCode: schema.unit.levelCode,
+        parentId: schema.unit.parentId,
+        name: schema.unit.name,
+        code: schema.unit.code,
+        active: schema.unit.active,
+        childCount: sql<number>`(
+          select count(*)::int from unit ch
+          where ch.parent_id = ${schema.unit.id} and ch.tenant_id = ${schema.unit.tenantId}
+        )`,
+      })
+      .from(schema.unit)
+      .where(and(...conditions))
+      .orderBy(asc(schema.unit.name));
+
+    return { units: rows };
+  });
+
+  /** @deprecated full list — prefer /summary + filtered GET for large trees */
+  app.get('/api/v1/units/all', { onRequest: [app.requirePermission('admin:hierarchy')] }, async (req) => {
     const rows = await db
       .select()
       .from(schema.unit)
       .where(eq(schema.unit.tenantId, req.tenant.id))
       .orderBy(asc(schema.unit.name));
     return { units: rows };
+  });
+
+  /** Excel template — columns from active CD-02 levels; pre-filled when units already exist. */
+  app.get('/api/v1/units/import/template', { onRequest: [app.requirePermission('admin:hierarchy')] }, async (req, reply) => {
+    const hierarchy = await getActiveConfig<Cd02Hierarchy>(req.tenant.id, 'cd02_hierarchy');
+    if (!hierarchy) return reply.code(503).send({ error: 'hierarchy_not_configured' });
+
+    const units = await db
+      .select()
+      .from(schema.unit)
+      .where(eq(schema.unit.tenantId, req.tenant.id))
+      .orderBy(asc(schema.unit.name));
+
+    const buffer = await buildUnitsImportTemplate(hierarchy, units, req.tenant.code);
+    return reply
+      .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      .header('Content-Disposition', 'attachment; filename="jurisdiction-units-template.xlsx"')
+      .send(buffer);
+  });
+
+  /** Export the current unit tree in the same layout as the import template. */
+  app.get('/api/v1/units/export', { onRequest: [app.requirePermission('admin:hierarchy')] }, async (req, reply) => {
+    const hierarchy = await getActiveConfig<Cd02Hierarchy>(req.tenant.id, 'cd02_hierarchy');
+    if (!hierarchy) return reply.code(503).send({ error: 'hierarchy_not_configured' });
+
+    const units = await db
+      .select()
+      .from(schema.unit)
+      .where(eq(schema.unit.tenantId, req.tenant.id))
+      .orderBy(asc(schema.unit.name));
+
+    const buffer = await buildUnitsExport(hierarchy, units);
+    return reply
+      .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      .header('Content-Disposition', 'attachment; filename="jurisdiction-units.xlsx"')
+      .send(buffer);
+  });
+
+  /** Bulk import units from an Excel file (same layout as the template). */
+  app.post('/api/v1/units/import', { onRequest: [app.requirePermission('admin:hierarchy')] }, async (req, reply) => {
+    const hierarchy = await getActiveConfig<Cd02Hierarchy>(req.tenant.id, 'cd02_hierarchy');
+    if (!hierarchy) return reply.code(503).send({ error: 'hierarchy_not_configured' });
+
+    const part = await req.file();
+    if (!part) return reply.code(400).send({ error: 'file_required' });
+
+    const buffer = await part.toBuffer();
+    const { rows, errors: parseErrors } = await parseUnitsWorkbook(buffer, hierarchy);
+    if (parseErrors.length > 0) {
+      return reply.code(422).send({ error: 'invalid_workbook', errors: parseErrors });
+    }
+    if (rows.length === 0) {
+      return reply.code(422).send({ error: 'no_rows', message: 'No data rows found in the Units sheet' });
+    }
+
+    const result = await importUnitsFromRows(req.tenant.id, hierarchy, rows, req.user.sub);
+    if (result.errors.length > 0 && result.created === 0) {
+      return reply.code(422).send({ error: 'import_failed', ...result });
+    }
+
+    return reply.code(result.created > 0 ? 201 : 200).send({ ok: true, ...result });
+  });
+
+  /** Remove all jurisdiction units for the tenant (re-import from Excel afterward). */
+  app.post('/api/v1/units/reset', { onRequest: [app.requirePermission('admin:hierarchy')] }, async (req, reply) => {
+    const result = await resetUnits(req.tenant.code);
+    await writeAudit({
+      tenantId: req.tenant.id,
+      actorId: req.user.sub,
+      action: 'unit.reset',
+      entity: 'unit',
+      entityId: req.tenant.id,
+      data: result,
+    });
+    return reply.send({ ok: true, ...result });
   });
 
   app.post('/api/v1/units', { onRequest: [app.requirePermission('admin:hierarchy')] }, async (req, reply) => {

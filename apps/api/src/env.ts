@@ -1,12 +1,15 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config as loadDotenv } from 'dotenv';
 import { z } from 'zod';
 
-// Railway CLI injects env before the process starts — do not load local apps/api/.env on top.
+const apiRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+// Load apps/api/.env for CLI scripts; Railway injects env and must not be overwritten.
 if (!process.env.RAILWAY_PROJECT_ID) {
-  loadDotenv();
+  loadDotenv({ path: path.join(apiRoot, '.env') });
 }
 import { resolveDatabaseUrl } from './db/resolve-database-url.js';
-
 const envSchema = z.object({
   DATABASE_URL: z.string().default('postgres://postgres:postgres@localhost:5432/egrm'),
   JWT_SECRET: z.string().default('dev-only-secret'),

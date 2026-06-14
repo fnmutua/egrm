@@ -127,7 +127,7 @@ async function loadUsers() {
 async function loadMeta() {
   const [r, u] = await Promise.all([
     api<{ roles: TenantRole[] }>('/api/v1/roles', { query: { manageable: '1' } }),
-    api<{ units: UnitRow[] }>('/api/v1/units'),
+    api<{ units: UnitRow[] }>('/api/v1/units?all=1'),
   ]);
   roles.value = r.roles;
   units.value = u.units;

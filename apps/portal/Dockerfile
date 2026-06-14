@@ -14,6 +14,8 @@ ARG NUXT_PUBLIC_TENANT=kisip
 ENV NUXT_PUBLIC_API_BASE=$NUXT_PUBLIC_API_BASE
 ENV NUXT_PUBLIC_TENANT=$NUXT_PUBLIC_TENANT
 
+RUN test -n "$NUXT_PUBLIC_API_BASE" || (echo "ERROR: NUXT_PUBLIC_API_BASE build arg is required" >&2 && exit 1)
+
 RUN pnpm --filter @egrm/core build \
  && pnpm --filter @egrm/portal build
 
