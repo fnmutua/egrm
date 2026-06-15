@@ -6,6 +6,7 @@ import { CASE_LIST_FILTER_OPTIONS, useCaseListFilterPrefs } from '~/composables/
 
 const { api } = useApi();
 const { user, fetchMe } = useAuth();
+const { loadCaseCount } = useCaseCount();
 const { canAdmin } = usePermissions();
 const toast = useToast();
 const { prefs, setFilter, activeCount } = useCaseListFilterPrefs();
@@ -142,6 +143,7 @@ async function load() {
     });
     rows.value = res.cases;
     total.value = res.total;
+    loadCaseCount();
   } finally {
     loading.value = false;
   }

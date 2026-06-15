@@ -1,29 +1,49 @@
 <script setup lang="ts">
-import { hasPermission } from '@egrm/core';
+import { canAccessAdminConsole, canAccessAdminPage } from '@egrm/core';
 
 const { user, logout } = useAuth();
+const { count: caseCount, loadCaseCount } = useCaseCount();
 const drawerOpen = ref(false);
 const route = useRoute();
 
 watch(() => route.fullPath, () => (drawerOpen.value = false));
 
+onMounted(() => {
+  if (user.value) loadCaseCount();
+});
+
+watch(user, (u) => {
+  if (u) loadCaseCount();
+  else caseCount.value = null;
+});
+
 const nav = computed(() => {
   const perms = user.value?.permissions ?? [];
-  const canAdmin = perms.some((p) => p.startsWith('admin:'));
-  const canManageUsers = user.value?.manages_staff_users || hasPermission(perms, 'admin:users') || perms.includes('admin:*');
+  const opts = { managesStaffUsers: user.value?.manages_staff_users === true };
+  const canAdmin = canAccessAdminConsole(perms);
+  const canManageUsers = canAccessAdminPage(perms, '/admin/settings/users', opts);
+  const canManageUnits = canAccessAdminPage(perms, '/admin/settings/units');
 
   const items: Record<string, unknown>[] = [
     { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
-    { label: 'Cases', icon: 'i-lucide-inbox', to: '/cases' },
+    {
+      label: 'Cases',
+      icon: 'i-lucide-inbox',
+      to: '/cases',
+      badge: caseCount.value != null ? caseCount.value.toLocaleString() : undefined,
+    },
     { label: 'Reports', icon: 'i-lucide-bar-chart-3', to: '/', disabled: true, badge: 'Phase 4' },
   ];
 
-  if (canAdmin || canManageUsers) {
-    const children: Record<string, unknown>[] = [];
-    if (canAdmin) children.push({ label: 'Configuration', icon: 'i-lucide-layout-grid', to: '/admin' });
-    if (canManageUsers) children.push({ label: 'Users', icon: 'i-lucide-users', to: '/admin/users' });
-    if (canAdmin) children.push({ label: 'Units', icon: 'i-lucide-map-pin', to: '/admin/units' });
-    items.push({ label: 'Configs', icon: 'i-lucide-settings', children });
+  if (canAdmin || canManageUsers || canManageUnits) {
+    const children: Record<string, unknown>[] = [
+      { label: 'Programme admin', icon: 'i-lucide-shield', to: '/admin' },
+    ];
+    if (canAdmin) children.push({ label: 'Configuration', icon: 'i-lucide-sliders-horizontal', to: '/admin/config' });
+    if (canManageUsers || canManageUnits) {
+      children.push({ label: 'Settings', icon: 'i-lucide-wrench', to: '/admin/settings' });
+    }
+    items.push({ label: 'Administration', icon: 'i-lucide-settings', children });
   }
 
   return [items];
@@ -44,9 +64,15 @@ const nav = computed(() => {
     <USlideover v-model:open="drawerOpen" side="left" title="Navigation">
       <template #body>
         <UNavigationMenu orientation="vertical" :items="nav" class="mb-4" />
-        <div class="border-t border-default pt-3">
-          <p class="text-xs font-semibold text-muted uppercase tracking-wide mb-2 px-2">Configs</p>
-          <AdminNav />
+        <div class="border-t border-default pt-3 space-y-3">
+          <div>
+            <p class="text-xs font-semibold text-muted uppercase tracking-wide mb-2 px-2">Configuration</p>
+            <AdminNav />
+          </div>
+          <div>
+            <p class="text-xs font-semibold text-muted uppercase tracking-wide mb-2 px-2">Settings</p>
+            <SettingsNav />
+          </div>
         </div>
       </template>
     </USlideover>
@@ -68,11 +94,18 @@ const nav = computed(() => {
     <div class="flex flex-col lg:flex-row flex-1 min-w-0 md:h-screen md:overflow-hidden">
       <aside class="hidden lg:flex w-64 shrink-0 border-r border-default bg-elevated/30 flex-col">
         <div class="px-4 py-3 border-b border-default flex items-center gap-2">
-          <UIcon name="i-lucide-settings" class="text-primary" />
-          <h2 class="font-semibold">Configs</h2>
+          <UIcon name="i-lucide-shield" class="text-primary" />
+          <h2 class="font-semibold">Programme admin</h2>
         </div>
-        <div class="flex-1 overflow-y-auto p-3">
-          <AdminNav />
+        <div class="flex-1 overflow-y-auto p-3 space-y-4">
+          <div>
+            <p class="text-xs font-semibold text-muted uppercase tracking-wide mb-2 px-2">Configuration</p>
+            <AdminNav />
+          </div>
+          <div>
+            <p class="text-xs font-semibold text-muted uppercase tracking-wide mb-2 px-2">Settings</p>
+            <SettingsNav />
+          </div>
         </div>
       </aside>
 

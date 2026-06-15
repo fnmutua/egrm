@@ -88,78 +88,84 @@ export const CD05_SUBSECTIONS = [
   { id: 'sec-escalation', label: 'Escalation rules' },
 ];
 
-/** An entry in an admin section: either a config domain editor or a standalone admin page. */
-export type AdminEntry =
-  | { type: 'domain'; domain: string }
-  | { type: 'page'; label: string; icon: string; to: string; description: string };
+/** Versioned config domain entry in the Configuration catalogue. */
+export type ConfigEntry = { domain: string };
 
-/** Sidebar grouping for the admin area, in display order. Related tools live together. */
-export const ADMIN_SECTIONS: { label: string; icon?: string; entries: AdminEntry[] }[] = [
-  { label: 'Identity', entries: [{ type: 'domain', domain: 'cd01_identity' }] },
-  { label: 'Access Control', entries: [{ type: 'domain', domain: 'cd10_org_access' }] },
+/** Operational settings page (live CRUD, not versioned config). */
+export type SettingsEntry = {
+  label: string;
+  icon: string;
+  to: string;
+  description: string;
+};
+
+/** Sidebar grouping for Configuration — versioned CD domains only. */
+export const CONFIG_SECTIONS: { label: string; icon?: string; entries: ConfigEntry[] }[] = [
+  { label: 'Identity', entries: [{ domain: 'cd01_identity' }] },
+  { label: 'Access Control', entries: [{ domain: 'cd10_org_access' }] },
   {
     label: 'Locations and Hierarchy',
     icon: 'i-lucide-network',
-    entries: [
-      { type: 'domain', domain: 'cd02_hierarchy' },
-      {
-        type: 'page',
-        label: 'Jurisdiction units',
-        icon: 'i-lucide-map-pin',
-        to: '/admin/units',
-        description: 'The unit tree itself: instances of the hierarchy levels (counties, settlements, …).',
-      },
-    ],
+    entries: [{ domain: 'cd02_hierarchy' }],
   },
   {
     label: 'Case Setup',
     entries: [
-      { type: 'domain', domain: 'cd03_taxonomy' },
-      { type: 'domain', domain: 'cd04_workflow' },
-      { type: 'domain', domain: 'cd05_sla' },
-      { type: 'domain', domain: 'cd07_numbering' },
+      { domain: 'cd03_taxonomy' },
+      { domain: 'cd04_workflow' },
+      { domain: 'cd05_sla' },
+      { domain: 'cd07_numbering' },
     ],
   },
   {
     label: 'Intake and Channels',
     entries: [
-      { type: 'domain', domain: 'cd06_intake_forms' },
-      { type: 'domain', domain: 'cd08_channels' },
+      { domain: 'cd06_intake_forms' },
+      { domain: 'cd08_channels' },
     ],
   },
   {
     label: 'Organisation',
     entries: [
-      { type: 'domain', domain: 'cd11_committees' },
-      { type: 'domain', domain: 'cd12_referrals' },
+      { domain: 'cd11_committees' },
+      { domain: 'cd12_referrals' },
     ],
   },
   {
     label: 'Communication',
     entries: [
-      { type: 'domain', domain: 'cd17_correspondence' },
-      { type: 'domain', domain: 'cd09_notifications' },
+      { domain: 'cd17_correspondence' },
+      { domain: 'cd09_notifications' },
     ],
   },
   {
     label: 'Platform',
     entries: [
-      { type: 'domain', domain: 'cd13_reporting' },
-      { type: 'domain', domain: 'cd14_features' },
-      { type: 'domain', domain: 'cd15_dashboards' },
-      { type: 'domain', domain: 'cd16_ai' },
+      { domain: 'cd13_reporting' },
+      { domain: 'cd14_features' },
+      { domain: 'cd15_dashboards' },
+      { domain: 'cd16_ai' },
     ],
   },
+];
+
+/** Sidebar grouping for Settings — operational data (not versioned config). */
+export const SETTINGS_SECTIONS: { label: string; icon?: string; entries: SettingsEntry[] }[] = [
   {
-    label: 'Administration',
-    icon: 'i-lucide-user-cog',
+    label: 'Organisation',
+    icon: 'i-lucide-building-2',
     entries: [
       {
-        type: 'page',
         label: 'Users',
         icon: 'i-lucide-users',
-        to: '/admin/users',
+        to: '/admin/settings/users',
         description: 'Staff accounts, role assignments, and pending self-registrations.',
+      },
+      {
+        label: 'Jurisdiction units',
+        icon: 'i-lucide-map-pin',
+        to: '/admin/settings/units',
+        description: 'The unit tree: instances of hierarchy levels (counties, settlements, …).',
       },
     ],
   },
@@ -170,7 +176,7 @@ export const DOMAIN_CATALOGUE: DomainMeta[] = [
     description: 'Tenant name, locales, colors, and the mandatory free-of-charge / non-retaliation / confidentiality statements.',
     subsections: CD01_SUBSECTIONS },
   { domain: 'cd02_hierarchy', cd: 'CD-02', title: 'Administrative hierarchy', icon: 'i-lucide-network', strict: true,
-    description: 'Ordered jurisdiction levels (arbitrary depth). The unit tree itself is managed under Units.' },
+    description: 'Ordered jurisdiction levels (arbitrary depth). The unit tree itself is managed under Settings → Jurisdiction units.' },
   { domain: 'cd03_taxonomy', cd: 'CD-03', title: 'Case taxonomy', icon: 'i-lucide-tags', strict: true,
     description: 'Grievance categories shown at intake, sensitivity classes for protected handling, and the priority ladder.',
     subsections: CD03_SUBSECTIONS },

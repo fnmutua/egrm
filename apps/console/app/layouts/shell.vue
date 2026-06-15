@@ -1,32 +1,66 @@
 <script setup lang="ts">
-import { hasPermission } from '@egrm/core';
+import { canAccessAdminConsole, canAccessAdminPage } from '@egrm/core';
 
 const { user, logout } = useAuth();
-const { loadDashboards, visibleDashboards } = useDashboards();
+const { loadDashboards, visibleDashboards, loading: dashboardsLoading } = useDashboards();
+const { count: caseCount, loadCaseCount } = useCaseCount();
+const { count: staffUserCount, loadStaffUserCount } = useStaffUserCount();
 const route = useRoute();
 
+const dashboardCount = computed(() => visibleDashboards.value.length);
+
 const nav = computed(() => [[
-  { label: 'Cases', icon: 'i-lucide-inbox', to: '/cases' },
+  {
+    label: 'Cases',
+    icon: 'i-lucide-inbox',
+    to: '/cases',
+    badge: caseCount.value != null ? caseCount.value.toLocaleString() : undefined,
+  },
   { label: 'Reports', icon: 'i-lucide-bar-chart-3', to: '/', disabled: true, badge: 'Phase 4' },
 ]]);
 
-const showConfigs = computed(() => {
+const adminPageOpts = computed(() => ({
+  managesStaffUsers: user.value?.manages_staff_users === true,
+}));
+
+const showConfiguration = computed(() => {
   const perms = user.value?.permissions ?? [];
-  return perms.some((p) => p.startsWith('admin:'))
-    || user.value?.manages_staff_users
-    || hasPermission(perms, 'admin:users')
-    || perms.includes('admin:*');
+  return canAccessAdminConsole(perms);
 });
+
+const showSettings = computed(() => {
+  const perms = user.value?.permissions ?? [];
+  const opts = adminPageOpts.value;
+  return SETTINGS_SECTIONS.some((section) =>
+    section.entries.some((entry) => canAccessAdminPage(perms, entry.to, opts)),
+  );
+});
+
+const showProgrammeAdmin = computed(() => showConfiguration.value || showSettings.value);
 
 const drawerOpen = ref(false);
 watch(() => route.fullPath, () => (drawerOpen.value = false));
 
 onMounted(async () => {
-  if (user.value) await loadDashboards();
+  if (user.value) {
+    await Promise.all([loadDashboards(), loadCaseCount(), loadStaffUserCount()]);
+  }
 });
 
 watch(user, async (u) => {
-  if (u && !visibleDashboards.value.length) await loadDashboards();
+  if (!u) {
+    caseCount.value = null;
+    staffUserCount.value = null;
+    return;
+  }
+  if (!visibleDashboards.value.length) await loadDashboards();
+  await Promise.all([loadCaseCount(), loadStaffUserCount()]);
+});
+
+watch(() => route.path, (path) => {
+  if (path === '/' && user.value) loadDashboards();
+  if (path.startsWith('/cases') && user.value) loadCaseCount();
+  if (path.startsWith('/admin/settings') && user.value) loadStaffUserCount();
 });
 
 function dashActive(id: string) {
@@ -58,6 +92,15 @@ const dashLinkClass = (active: boolean) => [
           <summary :class="collapsibleClass">
             <UIcon name="i-lucide-layout-dashboard" class="size-4 shrink-0 text-primary" />
             <span class="flex-1">Dashboards</span>
+            <UBadge
+              v-if="!dashboardsLoading"
+              size="xs"
+              variant="subtle"
+              color="neutral"
+              class="shrink-0 tabular-nums"
+            >
+              {{ dashboardCount }}
+            </UBadge>
             <UIcon name="i-lucide-chevron-down" class="size-4 shrink-0 text-muted transition-transform group-open:rotate-180" />
           </summary>
           <div class="mt-1 ml-2 pl-2 border-l border-default space-y-0.5">
@@ -73,15 +116,30 @@ const dashLinkClass = (active: boolean) => [
           <UNavigationMenu orientation="vertical" :items="nav" />
         </div>
 
-        <div v-if="showConfigs" class="pt-2 border-t border-default">
-          <details class="group">
+        <div v-if="showProgrammeAdmin" class="pt-2 border-t border-default space-y-2">
+          <details
+            v-if="showConfiguration"
+            :open="route.path.startsWith('/admin/config') || route.path === '/admin'"
+            class="group"
+          >
             <summary :class="collapsibleClass">
-              <UIcon name="i-lucide-settings" class="size-4 shrink-0 text-primary" />
-              <span class="flex-1">Settings</span>
+              <UIcon name="i-lucide-sliders-horizontal" class="size-4 shrink-0 text-primary" />
+              <span class="flex-1">Configuration</span>
               <UIcon name="i-lucide-chevron-down" class="size-4 shrink-0 text-muted transition-transform group-open:rotate-180" />
             </summary>
             <div class="mt-1 ml-2 pl-2 border-l border-default">
               <AdminNav compact />
+            </div>
+          </details>
+
+          <details v-if="showSettings" :open="route.path.startsWith('/admin/settings')" class="group">
+            <summary :class="collapsibleClass">
+              <UIcon name="i-lucide-wrench" class="size-4 shrink-0 text-primary" />
+              <span class="flex-1">Settings</span>
+              <UIcon name="i-lucide-chevron-down" class="size-4 shrink-0 text-muted transition-transform group-open:rotate-180" />
+            </summary>
+            <div class="mt-1 ml-2 pl-2 border-l border-default">
+              <SettingsNav compact />
             </div>
           </details>
         </div>
@@ -99,6 +157,15 @@ const dashLinkClass = (active: boolean) => [
           <summary :class="collapsibleClass">
             <UIcon name="i-lucide-layout-dashboard" class="size-4 shrink-0 text-primary" />
             <span class="flex-1">Dashboards</span>
+            <UBadge
+              v-if="!dashboardsLoading"
+              size="xs"
+              variant="subtle"
+              color="neutral"
+              class="shrink-0 tabular-nums"
+            >
+              {{ dashboardCount }}
+            </UBadge>
             <UIcon name="i-lucide-chevron-down" class="size-4 shrink-0 text-muted transition-transform group-open:rotate-180" />
           </summary>
           <div class="mt-1 ml-2 pl-2 border-l border-default space-y-0.5">
@@ -114,16 +181,31 @@ const dashLinkClass = (active: boolean) => [
           <UNavigationMenu orientation="vertical" :items="nav" />
         </div>
 
-        <template v-if="showConfigs">
-          <div class="pt-2 border-t border-default">
-            <details :open="route.path.startsWith('/admin')" class="group">
+        <template v-if="showProgrammeAdmin">
+          <div class="pt-2 border-t border-default space-y-2">
+            <details
+              v-if="showConfiguration"
+              :open="route.path.startsWith('/admin/config') || route.path === '/admin'"
+              class="group"
+            >
               <summary :class="collapsibleClass">
-                <UIcon name="i-lucide-settings" class="size-4 shrink-0 text-primary" />
-                <span class="flex-1">Settings</span>
+                <UIcon name="i-lucide-sliders-horizontal" class="size-4 shrink-0 text-primary" />
+                <span class="flex-1">Configuration</span>
                 <UIcon name="i-lucide-chevron-down" class="size-4 shrink-0 text-muted transition-transform group-open:rotate-180" />
               </summary>
               <div class="mt-1 ml-2 pl-2 border-l border-default">
                 <AdminNav compact />
+              </div>
+            </details>
+
+            <details v-if="showSettings" :open="route.path.startsWith('/admin/settings')" class="group">
+              <summary :class="collapsibleClass">
+                <UIcon name="i-lucide-wrench" class="size-4 shrink-0 text-primary" />
+                <span class="flex-1">Settings</span>
+                <UIcon name="i-lucide-chevron-down" class="size-4 shrink-0 text-muted transition-transform group-open:rotate-180" />
+              </summary>
+              <div class="mt-1 ml-2 pl-2 border-l border-default">
+                <SettingsNav compact />
               </div>
             </details>
           </div>

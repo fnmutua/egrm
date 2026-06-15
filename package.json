@@ -16,7 +16,7 @@
     "test": "turbo run test",
     "db:setup": "pnpm --filter @egrm/api db:setup",
     "db:migrate": "pnpm --filter @egrm/api db:migrate",
-    "db:seed": "pnpm --filter @egrm/api db:seed",
+    "db:seed": "pnpm --filter @egrm/core build && pnpm --filter @egrm/config-schemas build && pnpm --filter @egrm/api db:seed",
     "db:reset-cases": "pnpm --filter @egrm/api db:reset-cases",
     "db:reset-units": "pnpm --filter @egrm/api db:reset-units",
     "db:bootstrap": "pnpm --filter @egrm/api db:bootstrap",

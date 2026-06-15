@@ -27,20 +27,28 @@ export function canAccessAdminConsole(granted: readonly string[]): boolean {
   return granted.some((g) => g === 'admin:*' || g.startsWith('admin:'));
 }
 
+function isUnitsAdminPath(path: string): boolean {
+  return path === '/admin/units' || path === '/admin/settings/units';
+}
+
+function isUsersAdminPath(path: string): boolean {
+  return path === '/admin/users' || path === '/admin/settings/users';
+}
+
 /** Standalone admin pages outside the config registry. */
 export function canAccessAdminPage(
   granted: readonly string[],
   path: string,
   opts?: { managesStaffUsers?: boolean },
 ): boolean {
-  if (path === '/admin/units') {
+  if (isUnitsAdminPath(path)) {
     return (
       hasPermission(granted, 'admin:hierarchy') ||
       hasPermission(granted, 'admin:tenant_config') ||
       granted.includes('admin:*')
     );
   }
-  if (path === '/admin/users') {
+  if (isUsersAdminPath(path)) {
     return (
       hasPermission(granted, 'admin:users') ||
       granted.includes('admin:*') ||
