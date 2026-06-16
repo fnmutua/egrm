@@ -279,6 +279,51 @@ export type ComplainantWhatsAppTemplateId = (typeof COMPLAINANT_WHATSAPP_TEMPLAT
 
 export const COMPLAINANT_WHATSAPP_TEMPLATE_ID_SET = new Set<string>(COMPLAINANT_WHATSAPP_TEMPLATE_IDS);
 
+/**
+ * Meta-approved wording for KISIP WhatsApp templates ({{1}}…{{n}} positional).
+ * Used when pushing to Meta so saved CD-09 bodies with SMS-style copy still submit cleanly.
+ */
+export const KISIP_META_WHATSAPP_TEMPLATES: Record<
+  string,
+  { body: string; param_keys: readonly string[] }
+> = {
+  kisip_case_registered: {
+    body:
+      'Hello {{1}}, your grievance reference {{2}} has been registered with {{3}}. You may track progress and view status updates at any time using this link: {{4}} Thank you.',
+    param_keys: ['party.name', 'case.reference', 'tenant.name', 'tracking.url'],
+  },
+  kisip_status_update: {
+    body:
+      'Your grievance reference {{1}} has a status update: {{2}}. {{3}} You may review details at any time using this link: {{4}} Thank you.',
+    param_keys: ['case.reference', 'case.status_label', 'case.update_summary', 'tracking.url'],
+  },
+  kisip_status_update_privacy: {
+    body:
+      'Your grievance reference {{1}} has been updated. You may review the latest status at any time using this link: {{2}} Thank you.',
+    param_keys: ['case.reference', 'tracking.url'],
+  },
+  kisip_satisfaction_request: {
+    body:
+      'Hello from {{1}}. When you have a moment, please rate how we handled grievance reference {{2}} using this link: {{3}} Thank you.',
+    param_keys: ['tenant.name', 'case.reference', 'tracking.url'],
+  },
+  kisip_case_closed: {
+    body:
+      'Your grievance reference {{1}} has been closed. Thank you for using {{2}}. We appreciate your feedback.',
+    param_keys: ['case.reference', 'tenant.short_name'],
+  },
+  kisip_more_info_request: {
+    body:
+      'Hello from {{1}}. We need more information to progress grievance reference {{2}}. Please reply in the portal or visit this link: {{3}} Thank you.',
+    param_keys: ['tenant.name', 'case.reference', 'tracking.url'],
+  },
+  kisip_thread_message_outbound: {
+    body:
+      'Hello from {{1}}. You have a new message about grievance reference {{2}}. Please read and reply using this link: {{3}} Thank you.',
+    param_keys: ['tenant.name', 'case.reference', 'tracking.url'],
+  },
+};
+
 function appendBundledTemplates(
   templates: Array<Record<string, unknown>> | undefined,
   referencedIds: string[],
@@ -719,7 +764,7 @@ export function defaultNotificationPack(): Cd09Notifications {
             body: '{{case.reference}}: {{case.status_label}}. {{case.update_summary}} {{tracking.url}}',
           },
           whatsapp: {
-            body: '{{case.reference}}: {{case.status_label}}. {{case.update_summary}} {{tracking.url}}',
+            body: 'Your grievance reference {{case.reference}} has a status update: {{case.status_label}}. {{case.update_summary}} You may review details at any time using this link: {{tracking.url}} Thank you.',
             wa_template_name: 'kisip_status_update',
             wa_template_language: 'en_US',
             wa_body_param_keys: ['case.reference', 'case.status_label', 'case.update_summary', 'tracking.url'],
@@ -735,7 +780,7 @@ export function defaultNotificationPack(): Cd09Notifications {
             body: '{{case.reference}}: {{case.status_label}}. {{case.update_summary}} {{tracking.url}}',
           },
           whatsapp: {
-            body: '{{case.reference}}: {{case.status_label}}. {{case.update_summary}} {{tracking.url}}',
+            body: 'Your grievance reference {{case.reference}} has a status update: {{case.status_label}}. {{case.update_summary}} You may review details at any time using this link: {{tracking.url}} Thank you.',
             wa_template_name: 'kisip_status_update',
             wa_template_language: 'en_US',
             wa_body_param_keys: ['case.reference', 'case.status_label', 'case.update_summary', 'tracking.url'],
@@ -756,7 +801,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         en: {
           sms: { body: '{{case.reference}}: status updated. {{tracking.url}}' },
           whatsapp: {
-            body: '{{case.reference}}: status updated. {{tracking.url}}',
+            body: 'Your grievance reference {{case.reference}} has been updated. You may review the latest status at any time using this link: {{tracking.url}} Thank you.',
             wa_template_name: 'kisip_status_update_privacy',
             wa_template_language: 'en_US',
             wa_body_param_keys: ['case.reference', 'tracking.url'],
@@ -765,7 +810,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         sw: {
           sms: { body: '{{case.reference}}: hali imesasishwa. {{tracking.url}}' },
           whatsapp: {
-            body: '{{case.reference}}: hali imesasishwa. {{tracking.url}}',
+            body: 'Rejeleo lako la malalamiko {{case.reference}} limesasishwa. Unaweza kukagua hali ya hivi karibuni kwa kiungo hiki: {{tracking.url}} Asante.',
             wa_template_name: 'kisip_status_update_privacy',
             wa_template_language: 'en_US',
             wa_body_param_keys: ['case.reference', 'tracking.url'],
@@ -844,7 +889,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         en: {
           sms: { body: '{{tenant.name}}: please rate handling of {{case.reference}}: {{tracking.url}}' },
           whatsapp: {
-            body: '{{tenant.name}}: please rate handling of {{case.reference}}: {{tracking.url}}',
+            body: 'Hello from {{tenant.name}}. When you have a moment, please rate how we handled grievance reference {{case.reference}} using this link: {{tracking.url}} Thank you.',
             wa_template_name: 'kisip_satisfaction_request',
             wa_template_language: 'en_US',
             wa_body_param_keys: ['tenant.name', 'case.reference', 'tracking.url'],
@@ -853,7 +898,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         sw: {
           sms: { body: '{{tenant.name}}: tafadhali kadiria utendaji wa {{case.reference}}: {{tracking.url}}' },
           whatsapp: {
-            body: '{{tenant.name}}: tafadhali kadiria utendaji wa {{case.reference}}: {{tracking.url}}',
+            body: 'Habari kutoka {{tenant.name}}. Tafadhali kadiria jinsi tulivyoshughulikia rejeleo {{case.reference}} kwa kiungo hiki: {{tracking.url}} Asante.',
             wa_template_name: 'kisip_satisfaction_request',
             wa_template_language: 'en_US',
             wa_body_param_keys: ['tenant.name', 'case.reference', 'tracking.url'],
@@ -869,7 +914,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         en: {
           sms: { body: '{{case.reference}} is closed. Thank you for using {{tenant.short_name}}.' },
           whatsapp: {
-            body: '{{case.reference}} is closed. Thank you for using {{tenant.short_name}}.',
+            body: 'Your grievance reference {{case.reference}} has been closed. Thank you for using {{tenant.short_name}}. We appreciate your feedback.',
             wa_template_name: 'kisip_case_closed',
             wa_template_language: 'en_US',
             wa_body_param_keys: ['case.reference', 'tenant.short_name'],
@@ -882,7 +927,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         sw: {
           sms: { body: '{{case.reference}} imefungwa. Asante kwa kutumia {{tenant.short_name}}.' },
           whatsapp: {
-            body: '{{case.reference}} imefungwa. Asante kwa kutumia {{tenant.short_name}}.',
+            body: 'Malalamiko yako {{case.reference}} yamefungwa. Asante kwa kutumia {{tenant.short_name}}. Tunathamini maoni yako.',
             wa_template_name: 'kisip_case_closed',
             wa_template_language: 'en_US',
             wa_body_param_keys: ['case.reference', 'tenant.short_name'],
@@ -944,7 +989,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         en: {
           sms: { body: '{{tenant.name}}: we need more information for {{case.reference}}. Reply or visit {{tracking.url}}' },
           whatsapp: {
-            body: '{{tenant.name}}: we need more information for {{case.reference}}. Reply or visit {{tracking.url}}',
+            body: 'Hello from {{tenant.name}}. We need more information to progress grievance reference {{case.reference}}. Please reply in the portal or visit this link: {{tracking.url}} Thank you.',
             wa_template_name: 'kisip_more_info_request',
             wa_template_language: 'en_US',
             wa_body_param_keys: ['tenant.name', 'case.reference', 'tracking.url'],
@@ -957,7 +1002,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         sw: {
           sms: { body: '{{tenant.name}}: tunahitaji taarifa zaidi kwa {{case.reference}}. Tembelea {{tracking.url}}' },
           whatsapp: {
-            body: '{{tenant.name}}: tunahitaji taarifa zaidi kwa {{case.reference}}. Tembelea {{tracking.url}}',
+            body: 'Habari kutoka {{tenant.name}}. Tunahitaji taarifa zaidi ili kuendelea na rejeleo {{case.reference}}. Tafadhali jibu kwenye portal au tembelea kiungo hiki: {{tracking.url}} Asante.',
             wa_template_name: 'kisip_more_info_request',
             wa_template_language: 'en_US',
             wa_body_param_keys: ['tenant.name', 'case.reference', 'tracking.url'],
@@ -977,7 +1022,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         en: {
           sms: { body: '{{tenant.name}}: new message on {{case.reference}}. Read: {{tracking.url}}' },
           whatsapp: {
-            body: '{{tenant.name}}: new message on {{case.reference}}. Read: {{tracking.url}}',
+            body: 'Hello from {{tenant.name}}. You have a new message about grievance reference {{case.reference}}. Please read and reply using this link: {{tracking.url}} Thank you.',
             wa_template_name: 'kisip_thread_message_outbound',
             wa_template_language: 'en_US',
             wa_body_param_keys: ['tenant.name', 'case.reference', 'tracking.url'],
@@ -990,7 +1035,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         sw: {
           sms: { body: '{{tenant.name}}: ujumbe mpya kuhusu {{case.reference}}. Soma: {{tracking.url}}' },
           whatsapp: {
-            body: '{{tenant.name}}: ujumbe mpya kuhusu {{case.reference}}. Soma: {{tracking.url}}',
+            body: 'Habari kutoka {{tenant.name}}. Una ujumbe mpya kuhusu rejeleo {{case.reference}}. Tafadhali soma na ujibu kwa kiungo hiki: {{tracking.url}} Asante.',
             wa_template_name: 'kisip_thread_message_outbound',
             wa_template_language: 'en_US',
             wa_body_param_keys: ['tenant.name', 'case.reference', 'tracking.url'],

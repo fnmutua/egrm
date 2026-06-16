@@ -1,4 +1,4 @@
-import { META_WHATSAPP_API_VERSION } from '@egrm/config-schemas';
+import { KISIP_META_WHATSAPP_TEMPLATES, META_WHATSAPP_API_VERSION } from '@egrm/config-schemas';
 
 export interface MetaWhatsAppTemplate {
   name: string;
@@ -336,10 +336,20 @@ export function extractCd09ParamKeysInOrder(body: string): string[] {
   return keys;
 }
 
-/** Convert CD-09 body placeholders ({{party.name}}) to Meta {{1}}, {{2}}, … using param key order. */
-export function cd09BodyToMetaBody(body: string, paramKeys: string[]): string {
-  let out = body;
-  paramKeys.forEach((key, i) => {
+function hasCd09Placeholders(body: string): boolean {
+  return /\{\{\s*[a-z][a-z0-9_.]*\s*\}\}/i.test(body);
+}
+
+/** Convert CD-09 placeholders to Meta {{1}}, {{2}}, … numbered by first appearance in the body. */
+export function cd09BodyToMetaBody(body: string, paramKeys?: string[]): string {
+  const trimmed = body.trim();
+  if (!hasCd09Placeholders(trimmed) && /\{\{\d+\}\}/.test(trimmed)) {
+    return trimmed;
+  }
+  const order = extractCd09ParamKeysInOrder(trimmed);
+  const keys = order.length ? order : (paramKeys ?? []).map((k) => k.trim()).filter(Boolean);
+  let out = trimmed;
+  keys.forEach((key, i) => {
     const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const re = new RegExp(`\\{\\{\\s*${escaped}\\s*\\}\\}`, 'g');
     out = out.replace(re, `{{${i + 1}}}`);
@@ -347,15 +357,11 @@ export function cd09BodyToMetaBody(body: string, paramKeys: string[]): string {
   return out;
 }
 
-/** Prefer configured keys; fall back to extraction when placeholders would remain unmapped. */
+/** Param keys in body appearance order — matches Meta {{1}}, {{2}}, … numbering. */
 export function resolveParamKeysForMeta(body: string, configuredKeys: string[]): string[] {
-  const configured = configuredKeys.map((k) => k.trim()).filter(Boolean);
-  const extracted = extractCd09ParamKeysInOrder(body);
-  if (extracted.length === 0) return configured;
-  if (configured.length === 0) return extracted;
-  const trial = cd09BodyToMetaBody(body, configured);
-  if (/\{\{[a-z][a-z0-9_.]*\}\}/i.test(trial)) return extracted;
-  return configured;
+  const fromBody = extractCd09ParamKeysInOrder(body);
+  if (fromBody.length) return fromBody;
+  return configuredKeys.map((k) => k.trim()).filter(Boolean);
 }
 
 const META_PARAM_EXAMPLES: Record<string, string> = {
@@ -374,11 +380,12 @@ function metaParamExamples(paramKeys: string[]): string[] {
 }
 
 function validateMetaTemplateBody(metaBody: string): void {
-  const leftover = metaBody.match(/\{\{[a-z][a-z0-9_.]*\}\}/gi);
+  const trimmed = metaBody.trim();
+  const leftover = trimmed.match(/\{\{[a-z][a-z0-9_.]*\}\}/gi);
   if (leftover?.length) {
     throw new Error(`Body still has unmapped placeholders: ${leftover.slice(0, 3).join(', ')}`);
   }
-  const nums = [...metaBody.matchAll(/\{\{(\d+)\}\}/g)].map((m) => Number(m[1]));
+  const nums = [...trimmed.matchAll(/\{\{(\d+)\}\}/g)].map((m) => Number(m[1]));
   if (nums.length === 0) {
     throw new Error('Body has no {{1}}…{{n}} variables');
   }
@@ -388,18 +395,30 @@ function validateMetaTemplateBody(metaBody: string): void {
       throw new Error(`Variable numbering must be sequential; missing {{${i}}}`);
     }
   }
+  if (/^\{\{\d+\}\}/.test(trimmed)) {
+    throw new Error('Variables cannot be at the start of the template body');
+  }
+  if (/\{\{\d+\}\}[.!?,;:]*$/.test(trimmed)) {
+    throw new Error('Variables cannot be at the end of the template body');
+  }
 }
 
 export function prepareMetaTemplateBody(
   body: string,
   paramKeys: string[],
+  templateName?: string,
 ): { metaBody: string; paramKeys: string[] } {
+  const canonical = templateName?.trim()
+    ? KISIP_META_WHATSAPP_TEMPLATES[templateName.trim().toLowerCase()]
+    : undefined;
+  if (canonical) {
+    validateMetaTemplateBody(canonical.body);
+    return { metaBody: canonical.body, paramKeys: [...canonical.param_keys] };
+  }
+
   const keys = resolveParamKeysForMeta(body, paramKeys);
   if (keys.length === 0) throw new Error('No body parameter keys');
-  let metaBody = cd09BodyToMetaBody(body.trim(), keys);
-  if (/\{\{\d+\}\}\s*$/.test(metaBody.trim())) {
-    metaBody = `${metaBody.trim()} Thank you.`;
-  }
+  const metaBody = cd09BodyToMetaBody(body.trim(), keys);
   validateMetaTemplateBody(metaBody);
   return { metaBody, paramKeys: keys };
 }
@@ -454,7 +473,7 @@ export async function submitMetaWhatsAppTemplate(
   }
 
   const language = normalizeMetaLanguage(input.language);
-  const { metaBody, paramKeys } = prepareMetaTemplateBody(input.body, input.paramKeys);
+  const { metaBody, paramKeys } = prepareMetaTemplateBody(input.body, input.paramKeys, name);
   if (!metaBody.trim()) throw new Error('WhatsApp body is empty');
 
   const existing = opts?.existing ?? [];
@@ -537,7 +556,7 @@ export async function pushCd09TemplatesToMeta(
     } catch (err) {
       let meta_body = '';
       try {
-        meta_body = prepareMetaTemplateBody(item.body, item.paramKeys).metaBody;
+        meta_body = prepareMetaTemplateBody(item.body, item.paramKeys, item.name).metaBody;
       } catch {
         meta_body = cd09BodyToMetaBody(item.body, item.paramKeys);
       }

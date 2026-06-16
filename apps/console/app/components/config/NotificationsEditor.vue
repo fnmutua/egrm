@@ -23,6 +23,7 @@ import {
   ensureChannelApiConfig,
   migrateLegacySender,
   COMPLAINANT_WHATSAPP_TEMPLATE_ID_SET,
+  KISIP_META_WHATSAPP_TEMPLATES,
 } from '@egrm/config-schemas';
 import type { ProviderField } from '@egrm/config-schemas';
 
@@ -575,15 +576,13 @@ function whatsappPushItemsFromPayload(): Array<{
       if (seen.has(dedupe)) continue;
       seen.add(dedupe);
 
-      const param_keys = effectiveWaParamKeys(variant);
+      const param_keys = canonicalWaParamKeys(name, variant);
       if (!param_keys.length) continue;
 
       // Persist inferred Meta fields in the editor payload.
       variant.wa_template_name = name;
       if (!String(variant.wa_template_language ?? '').trim()) variant.wa_template_language = language;
-      if (!(variant.wa_body_param_keys as string[] | undefined)?.length) {
-        variant.wa_body_param_keys = [...param_keys];
-      }
+      variant.wa_body_param_keys = [...param_keys];
 
       items.push({
         name,
@@ -666,7 +665,7 @@ function pushWhatsAppVariantToMeta(tpl: Record<string, unknown>, loc: string) {
   const language = normalizeMetaLanguage(
     String(variant.wa_template_language ?? props.payload.senders?.whatsapp?.template_language ?? 'en_US'),
   );
-  const param_keys = effectiveWaParamKeys(variant);
+  const param_keys = canonicalWaParamKeys(name, variant);
   if (!param_keys.length) {
     pushToMetaMessage.value = `Set body parameters on ${String(tpl.id)} (${loc}) WhatsApp variant.`;
     return;
@@ -984,6 +983,12 @@ function waParamCountMismatch(
     return `Meta template "${meta.name}" expects ${meta.body_param_count} body parameter(s) ({{1}}…{{${meta.body_param_count}}}) but ${configured} configured — Meta error #132000.`;
   }
   return null;
+}
+
+function canonicalWaParamKeys(templateName: string, variant: Record<string, unknown>): string[] {
+  const canonical = KISIP_META_WHATSAPP_TEMPLATES[templateName.trim().toLowerCase()];
+  if (canonical) return [...canonical.param_keys];
+  return effectiveWaParamKeys(variant);
 }
 
 function effectiveWaParamKeys(variant: Record<string, unknown>): string[] {
