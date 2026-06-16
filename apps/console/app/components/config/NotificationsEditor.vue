@@ -22,6 +22,7 @@ import {
   applyProviderPreset,
   ensureChannelApiConfig,
   migrateLegacySender,
+  COMPLAINANT_WHATSAPP_TEMPLATE_ID_SET,
 } from '@egrm/config-schemas';
 import type { ProviderField } from '@egrm/config-schemas';
 
@@ -226,6 +227,8 @@ const metaTemplates = ref<MetaTemplateRow[]>([]);
 const metaTemplatesLoading = ref(false);
 const metaTemplatesError = ref('');
 const metaTemplatesLoaded = ref(false);
+const pushingToMeta = ref(false);
+const pushToMetaMessage = ref('');
 
 function waAuthHeaderRow(): ProviderField {
   const wa = props.payload.senders?.whatsapp as Record<string, unknown> | undefined;
@@ -435,6 +438,259 @@ function waTemplateItemsForVariant(variant: Record<string, unknown>) {
   return items;
 }
 
+const DEFAULT_WA_BY_TEMPLATE = (() => {
+  const map = new Map<string, Record<string, Record<string, unknown>>>();
+  for (const tpl of defaultNotificationPack().templates) {
+    const byLoc: Record<string, Record<string, unknown>> = {};
+    for (const [loc, channels] of Object.entries(tpl.variants)) {
+      const wa = (channels as { whatsapp?: Record<string, unknown> }).whatsapp;
+      if (wa?.body) byLoc[loc] = { ...wa };
+    }
+    if (Object.keys(byLoc).length) map.set(tpl.id, byLoc);
+  }
+  return map;
+})();
+
+const DEFAULT_WA_PARAM_KEYS = [
+  'party.name',
+  'case.reference',
+  'tenant.name',
+  'tracking.url',
+] as const;
+
+function normalizeMetaLanguage(lang: string): string {
+  const t = lang.trim();
+  if (!t || t === 'en') return 'en_US';
+  if (/^[a-z]{2}_[A-Z]{2}$/.test(t)) return t;
+  if (t === 'sw') return 'sw';
+  return 'en_US';
+}
+
+function extractWaParamKeysFromBody(body: string): string[] {
+  const re = /\{\{\s*([a-z][a-z0-9_.]*)\s*\}\}/g;
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body)) !== null) {
+    const k = m[1]!;
+    if (!seen.has(k)) {
+      seen.add(k);
+      keys.push(k);
+    }
+  }
+  return keys;
+}
+
+function inferMetaTemplateName(templateId: string, variant?: Record<string, unknown>): string {
+  const explicit = String(variant?.wa_template_name ?? '').trim().toLowerCase();
+  if (explicit) return explicit;
+  const def = DEFAULT_WA_BY_TEMPLATE.get(templateId);
+  const fromDef = Object.values(def ?? {})
+    .map((v) => String(v.wa_template_name ?? '').trim().toLowerCase())
+    .find(Boolean);
+  if (fromDef) return fromDef;
+  return `kisip_${templateId.replace(/-/g, '_')}`;
+}
+
+function backfillWhatsAppMeta(tpl: Record<string, unknown>) {
+  const id = String(tpl.id ?? '');
+  const defaults = DEFAULT_WA_BY_TEMPLATE.get(id);
+  const variants = (tpl.variants ??= {}) as Record<string, Record<string, Record<string, unknown>>>;
+  const senderKeys = (props.payload.senders?.whatsapp?.template_body_param_keys as string[] | undefined) ?? [
+    ...DEFAULT_WA_PARAM_KEYS,
+  ];
+
+  for (const loc of Object.keys(variants)) {
+    const wa = variants[loc]?.whatsapp;
+    if (!wa || !String(wa.body ?? '').trim()) continue;
+    const def = defaults?.[loc];
+
+    if (!String(wa.wa_template_name ?? '').trim()) {
+      wa.wa_template_name = def?.wa_template_name ?? inferMetaTemplateName(id, wa);
+    }
+    if (!String(wa.wa_template_language ?? '').trim()) {
+      wa.wa_template_language =
+        def?.wa_template_language ?? props.payload.senders?.whatsapp?.template_language ?? 'en_US';
+    }
+    const keys = wa.wa_body_param_keys as string[] | undefined;
+    if (!keys?.length) {
+      wa.wa_body_param_keys = (def?.wa_body_param_keys as string[] | undefined)?.length
+        ? [...(def.wa_body_param_keys as string[])]
+        : [...senderKeys];
+    }
+  }
+}
+
+function diagnoseWhatsAppPushGaps(): string {
+  const lines: string[] = [];
+  for (const tpl of templates.value) {
+    const id = String(tpl.id ?? '');
+    for (const loc of Object.keys((tpl.variants as Record<string, unknown>) ?? {})) {
+      const variant = (tpl.variants as Record<string, Record<string, Record<string, unknown>>>)?.[loc]?.whatsapp;
+      if (!variant || !String(variant.body ?? '').trim()) continue;
+      const issues: string[] = [];
+      if (!inferMetaTemplateName(id, variant)) issues.push('Meta template name');
+      if (!effectiveWaParamKeys(variant).length) issues.push('body parameters');
+      if (issues.length) lines.push(`• ${id} (${loc}): missing ${issues.join(' and ')}`);
+    }
+  }
+  if (lines.length === 0) {
+    return 'No WhatsApp channel bodies found. Add WhatsApp to a template (or enable WhatsApp sender to mirror SMS).';
+  }
+  return `Could not build Meta payloads:\n${lines.join('\n')}`;
+}
+
+function whatsappPushItemsFromPayload(): Array<{
+  name: string;
+  language: string;
+  body: string;
+  param_keys: string[];
+  source: string;
+}> {
+  for (const tpl of templates.value) backfillWhatsAppMeta(tpl);
+
+  const items: Array<{
+    name: string;
+    language: string;
+    body: string;
+    param_keys: string[];
+    source: string;
+  }> = [];
+  const seen = new Set<string>();
+
+  for (const tpl of templates.value) {
+    const templateId = String(tpl.id ?? '');
+    if (!COMPLAINANT_WHATSAPP_TEMPLATE_ID_SET.has(templateId)) continue;
+
+    const variants = (tpl.variants as Record<string, Record<string, Record<string, unknown>>>) ?? {};
+    for (const loc of Object.keys(variants)) {
+      const variant = (tpl.variants as Record<string, Record<string, Record<string, unknown>>>)?.[loc]?.whatsapp;
+      if (!variant || !String(variant.body ?? '').trim()) continue;
+
+      const name = inferMetaTemplateName(templateId, variant);
+      const language = normalizeMetaLanguage(
+        String(variant.wa_template_language ?? props.payload.senders?.whatsapp?.template_language ?? 'en_US'),
+      );
+      const dedupe = `${name}::${language}`;
+      if (seen.has(dedupe)) continue;
+      seen.add(dedupe);
+
+      const param_keys = effectiveWaParamKeys(variant);
+      if (!param_keys.length) continue;
+
+      // Persist inferred Meta fields in the editor payload.
+      variant.wa_template_name = name;
+      if (!String(variant.wa_template_language ?? '').trim()) variant.wa_template_language = language;
+      if (!(variant.wa_body_param_keys as string[] | undefined)?.length) {
+        variant.wa_body_param_keys = [...param_keys];
+      }
+
+      items.push({
+        name,
+        language,
+        body: String(variant.body),
+        param_keys,
+        source: `${templateId} (${loc})`,
+      });
+    }
+  }
+  return items;
+}
+
+async function pushWhatsAppTemplatesToMeta(items: ReturnType<typeof whatsappPushItemsFromPayload>) {
+  const wa = props.payload.senders?.whatsapp;
+  const waba_id = String(wa?.waba_id ?? '').trim();
+  const token = waAccessToken.value.trim();
+  pushToMetaMessage.value = '';
+
+  if (!token) {
+    pushToMetaMessage.value = 'Enter WhatsApp access token in Sender identities first.';
+    return;
+  }
+  if (!waba_id) {
+    pushToMetaMessage.value = 'Set WABA ID in Sender identities (use Discover).';
+    return;
+  }
+  if (items.length === 0) {
+    pushToMetaMessage.value = diagnoseWhatsAppPushGaps();
+    return;
+  }
+
+  pushingToMeta.value = true;
+  try {
+    const res = await api<{
+      results: Array<{ name: string; language: string; status: string; skipped?: boolean; reason?: string; meta_body?: string }>;
+    }>('/api/v1/config/whatsapp/push-templates', {
+      method: 'POST',
+      body: {
+        waba_id,
+        token: `Bearer ${token}`,
+        templates: items.map(({ name, language, body, param_keys }) => ({
+          name,
+          language,
+          body,
+          param_keys,
+          category: 'UTILITY',
+        })),
+      },
+    });
+
+    const lines = (res.results ?? []).map((r) => {
+      if (r.skipped) return `${r.name} (${r.language}): skipped — ${r.reason ?? r.status}`;
+      if (r.status === 'FAILED') return `${r.name} (${r.language}): failed — ${r.reason ?? 'unknown'}`;
+      return `${r.name} (${r.language}): ${r.status}`;
+    });
+    pushToMetaMessage.value = lines.join('\n');
+    await loadMetaTemplates();
+  } catch (err: unknown) {
+    const e = err as { data?: { message?: string }; statusMessage?: string; message?: string };
+    pushToMetaMessage.value =
+      e.data?.message ?? e.statusMessage ?? e.message ?? 'Failed to push templates to Meta';
+  } finally {
+    pushingToMeta.value = false;
+  }
+}
+
+function pushAllWhatsAppToMeta() {
+  void pushWhatsAppTemplatesToMeta(whatsappPushItemsFromPayload());
+}
+
+function pushWhatsAppVariantToMeta(tpl: Record<string, unknown>, loc: string) {
+  backfillWhatsAppMeta(tpl);
+  const variant = (tpl.variants as Record<string, Record<string, Record<string, unknown>>>)?.[loc]?.whatsapp;
+  if (!variant || !String(variant.body ?? '').trim()) {
+    pushToMetaMessage.value = `No WhatsApp body on ${String(tpl.id)} (${loc}).`;
+    return;
+  }
+  const name = inferMetaTemplateName(String(tpl.id ?? ''), variant);
+  const language = normalizeMetaLanguage(
+    String(variant.wa_template_language ?? props.payload.senders?.whatsapp?.template_language ?? 'en_US'),
+  );
+  const param_keys = effectiveWaParamKeys(variant);
+  if (!param_keys.length) {
+    pushToMetaMessage.value = `Set body parameters on ${String(tpl.id)} (${loc}) WhatsApp variant.`;
+    return;
+  }
+  variant.wa_template_name = name;
+  void pushWhatsAppTemplatesToMeta([
+    {
+      name,
+      language,
+      body: String(variant.body ?? ''),
+      param_keys,
+      source: `${String(tpl.id)} (${loc})`,
+    },
+  ]);
+}
+
+function metaStatusForTemplate(name: string | undefined, language: string | undefined): string | null {
+  const n = String(name ?? '').trim();
+  if (!n) return null;
+  const lang = String(language ?? 'en_US').trim() || 'en_US';
+  const row = metaTemplates.value.find((t) => t.name === n && t.language === lang);
+  return row?.status ?? null;
+}
+
 watch(
   () => [
     senderExpanded.value.has('whatsapp'),
@@ -530,13 +786,26 @@ function syncWhatsappConfig(p: Record<string, unknown>) {
     }
   }
 
-  for (const tpl of (p.templates as { variants: Record<string, Record<string, { body?: string }>> }[]) ?? []) {
+  for (const tpl of (p.templates as { id?: string; variants: Record<string, Record<string, { body?: string }>> }[]) ?? []) {
+    const tplId = String(tpl.id ?? '');
+    if (!COMPLAINANT_WHATSAPP_TEMPLATE_ID_SET.has(tplId)) continue;
+
     for (const loc of Object.keys(tpl.variants ?? {})) {
       const sms = tpl.variants[loc]?.sms;
       if (sms?.body?.trim() && !tpl.variants[loc]?.whatsapp?.body?.trim()) {
-        tpl.variants[loc].whatsapp = { body: sms.body };
+        const def = DEFAULT_WA_BY_TEMPLATE.get(String((tpl as { id?: string }).id ?? ''))?.[loc];
+        tpl.variants[loc].whatsapp = def
+          ? { ...def, body: String(def.body ?? sms.body) }
+          : {
+              body: sms.body,
+              wa_template_language: 'en_US',
+              wa_body_param_keys: [...DEFAULT_WA_PARAM_KEYS],
+            };
       }
     }
+  }
+  for (const tpl of (p.templates as Record<string, unknown>[]) ?? []) {
+    backfillWhatsAppMeta(tpl);
   }
 }
 ensure();
@@ -718,9 +987,18 @@ function waParamCountMismatch(
 }
 
 function effectiveWaParamKeys(variant: Record<string, unknown>): string[] {
-  const keys = variant.wa_body_param_keys as string[] | undefined;
-  if (keys?.length) return keys;
-  return (props.payload.senders?.whatsapp?.template_body_param_keys as string[] | undefined) ?? [];
+  const body = String(variant.body ?? '');
+  const configured = (variant.wa_body_param_keys as string[] | undefined)?.filter(Boolean) ?? [];
+  const extracted = extractWaParamKeysFromBody(body);
+  if (!configured.length) {
+    if (extracted.length) return extracted;
+    return (props.payload.senders?.whatsapp?.template_body_param_keys as string[] | undefined) ?? [];
+  }
+  if (extracted.length > configured.length) return extracted;
+  for (const k of extracted) {
+    if (!configured.includes(k)) return extracted;
+  }
+  return configured;
 }
 
 function waParamKeysStr(variant: Record<string, unknown>): string {
@@ -1082,15 +1360,37 @@ function varToken(name: string) {
     </section>
 
     <section v-if="show('sec-templates')" id="sec-templates" class="space-y-4">
-      <div>
-        <h2 class="text-sm font-semibold">Message templates</h2>
-        <p class="text-xs text-muted mt-0.5">
-          Per locale and channel — only configured variants are saved. Add SMS, email, or in-app per language.
-          Variables:
-          <code v-for="v in TEMPLATE_VARIABLES.slice(0, 5)" :key="v" class="mx-0.5">{{ varToken(v) }}</code>
-          …
-        </p>
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-semibold">Message templates</h2>
+          <p class="text-xs text-muted mt-0.5 max-w-2xl">
+            Per locale and channel — only configured variants are saved. For WhatsApp, use
+            <strong>Push to Meta</strong> to submit templates from here (Meta reviews before they go live).
+            Variables:
+            <code v-for="v in TEMPLATE_VARIABLES.slice(0, 5)" :key="v" class="mx-0.5">{{ varToken(v) }}</code>
+            …
+          </p>
+        </div>
+        <UButton
+          size="xs"
+          variant="soft"
+          icon="i-lucide-upload"
+          :loading="pushingToMeta"
+          @click="pushAllWhatsAppToMeta"
+        >
+          Push all WhatsApp to Meta
+        </UButton>
       </div>
+
+      <UAlert
+        v-if="pushToMetaMessage"
+        color="info"
+        variant="subtle"
+        icon="i-lucide-info"
+        title="Meta template push"
+        class="whitespace-pre-wrap text-xs"
+        :description="pushToMetaMessage"
+      />
 
       <div class="space-y-2">
         <UCard
@@ -1189,6 +1489,27 @@ function varToken(name: string) {
                     :placeholder="`${ch} body — use {{case.reference}} etc.`"
                   />
                   <div v-if="ch === 'whatsapp'" class="mt-2 grid sm:grid-cols-2 gap-2">
+                    <div class="sm:col-span-2 flex flex-wrap items-center justify-between gap-2">
+                      <div class="flex items-center gap-2">
+                        <UBadge
+                          v-if="metaStatusForTemplate(String(getVariant(tpl, loc, ch).wa_template_name ?? ''), String(getVariant(tpl, loc, ch).wa_template_language ?? ''))"
+                          size="xs"
+                          variant="subtle"
+                          :color="metaStatusForTemplate(String(getVariant(tpl, loc, ch).wa_template_name ?? ''), String(getVariant(tpl, loc, ch).wa_template_language ?? '')) === 'APPROVED' ? 'success' : 'warning'"
+                        >
+                          Meta: {{ metaStatusForTemplate(String(getVariant(tpl, loc, ch).wa_template_name ?? ''), String(getVariant(tpl, loc, ch).wa_template_language ?? '')) }}
+                        </UBadge>
+                      </div>
+                      <UButton
+                        size="xs"
+                        variant="soft"
+                        icon="i-lucide-upload"
+                        :loading="pushingToMeta"
+                        @click="pushWhatsAppVariantToMeta(tpl, loc)"
+                      >
+                        Push to Meta
+                      </UButton>
+                    </div>
                     <UFormField label="Meta template" help="Approved template name in Meta Business Manager. Overrides sender default.">
                       <USelectMenu
                         v-if="approvedMetaTemplateItems.length"

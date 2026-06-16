@@ -6,7 +6,13 @@ import { db, schema } from '../db/client.js';
 import { writeAudit } from '../services/audit.js';
 import { invalidateConfigCache } from '../services/config.js';
 import { syncRolesFromOrgAccess } from '../services/org-access.js';
-import { fetchMetaWhatsAppTemplates, discoverMetaWhatsAppAccounts, MetaApiError } from '../services/meta-whatsapp.js';
+import {
+  fetchMetaWhatsAppTemplates,
+  discoverMetaWhatsAppAccounts,
+  pushCd09TemplatesToMeta,
+  submitMetaWhatsAppTemplate,
+  MetaApiError,
+} from '../services/meta-whatsapp.js';
 
 function parseDomain(value: string): ConfigDomain | undefined {
   return (CONFIG_DOMAINS as readonly string[]).includes(value) ? (value as ConfigDomain) : undefined;
@@ -309,6 +315,50 @@ export default async function configRoutes(app: FastifyInstance) {
             ? { discovered_wabas: err.discoveredWabas }
             : {};
         return reply.code(502).send({ error: 'meta_api_error', message, ...discovered });
+      }
+    },
+  );
+
+  /** Submit CD-09 WhatsApp template variant(s) to Meta for approval. */
+  app.post(
+    '/api/v1/config/whatsapp/push-templates',
+    { onRequest: [app.requireAdminConsole] },
+    async (req, reply) => {
+      const body = req.body as {
+        token?: string;
+        waba_id?: string;
+        templates?: Array<{
+          name: string;
+          language: string;
+          body: string;
+          param_keys: string[];
+          category?: string;
+        }>;
+      };
+      const token = String(body.token ?? '').trim();
+      const wabaId = String(body.waba_id ?? '').trim();
+      const templates = body.templates ?? [];
+
+      if (!wabaId) return reply.code(422).send({ error: 'waba_id_required' });
+      if (!token) return reply.code(422).send({ error: 'token_required' });
+      if (templates.length === 0) return reply.code(422).send({ error: 'templates_required' });
+
+      try {
+        const results = await pushCd09TemplatesToMeta(
+          wabaId,
+          token,
+          templates.map((t) => ({
+            name: t.name,
+            language: t.language || 'en_US',
+            body: t.body,
+            paramKeys: t.param_keys ?? [],
+            category: t.category,
+          })),
+        );
+        return { results };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return reply.code(502).send({ error: 'meta_api_error', message });
       }
     },
   );

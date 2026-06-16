@@ -288,6 +288,22 @@ Ensure `NOTIFICATIONS_DEV_LOG_ONLY=0` in `apps/api/.env` for real sends.
 
 ---
 
+## Push templates from CD-09 to Meta (console)
+
+Console → Notifications → **Message templates**:
+
+1. Configure each **WhatsApp** variant: body text, **Meta template** name, **Body parameters** (order = `{{1}}`, `{{2}}`, …).
+2. Set **token + WABA ID** under Sender identities.
+3. Click **Push to Meta** (per template) or **Push all WhatsApp to Meta**.
+4. Meta converts `{{party.name}}` → `{{1}}` automatically from your parameter list.
+5. Templates show **PENDING** until Meta approves (usually minutes to 48h). Reload templates to see status.
+
+Skipped if the same name + language already exists on Meta.
+
+**Limitations:** Meta must approve every submission; you cannot overwrite an approved template in place (create a new name or language variant). Category is submitted as **UTILITY**.
+
+---
+
 ## Rollout checklist
 
 1. [ ] Create & approve `kisip_case_registered` in Meta

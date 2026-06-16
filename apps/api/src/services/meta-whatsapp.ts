@@ -23,8 +23,23 @@ export interface FetchMetaWhatsAppTemplatesResult {
 }
 
 type GraphErrorBody = {
-  error?: { message?: string; code?: number; type?: string; error_subcode?: number };
+  error?: {
+    message?: string;
+    code?: number;
+    type?: string;
+    error_subcode?: number;
+    error_user_msg?: string;
+    error_user_title?: string;
+  };
 };
+
+function formatGraphError(data: GraphErrorBody, httpStatus: number): string {
+  const e = data.error;
+  const parts = [e?.message, e?.error_user_msg, e?.error_user_title].filter(Boolean);
+  if (e?.error_subcode != null) parts.push(`subcode ${e.error_subcode}`);
+  if (e?.code != null) parts.push(`code ${e.code}`);
+  return parts.length ? parts.join(' — ') : `Meta API HTTP ${httpStatus}`;
+}
 
 export class MetaApiError extends Error {
   constructor(
@@ -47,8 +62,7 @@ async function graphGet<T>(url: string, auth: Record<string, string>): Promise<T
   const res = await fetch(url, { headers: auth });
   const data = (await res.json()) as T & GraphErrorBody;
   if (!res.ok) {
-    const msg = data.error?.message ?? `Meta API HTTP ${res.status}`;
-    throw new MetaApiError(msg, data.error?.code);
+    throw new MetaApiError(formatGraphError(data, res.status), data.error?.code);
   }
   return data;
 }
@@ -290,4 +304,252 @@ export async function fetchMetaWhatsAppTemplates(
   const templates = await listTemplates(base, auth, resolvedWabaId);
 
   return { templates, resolvedWabaId, discovered_wabas: discovered };
+}
+
+const META_LANGUAGE_MAP: Record<string, string> = {
+  en: 'en_US',
+  sw: 'sw',
+};
+
+/** Meta rejects bare locale codes like `en`; map CD-09 variant keys to supported WhatsApp locales. */
+export function normalizeMetaLanguage(lang: string): string {
+  const t = lang.trim();
+  if (!t) return 'en_US';
+  if (META_LANGUAGE_MAP[t]) return META_LANGUAGE_MAP[t];
+  if (/^[a-z]{2}_[A-Z]{2}$/.test(t)) return t;
+  return 'en_US';
+}
+
+/** Unique CD-09 placeholder keys in order of first appearance (e.g. party.name → {{1}}). */
+export function extractCd09ParamKeysInOrder(body: string): string[] {
+  const re = /\{\{\s*([a-z][a-z0-9_.]*)\s*\}\}/g;
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body)) !== null) {
+    const k = m[1]!;
+    if (!seen.has(k)) {
+      seen.add(k);
+      keys.push(k);
+    }
+  }
+  return keys;
+}
+
+/** Convert CD-09 body placeholders ({{party.name}}) to Meta {{1}}, {{2}}, … using param key order. */
+export function cd09BodyToMetaBody(body: string, paramKeys: string[]): string {
+  let out = body;
+  paramKeys.forEach((key, i) => {
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`\\{\\{\\s*${escaped}\\s*\\}\\}`, 'g');
+    out = out.replace(re, `{{${i + 1}}}`);
+  });
+  return out;
+}
+
+/** Prefer configured keys; fall back to extraction when placeholders would remain unmapped. */
+export function resolveParamKeysForMeta(body: string, configuredKeys: string[]): string[] {
+  const configured = configuredKeys.map((k) => k.trim()).filter(Boolean);
+  const extracted = extractCd09ParamKeysInOrder(body);
+  if (extracted.length === 0) return configured;
+  if (configured.length === 0) return extracted;
+  const trial = cd09BodyToMetaBody(body, configured);
+  if (/\{\{[a-z][a-z0-9_.]*\}\}/i.test(trial)) return extracted;
+  return configured;
+}
+
+const META_PARAM_EXAMPLES: Record<string, string> = {
+  'party.name': 'Jane Doe',
+  'case.reference': 'GR-2026-001',
+  'tenant.name': 'KISIP',
+  'tenant.short_name': 'KISIP',
+  'tracking.url': 'https://portal.example.com/track/abc',
+  'case.status_label': 'Under review',
+  'case.update_summary': 'Your grievance is being reviewed.',
+  'case.unit_name': 'Nairobi County',
+};
+
+function metaParamExamples(paramKeys: string[]): string[] {
+  return paramKeys.map((k, i) => META_PARAM_EXAMPLES[k] ?? `sample${i + 1}`);
+}
+
+function validateMetaTemplateBody(metaBody: string): void {
+  const leftover = metaBody.match(/\{\{[a-z][a-z0-9_.]*\}\}/gi);
+  if (leftover?.length) {
+    throw new Error(`Body still has unmapped placeholders: ${leftover.slice(0, 3).join(', ')}`);
+  }
+  const nums = [...metaBody.matchAll(/\{\{(\d+)\}\}/g)].map((m) => Number(m[1]));
+  if (nums.length === 0) {
+    throw new Error('Body has no {{1}}…{{n}} variables');
+  }
+  const max = Math.max(...nums);
+  for (let i = 1; i <= max; i++) {
+    if (!nums.includes(i)) {
+      throw new Error(`Variable numbering must be sequential; missing {{${i}}}`);
+    }
+  }
+}
+
+export function prepareMetaTemplateBody(
+  body: string,
+  paramKeys: string[],
+): { metaBody: string; paramKeys: string[] } {
+  const keys = resolveParamKeysForMeta(body, paramKeys);
+  if (keys.length === 0) throw new Error('No body parameter keys');
+  let metaBody = cd09BodyToMetaBody(body.trim(), keys);
+  if (/\{\{\d+\}\}\s*$/.test(metaBody.trim())) {
+    metaBody = `${metaBody.trim()} Thank you.`;
+  }
+  validateMetaTemplateBody(metaBody);
+  return { metaBody, paramKeys: keys };
+}
+
+export interface PushMetaTemplateInput {
+  name: string;
+  language: string;
+  body: string;
+  paramKeys: string[];
+  category?: string;
+}
+
+export interface PushMetaTemplateResult {
+  name: string;
+  language: string;
+  meta_body: string;
+  status: string;
+  id?: string;
+  skipped?: boolean;
+  reason?: string;
+}
+
+async function graphPost<T>(url: string, auth: Record<string, string>, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json()) as T & GraphErrorBody;
+  if (!res.ok) {
+    throw new MetaApiError(formatGraphError(data, res.status), data.error?.code);
+  }
+  return data;
+}
+
+/** Submit one template to Meta for approval (status usually PENDING until Meta reviews). */
+export async function submitMetaWhatsAppTemplate(
+  wabaId: string,
+  bearerToken: string,
+  input: PushMetaTemplateInput,
+  opts?: { existing?: MetaWhatsAppTemplate[] },
+): Promise<PushMetaTemplateResult> {
+  const token = normalizeBearerToken(bearerToken);
+  if (!token) throw new Error('Bearer token required');
+
+  const waba = wabaId.trim();
+  if (!waba) throw new Error('waba_id required');
+
+  const name = input.name.trim().toLowerCase();
+  if (!/^[a-z0-9_]+$/.test(name)) {
+    throw new Error(`Template name "${name}" must be lowercase letters, numbers, and underscores only`);
+  }
+
+  const language = normalizeMetaLanguage(input.language);
+  const { metaBody, paramKeys } = prepareMetaTemplateBody(input.body, input.paramKeys);
+  if (!metaBody.trim()) throw new Error('WhatsApp body is empty');
+
+  const existing = opts?.existing ?? [];
+  const match = existing.find((t) => t.name === name && t.language === language);
+  if (match) {
+    return {
+      name,
+      language,
+      meta_body: metaBody,
+      status: match.status,
+      skipped: true,
+      reason: `Already on Meta (${match.status})`,
+    };
+  }
+
+  const base = `https://graph.facebook.com/${META_WHATSAPP_API_VERSION}`;
+  const auth = { Authorization: `Bearer ${token}` };
+
+  const created = await graphPost<{ id?: string; status?: string; category?: string }>(
+    `${base}/${waba}/message_templates`,
+    auth,
+    {
+      name,
+      language,
+      category: (input.category ?? 'UTILITY').toUpperCase(),
+      components: [
+        {
+          type: 'BODY',
+          text: metaBody,
+          example: { body_text: [metaParamExamples(paramKeys)] },
+        },
+      ],
+    },
+  );
+
+  return {
+    name,
+    language,
+    meta_body: metaBody,
+    status: created.status ?? 'PENDING',
+    id: created.id,
+  };
+}
+
+/** Push multiple CD-09 WhatsApp variants to Meta (deduped by name + language). */
+export async function pushCd09TemplatesToMeta(
+  wabaId: string,
+  bearerToken: string,
+  items: PushMetaTemplateInput[],
+): Promise<PushMetaTemplateResult[]> {
+  const token = normalizeBearerToken(bearerToken);
+  const base = `https://graph.facebook.com/${META_WHATSAPP_API_VERSION}`;
+  const auth = { Authorization: `Bearer ${token}` };
+  const existing = await listTemplates(base, auth, wabaId.trim());
+
+  const seen = new Set<string>();
+  const results: PushMetaTemplateResult[] = [];
+
+  for (const item of items) {
+    const language = normalizeMetaLanguage(item.language);
+    const key = `${item.name.trim().toLowerCase()}::${language}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const normalizedItem = { ...item, language };
+
+    try {
+      const result = await submitMetaWhatsAppTemplate(wabaId, token, normalizedItem, { existing });
+      results.push(result);
+      if (!result.skipped && result.status) {
+        const resolvedKeys = resolveParamKeysForMeta(item.body, item.paramKeys);
+        existing.push({
+          name: result.name,
+          language: result.language,
+          status: result.status,
+          bodyPreview: result.meta_body,
+          bodyParamCount: resolvedKeys.length,
+        });
+      }
+    } catch (err) {
+      let meta_body = '';
+      try {
+        meta_body = prepareMetaTemplateBody(item.body, item.paramKeys).metaBody;
+      } catch {
+        meta_body = cd09BodyToMetaBody(item.body, item.paramKeys);
+      }
+      results.push({
+        name: item.name,
+        language,
+        meta_body,
+        status: 'FAILED',
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return results;
 }
