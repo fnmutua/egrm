@@ -6,6 +6,7 @@ import { db, schema } from '../db/client.js';
 import { writeAudit } from '../services/audit.js';
 import { invalidateConfigCache } from '../services/config.js';
 import { syncRolesFromOrgAccess } from '../services/org-access.js';
+import { fetchMetaWhatsAppTemplates, discoverMetaWhatsAppAccounts, MetaApiError } from '../services/meta-whatsapp.js';
 
 function parseDomain(value: string): ConfigDomain | undefined {
   return (CONFIG_DOMAINS as readonly string[]).includes(value) ? (value as ConfigDomain) : undefined;
@@ -242,6 +243,73 @@ export default async function configRoutes(app: FastifyInstance) {
         });
       }
       return reply.code(outcome.code).send(outcome.body);
+    },
+  );
+
+  /** Discover WhatsApp Business accounts visible to a Meta token (config editor). */
+  app.post(
+    '/api/v1/config/whatsapp/discover-accounts',
+    { onRequest: [app.requireAdminConsole] },
+    async (req, reply) => {
+      const body = req.body as { token?: string };
+      const token = String(body.token ?? '').trim();
+      if (!token) return reply.code(422).send({ error: 'token_required' });
+
+      try {
+        const accounts = await discoverMetaWhatsAppAccounts(token);
+        return { accounts };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return reply.code(502).send({ error: 'meta_api_error', message });
+      }
+    },
+  );
+
+  /** Fetch Meta-approved WhatsApp templates using CD-09 sender credentials (config editor). */
+  app.post(
+    '/api/v1/config/whatsapp/meta-templates',
+    { onRequest: [app.requireAdminConsole] },
+    async (req, reply) => {
+      const body = req.body as { phone_number_id?: string; token?: string; waba_id?: string };
+      const phoneNumberId = String(body.phone_number_id ?? '').trim();
+      const token = String(body.token ?? '').trim();
+      const wabaId = String(body.waba_id ?? '').trim();
+      if (!wabaId && !phoneNumberId) {
+        return reply.code(422).send({
+          error: 'waba_or_phone_required',
+          message: 'WhatsApp Business Account ID (WABA) or phone number ID is required',
+        });
+      }
+      if (!token) {
+        return reply.code(422).send({ error: 'token_required' });
+      }
+
+      try {
+        const { templates, resolvedWabaId, discovered_wabas } = await fetchMetaWhatsAppTemplates(
+          phoneNumberId || undefined,
+          token,
+          { wabaId: wabaId || undefined },
+        );
+        return {
+          waba_id: resolvedWabaId,
+          discovered_wabas,
+          templates: templates.map((t) => ({
+            name: t.name,
+            language: t.language,
+            status: t.status,
+            category: t.category,
+            body_preview: t.bodyPreview,
+            body_param_count: t.bodyParamCount,
+          })),
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const discovered =
+          err instanceof MetaApiError && err.discoveredWabas?.length
+            ? { discovered_wabas: err.discoveredWabas }
+            : {};
+        return reply.code(502).send({ error: 'meta_api_error', message, ...discovered });
+      }
     },
   );
 }

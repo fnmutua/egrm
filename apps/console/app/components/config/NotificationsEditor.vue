@@ -206,9 +206,250 @@ const waConfigInvalid = computed(() => {
   const wa = props.payload.senders?.whatsapp;
   if (!wa?.enabled) return false;
   if (!String(wa.phone_number_id ?? '').trim()) return true;
+  if (!String(wa.waba_id ?? '').trim()) return true;
+  if (!waAccessToken.value.trim()) return true;
   const templateName = String(wa.template_name ?? '').trim().toLowerCase();
   return templateName === 'hello_world';
 });
+
+interface MetaTemplateRow {
+  name: string;
+  language: string;
+  status: string;
+  body_preview?: string;
+  body_param_count: number;
+  label: string;
+  value: string;
+}
+
+const metaTemplates = ref<MetaTemplateRow[]>([]);
+const metaTemplatesLoading = ref(false);
+const metaTemplatesError = ref('');
+const metaTemplatesLoaded = ref(false);
+
+function waAuthHeaderRow(): ProviderField {
+  const wa = props.payload.senders?.whatsapp as Record<string, unknown> | undefined;
+  const headers = (wa?.headers ?? []) as ProviderField[];
+  let row = headers.find((h) => h.key?.toLowerCase() === 'authorization');
+  if (!row) {
+    row = { key: 'Authorization', value: 'Bearer ', secret: true };
+    headers.push(row);
+    if (wa) wa.headers = headers;
+  }
+  return row;
+}
+
+const waAccessToken = computed({
+  get() {
+    const val = waAuthHeaderRow().value ?? '';
+    return val.replace(/^Bearer\s*/i, '');
+  },
+  set(raw: string) {
+    const row = waAuthHeaderRow();
+    row.key = 'Authorization';
+    row.secret = true;
+    const trimmed = raw.trim().replace(/^Bearer\s*/i, '');
+    row.value = trimmed ? `Bearer ${trimmed}` : 'Bearer ';
+    metaTemplatesLoaded.value = false;
+  },
+});
+
+const approvedMetaTemplateItems = computed(() =>
+  metaTemplates.value
+    .filter((t) => t.status === 'APPROVED')
+    .map((t) => ({ value: t.name, label: t.label, language: t.language })),
+);
+
+const metaTemplateItemsWithCustom = computed(() => {
+  const items = [...approvedMetaTemplateItems.value];
+  const current = String(props.payload.senders?.whatsapp?.template_name ?? '').trim();
+  if (current && !items.some((i) => i.value === current)) {
+    items.unshift({ value: current, label: `${current} (manual)`, language: '' });
+  }
+  return items;
+});
+
+interface DiscoveredWabaRow {
+  id: string;
+  name?: string;
+  phone_number_ids: string[];
+  source: string;
+  label: string;
+  value: string;
+}
+
+const discoveredWabas = ref<DiscoveredWabaRow[]>([]);
+const discoveringWabas = ref(false);
+
+const wabaSelectItems = computed(() => {
+  const items = discoveredWabas.value.map((w) => ({
+    value: w.id,
+    label: w.label,
+    phone_number_ids: w.phone_number_ids,
+  }));
+  const current = String(props.payload.senders?.whatsapp?.waba_id ?? '').trim();
+  if (current && !items.some((i) => i.value === current)) {
+    items.unshift({ value: current, label: `${current} (manual)`, phone_number_ids: [] });
+  }
+  return items;
+});
+
+function mapDiscoveredWabas(rows: Array<{ id: string; name?: string; phone_number_ids?: string[]; source?: string }>) {
+  discoveredWabas.value = rows.map((w) => ({
+    id: w.id,
+    name: w.name,
+    phone_number_ids: w.phone_number_ids ?? [],
+    source: w.source ?? '',
+    value: w.id,
+    label: w.name
+      ? `${w.name} — ${w.id}${w.phone_number_ids?.length ? ` (phone ${w.phone_number_ids.join(', ')})` : ''}`
+      : `${w.id}${w.phone_number_ids?.length ? ` (phone ${w.phone_number_ids.join(', ')})` : ''}`,
+  }));
+}
+
+function applyDiscoveredWaba(wabaId: string) {
+  if (!props.payload.senders?.whatsapp) return;
+  props.payload.senders.whatsapp.waba_id = wabaId;
+  const row = discoveredWabas.value.find((w) => w.id === wabaId);
+  if (row?.phone_number_ids.length === 1 && !String(props.payload.senders.whatsapp.phone_number_id ?? '').trim()) {
+    props.payload.senders.whatsapp.phone_number_id = row.phone_number_ids[0];
+  }
+  metaTemplatesLoaded.value = false;
+}
+
+async function discoverWhatsAppAccounts() {
+  const token = waAccessToken.value.trim();
+  metaTemplatesError.value = '';
+  if (!token) {
+    metaTemplatesError.value = 'Enter access token first';
+    return;
+  }
+  discoveringWabas.value = true;
+  try {
+    const res = await api<{ accounts: Array<{ id: string; name?: string; phone_number_ids: string[]; source: string }> }>(
+      '/api/v1/config/whatsapp/discover-accounts',
+      { method: 'POST', body: { token: `Bearer ${token}` } },
+    );
+    mapDiscoveredWabas(res.accounts ?? []);
+    if (res.accounts?.length === 1) {
+      applyDiscoveredWaba(res.accounts[0]!.id);
+    }
+    if (!res.accounts?.length) {
+      metaTemplatesError.value =
+        'No WhatsApp Business accounts found. Regenerate the token with whatsapp_business_management permission in Meta → Business settings → System users.';
+    }
+  } catch (err: unknown) {
+    const e = err as { data?: { message?: string }; statusMessage?: string; message?: string };
+    metaTemplatesError.value =
+      e.data?.message ?? e.statusMessage ?? e.message ?? 'Failed to discover WhatsApp accounts';
+  } finally {
+    discoveringWabas.value = false;
+  }
+}
+
+async function loadMetaTemplates() {
+  const wa = props.payload.senders?.whatsapp;
+  if (!wa) return;
+  const phone_number_id = String(wa.phone_number_id ?? '').trim();
+  const waba_id = String(wa.waba_id ?? '').trim();
+  const token = waAccessToken.value.trim();
+  metaTemplatesError.value = '';
+  if (!token) {
+    metaTemplatesError.value = 'Enter access token first';
+    return;
+  }
+  if (!waba_id && !phone_number_id) {
+    metaTemplatesError.value = 'Enter WABA ID or phone number ID (or click Discover accounts)';
+    return;
+  }
+  metaTemplatesLoading.value = true;
+  try {
+    const res = await api<{
+      waba_id: string;
+      discovered_wabas?: Array<{ id: string; name?: string; phone_number_ids: string[]; source: string }>;
+      templates: Array<{
+        name: string;
+        language: string;
+        status: string;
+        body_preview?: string;
+        body_param_count: number;
+      }>;
+    }>('/api/v1/config/whatsapp/meta-templates', {
+      method: 'POST',
+      body: {
+        phone_number_id: phone_number_id || undefined,
+        waba_id: waba_id || undefined,
+        token: `Bearer ${token}`,
+      },
+    });
+    if (res.waba_id) props.payload.senders.whatsapp.waba_id = res.waba_id;
+    if (res.discovered_wabas?.length) mapDiscoveredWabas(res.discovered_wabas);
+    metaTemplates.value = (res.templates ?? []).map((t) => ({
+      ...t,
+      value: t.name,
+      label:
+        t.status === 'APPROVED'
+          ? `${t.name} (${t.language})`
+          : `${t.name} (${t.language}) — ${t.status}`,
+    }));
+    metaTemplatesLoaded.value = true;
+  } catch (err: unknown) {
+    const e = err as {
+      data?: {
+        message?: string;
+        discovered_wabas?: Array<{ id: string; name?: string; phone_number_ids: string[]; source: string }>;
+      };
+      statusMessage?: string;
+      message?: string;
+    };
+    metaTemplatesError.value =
+      e.data?.message ?? e.statusMessage ?? e.message ?? 'Failed to load templates from Meta';
+    if (e.data?.discovered_wabas?.length) mapDiscoveredWabas(e.data.discovered_wabas);
+    metaTemplates.value = [];
+    metaTemplatesLoaded.value = false;
+  } finally {
+    metaTemplatesLoading.value = false;
+  }
+}
+
+function applyDefaultMetaTemplate(name: string) {
+  if (!props.payload.senders?.whatsapp) return;
+  props.payload.senders.whatsapp.template_name = name;
+  const row = metaTemplates.value.find((t) => t.name === name);
+  if (row?.language) props.payload.senders.whatsapp.template_language = row.language;
+}
+
+function applyWaMetaTemplate(tpl: Record<string, unknown>, locale: string, name: string) {
+  const variant = getVariant(tpl, locale, 'whatsapp');
+  variant.wa_template_name = name;
+  const row = metaTemplates.value.find((t) => t.name === name);
+  if (row?.language) variant.wa_template_language = row.language;
+}
+
+function waTemplateItemsForVariant(variant: Record<string, unknown>) {
+  const current = String(variant.wa_template_name ?? '').trim();
+  const items = [...approvedMetaTemplateItems.value];
+  if (current && !items.some((i) => i.value === current)) {
+    items.unshift({ value: current, label: `${current} (manual)`, language: '' });
+  }
+  return items;
+}
+
+watch(
+  () => [
+    senderExpanded.value.has('whatsapp'),
+    waAccessToken.value,
+    props.payload.senders?.whatsapp?.phone_number_id,
+    props.payload.senders?.whatsapp?.waba_id,
+  ],
+  () => {
+    if (!senderExpanded.value.has('whatsapp')) return;
+    if (metaTemplatesLoaded.value || metaTemplatesLoading.value) return;
+    const phone = String(props.payload.senders?.whatsapp?.phone_number_id ?? '').trim();
+    const waba = String(props.payload.senders?.whatsapp?.waba_id ?? '').trim();
+    if (waAccessToken.value.trim() && phone && waba) void loadMetaTemplates();
+  },
+);
 
 function ensure() {
   const p = props.payload;
@@ -450,6 +691,36 @@ function templateLocales(tpl: Record<string, unknown>): string[] {
 
 function getVariant(tpl: Record<string, unknown>, locale: string, channel: string) {
   return (tpl.variants as Record<string, Record<string, Record<string, unknown>>>)[locale][channel]!;
+}
+
+function countParamKeys(keys: string[] | undefined): number {
+  return keys?.filter((k) => k.trim()).length ?? 0;
+}
+
+function metaTemplateByName(name: string | undefined): MetaTemplateRow | undefined {
+  const n = String(name ?? '').trim();
+  if (!n) return undefined;
+  return metaTemplates.value.find((t) => t.name === n);
+}
+
+function waParamCountMismatch(
+  templateName: string | undefined,
+  paramKeys: string[] | undefined,
+  fallbackKeys?: string[],
+): string | null {
+  const meta = metaTemplateByName(templateName);
+  if (!meta?.body_param_count) return null;
+  const configured = countParamKeys(paramKeys?.length ? paramKeys : fallbackKeys);
+  if (configured !== meta.body_param_count) {
+    return `Meta template "${meta.name}" expects ${meta.body_param_count} body parameter(s) ({{1}}…{{${meta.body_param_count}}}) but ${configured} configured — Meta error #132000.`;
+  }
+  return null;
+}
+
+function effectiveWaParamKeys(variant: Record<string, unknown>): string[] {
+  const keys = variant.wa_body_param_keys as string[] | undefined;
+  if (keys?.length) return keys;
+  return (props.payload.senders?.whatsapp?.template_body_param_keys as string[] | undefined) ?? [];
 }
 
 function waParamKeysStr(variant: Record<string, unknown>): string {
@@ -919,7 +1190,19 @@ function varToken(name: string) {
                   />
                   <div v-if="ch === 'whatsapp'" class="mt-2 grid sm:grid-cols-2 gap-2">
                     <UFormField label="Meta template" help="Approved template name in Meta Business Manager. Overrides sender default.">
+                      <USelectMenu
+                        v-if="approvedMetaTemplateItems.length"
+                        :model-value="String(getVariant(tpl, loc, ch).wa_template_name ?? '')"
+                        :items="waTemplateItemsForVariant(getVariant(tpl, loc, ch))"
+                        value-key="value"
+                        label-key="label"
+                        searchable
+                        class="w-full font-mono text-xs"
+                        placeholder="Select Meta template…"
+                        @update:model-value="applyWaMetaTemplate(tpl, loc, $event)"
+                      />
                       <UInput
+                        v-else
                         v-model="getVariant(tpl, loc, ch).wa_template_name"
                         class="w-full font-mono text-xs"
                         placeholder="kisip_case_registered"
@@ -943,6 +1226,28 @@ function varToken(name: string) {
                         placeholder="party.name, case.reference, tenant.name, tracking.url"
                         @update:model-value="setWaParamKeys(getVariant(tpl, loc, ch), $event)"
                       />
+                      <p
+                        v-if="waParamCountMismatch(
+                          String(getVariant(tpl, loc, ch).wa_template_name ?? ''),
+                          getVariant(tpl, loc, ch).wa_body_param_keys as string[] | undefined,
+                          payload.senders.whatsapp.template_body_param_keys,
+                        )"
+                        class="text-xs text-error mt-1"
+                      >
+                        {{
+                          waParamCountMismatch(
+                            String(getVariant(tpl, loc, ch).wa_template_name ?? ''),
+                            getVariant(tpl, loc, ch).wa_body_param_keys as string[] | undefined,
+                            payload.senders.whatsapp.template_body_param_keys,
+                          )
+                        }}
+                      </p>
+                      <p
+                        v-else-if="metaTemplateByName(String(getVariant(tpl, loc, ch).wa_template_name ?? ''))?.body_preview"
+                        class="text-xs text-muted mt-1 font-mono whitespace-pre-wrap"
+                      >
+                        Meta body: {{ metaTemplateByName(String(getVariant(tpl, loc, ch).wa_template_name ?? ''))?.body_preview }}
+                      </p>
                     </UFormField>
                   </div>
                 </div>
@@ -1202,7 +1507,43 @@ function varToken(name: string) {
             variant="subtle"
             icon="i-lucide-triangle-alert"
             title="WhatsApp not ready"
-            description="Set phone number ID, Authorization Bearer token, and replace hello_world with an approved Meta template."
+            description="Enter access token, phone number ID, and WhatsApp Business Account ID (WABA), then load templates."
+          />
+          <UAlert
+            v-else-if="metaTemplatesError"
+            color="warning"
+            variant="subtle"
+            icon="i-lucide-triangle-alert"
+            title="Could not load Meta templates"
+          >
+            <p class="text-sm whitespace-pre-wrap">{{ metaTemplatesError }}</p>
+            <UButton
+              v-if="waAccessToken"
+              class="mt-2"
+              size="xs"
+              variant="soft"
+              icon="i-lucide-search"
+              :loading="discoveringWabas"
+              @click="discoverWhatsAppAccounts"
+            >
+              Discover WhatsApp accounts
+            </UButton>
+          </UAlert>
+          <UAlert
+            v-else-if="metaTemplatesLoaded && approvedMetaTemplateItems.length === 0"
+            color="warning"
+            variant="subtle"
+            icon="i-lucide-info"
+            title="No approved templates"
+            description="Meta returned no APPROVED templates for this account. Create templates in Meta Business Manager first."
+          />
+          <UAlert
+            v-else-if="metaTemplatesLoaded"
+            color="success"
+            variant="subtle"
+            icon="i-lucide-check"
+            :title="`${approvedMetaTemplateItems.length} approved template(s) loaded`"
+            description="Pick a default template below or override per notification rule."
           />
           <UAlert
             v-else
@@ -1210,11 +1551,86 @@ function varToken(name: string) {
             variant="subtle"
             icon="i-lucide-info"
             title="Meta message templates"
-            description="Business-initiated WhatsApp uses approved Meta templates. Set a default template below or per notification rule. The body text is kept for preview and logs."
+            description="Enter your access token, phone number ID, and WABA ID, then load templates from Meta. Business-initiated WhatsApp requires approved templates."
           />
+
           <div class="grid sm:grid-cols-2 gap-3">
+            <UFormField label="Access token" help="Permanent token from Meta → WhatsApp → API Setup. Enter this first." class="sm:col-span-2" required>
+              <UInput
+                v-model="waAccessToken"
+                type="password"
+                class="w-full font-mono text-xs"
+                placeholder="EAAxxxx…"
+                autocomplete="off"
+              />
+            </UFormField>
+            <UFormField
+              label="WhatsApp Business Account ID (WABA)"
+              help="Not the Business Portfolio ID. Click Discover accounts after entering token — or find WABA ID in WhatsApp Manager → Account overview."
+              class="sm:col-span-2"
+              required
+            >
+              <div class="flex gap-2">
+                <USelectMenu
+                  v-if="wabaSelectItems.length"
+                  :model-value="String(payload.senders.whatsapp.waba_id ?? '')"
+                  :items="wabaSelectItems"
+                  value-key="value"
+                  label-key="label"
+                  searchable
+                  class="flex-1 font-mono text-xs"
+                  placeholder="Select WABA account…"
+                  @update:model-value="applyDiscoveredWaba"
+                />
+                <UInput
+                  v-else
+                  v-model="payload.senders.whatsapp.waba_id"
+                  class="flex-1 font-mono text-xs"
+                  placeholder="123456789012345"
+                  @update:model-value="metaTemplatesLoaded = false"
+                />
+                <UButton
+                  variant="soft"
+                  icon="i-lucide-search"
+                  :loading="discoveringWabas"
+                  @click="discoverWhatsAppAccounts"
+                >
+                  Discover
+                </UButton>
+              </div>
+            </UFormField>
+            <UFormField label="Phone number ID" help="Numeric ID from Meta → WhatsApp → API Setup (not your +254 display number)." required>
+              <UInput v-model="payload.senders.whatsapp.phone_number_id" class="w-full font-mono" placeholder="1150176101510853" />
+            </UFormField>
+            <UFormField label="Templates" help="Fetch approved templates using token, WABA ID, and phone number ID.">
+              <UButton
+                class="w-full justify-center"
+                variant="soft"
+                icon="i-lucide-refresh-cw"
+                :loading="metaTemplatesLoading"
+                @click="loadMetaTemplates"
+              >
+                Load templates from Meta
+              </UButton>
+            </UFormField>
             <UFormField label="Default Meta template" help="Fallback when a notification rule omits its own template name.">
-              <UInput v-model="payload.senders.whatsapp.template_name" class="w-full font-mono" placeholder="kisip_case_registered" />
+              <USelectMenu
+                v-if="metaTemplateItemsWithCustom.length"
+                :model-value="String(payload.senders.whatsapp.template_name ?? '')"
+                :items="metaTemplateItemsWithCustom"
+                value-key="value"
+                label-key="label"
+                searchable
+                class="w-full font-mono text-xs"
+                placeholder="Select template…"
+                @update:model-value="applyDefaultMetaTemplate"
+              />
+              <UInput
+                v-else
+                v-model="payload.senders.whatsapp.template_name"
+                class="w-full font-mono"
+                placeholder="kisip_case_registered"
+              />
             </UFormField>
             <UFormField label="Default template language">
               <UInput v-model="payload.senders.whatsapp.template_language" class="w-full font-mono" placeholder="en_US" />
@@ -1230,12 +1646,23 @@ function varToken(name: string) {
                 placeholder="party.name, case.reference, tenant.name, tracking.url"
                 @update:model-value="setSenderParamKeys(payload.senders.whatsapp, $event)"
               />
+              <p
+                v-if="waParamCountMismatch(
+                  String(payload.senders.whatsapp.template_name ?? ''),
+                  payload.senders.whatsapp.template_body_param_keys,
+                )"
+                class="text-xs text-error mt-1"
+              >
+                {{
+                  waParamCountMismatch(
+                    String(payload.senders.whatsapp.template_name ?? ''),
+                    payload.senders.whatsapp.template_body_param_keys,
+                  )
+                }}
+              </p>
             </UFormField>
             <UFormField label="Display number" help="Business number shown to recipients (E.164).">
               <UInput v-model="payload.senders.whatsapp.display_number" class="w-full" placeholder="+254…" />
-            </UFormField>
-            <UFormField label="Phone number ID" help="Numeric ID from Meta → WhatsApp → API Setup (not your +254 display number).">
-              <UInput v-model="payload.senders.whatsapp.phone_number_id" class="w-full font-mono" placeholder="1150176101510853" />
             </UFormField>
             <UFormField label="Provider preset">
               <USelectMenu
@@ -1271,6 +1698,7 @@ function varToken(name: string) {
             </div>
             <div
               v-for="(row, hi) in payload.senders.whatsapp.headers"
+              v-show="row.key?.toLowerCase() !== 'authorization'"
               :key="`wh-${hi}`"
               class="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-center"
             >

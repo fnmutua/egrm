@@ -241,6 +241,7 @@ export const notificationLog = pgTable('notification_log', {
   renderedPreview: text('rendered_preview'),
   status: text('status').notNull().default('queued'),
   providerMessageId: text('provider_message_id'),
+  lastError: text('last_error'),
   attempts: integer('attempts').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

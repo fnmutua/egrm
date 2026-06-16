@@ -376,7 +376,8 @@ export async function dispatchNotificationOutbox(outboxId: string): Promise<void
         .set({
           status: sent === addresses.length ? 'sent' : 'sent:partial',
           providerMessageId: lastMessageId,
-          renderedPreview: body.slice(0, 500),
+          renderedPreview: body.slice(0, 2000),
+          lastError: sent < addresses.length ? (lastError ?? null) : null,
           updatedAt: new Date(),
           attempts: log.attempts + 1,
         })
@@ -386,7 +387,8 @@ export async function dispatchNotificationOutbox(outboxId: string): Promise<void
         .update(schema.notificationLog)
         .set({
           status: 'failed',
-          renderedPreview: `${body.slice(0, 400)} [err: ${(lastError ?? 'unknown').slice(0, 80)}]`,
+          renderedPreview: body.slice(0, 2000),
+          lastError: lastError ?? 'unknown',
           updatedAt: new Date(),
           attempts: log.attempts + 1,
         })

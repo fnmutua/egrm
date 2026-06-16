@@ -12,6 +12,7 @@ Reference for creating and wiring **approved Meta Business Manager templates** t
 |------|--------|
 | Meta WhatsApp Business account | [business.facebook.com](https://business.facebook.com) |
 | Phone number ID (numeric) | WhatsApp → API Setup |
+| **WhatsApp Business Account ID (WABA)** | WhatsApp Manager → Account overview |
 | Bearer token | CD-09 → Senders → WhatsApp → Authorization header |
 | Portal tracking base URL | API env `PUBLIC_PORTAL_BASE_URL` (not `localhost` in production) |
 
@@ -25,6 +26,7 @@ Reference for creating and wiring **approved Meta Business Manager templates** t
 - Do **not** start or end the body on a variable — add trailing text like `Thank you.`
 - Template **names** in Meta must match CD-09 **exactly** (lowercase, underscores).
 - Do **not** use `hello_world` in production (sandbox only).
+- **Body parameter count must match Meta exactly** — if the approved template has `{{1}}`…`{{4}}`, CD-09 must list exactly **4** comma-separated keys in the same order. Mismatch causes Meta error `#132000`.
 
 ---
 
@@ -38,6 +40,7 @@ Reference for creating and wiring **approved Meta Business Manager templates** t
 |-------|--------|
 | Provider | Meta Cloud API |
 | Phone number ID | Numeric ID from Meta API Setup |
+| **WABA ID** | WhatsApp Business Account ID from WhatsApp Manager |
 | Default Meta template | `kisip_case_registered` (fallback) |
 | Default template language | `en_US` |
 | Default body parameters | `party.name, case.reference, tenant.name, tracking.url` |

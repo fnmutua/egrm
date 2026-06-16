@@ -21,6 +21,7 @@ export interface SmsSenderConfig extends ChannelApiConfig {
 export interface WhatsAppSenderConfig extends ChannelApiConfig {
   mode?: 'live';
   phone_number_id?: string;
+  waba_id?: string;
   display_number?: string;
   template_name?: string;
   template_language?: string;

@@ -100,6 +100,7 @@ interface CaseNotification {
   status: string;
   rendered_preview: string | null;
   provider_message_id: string | null;
+  last_error: string | null;
   attempts: number;
   created_at: string;
   updated_at: string;
@@ -261,6 +262,10 @@ function notificationStatusColor(status: string): string {
   if (status.startsWith('suppressed:')) return 'neutral';
   if (status.startsWith('failed')) return 'error';
   return 'neutral';
+}
+
+function notificationHasError(n: CaseNotification): boolean {
+  return n.status.startsWith('failed') || Boolean(n.last_error);
 }
 
 function formatNotificationStatus(status: string): string {
@@ -1263,6 +1268,7 @@ onMounted(async () => {
                 <th class="px-4 py-3 font-medium">Template</th>
                 <th class="px-4 py-3 font-medium">Status</th>
                 <th class="px-4 py-3 font-medium">Preview</th>
+                <th class="px-4 py-3 font-medium">Error / debug</th>
               </tr>
             </thead>
             <tbody>
@@ -1294,8 +1300,18 @@ onMounted(async () => {
                     {{ n.provider_message_id }}
                   </div>
                 </td>
-                <td class="px-4 py-3 text-xs text-muted max-w-xs">
-                  <p class="line-clamp-3 whitespace-pre-wrap">{{ n.rendered_preview ?? '—' }}</p>
+                <td class="px-4 py-3 text-xs text-muted max-w-md">
+                  <p class="whitespace-pre-wrap break-words">{{ n.rendered_preview ?? '—' }}</p>
+                </td>
+                <td class="px-4 py-3 text-xs max-w-md">
+                  <p
+                    v-if="n.last_error"
+                    class="whitespace-pre-wrap break-words font-mono text-error bg-error/5 border border-error/20 rounded p-2"
+                  >
+                    {{ n.last_error }}
+                  </p>
+                  <p v-else-if="notificationHasError(n)" class="text-muted">No error detail recorded</p>
+                  <span v-else class="text-muted">—</span>
                 </td>
               </tr>
             </tbody>

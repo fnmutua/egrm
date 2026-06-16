@@ -357,6 +357,8 @@ export const whatsappSenderIdentity = channelApiConfig.extend({
   /** Production Meta Cloud API — uses approved message templates for business-initiated sends. */
   mode: z.literal('live').default('live'),
   phone_number_id: z.string().optional(),
+  /** WhatsApp Business Account ID — from Meta → WhatsApp Manager → Account overview. */
+  waba_id: z.string().optional(),
   display_number: z.string().optional(),
   /** Default Meta template when a notification rule omits wa_template_name. */
   template_name: z.string().optional(),
@@ -536,6 +538,13 @@ export const cd09Notifications = z
           code: z.ZodIssueCode.custom,
           path: ['senders', 'whatsapp', 'phone_number_id'],
           message: 'Phone number ID is required for WhatsApp.',
+        });
+      }
+      if (!wa.waba_id?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['senders', 'whatsapp', 'waba_id'],
+          message: 'WhatsApp Business Account ID (WABA) is required for WhatsApp.',
         });
       }
       const templateName = wa.template_name?.trim().toLowerCase();
