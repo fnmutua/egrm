@@ -40,7 +40,7 @@ Priorities: **M**ust (MVP), **S**hould (fast-follow), **C**ould (differentiator)
 | GEN-INT-17 | S | Registered complainant accounts (OTP) with case history | K2 FR-PUB-07 |
 | GEN-INT-18 | S | Knowledge base: categories, search, featured, multi-language; canned responses for staff | K2 FR-KB-01–03 |
 
-## GEN-AI — Chatbot & AI assistance (spec 05 §7) — all opt-in, default off
+## GEN-AI — Chatbot & AI assistance ([16-ai-integration.md](16-ai-integration.md)) — all opt-in, default off
 
 | ID | P | Requirement | Source |
 |---|---|---|---|

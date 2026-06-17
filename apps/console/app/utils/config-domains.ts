@@ -35,6 +35,15 @@ export const CD17_SUBSECTIONS = [
   { id: 'sec-notify', label: 'Notifications' },
 ];
 
+export const CD16_SUBSECTIONS = [
+  { id: 'sec-overview', label: 'Overview & limits' },
+  { id: 'sec-providers', label: 'Provider profiles' },
+  { id: 'sec-capabilities', label: 'Staff capabilities' },
+  { id: 'sec-chatbot', label: 'Chatbot' },
+  { id: 'sec-safety', label: 'Safety' },
+  { id: 'sec-rag', label: 'RAG indexing' },
+];
+
 export const CD06_SUBSECTIONS = [
   { id: 'sec-general', label: 'Form settings' },
   { id: 'sec-complainant', label: 'Complainant' },
@@ -218,8 +227,9 @@ export const DOMAIN_CATALOGUE: DomainMeta[] = [
       { id: 'sec-sections', label: 'Sections' },
       { id: 'sec-widgets', label: 'Widgets' },
     ] },
-  { domain: 'cd16_ai', cd: 'CD-16', title: 'Chatbot & AI', icon: 'i-lucide-bot', strict: false,
-    description: 'AI provider profiles, chatbot persona/intents, per-capability flags, safety policy. Default off.' },
+  { domain: 'cd16_ai', cd: 'CD-16', title: 'Chatbot & AI', icon: 'i-lucide-bot', strict: true,
+    description: 'OpenAI, xAI, Azure, Ollama profiles; token budgets; staff AI capabilities; chatbot; safety & RAG.',
+    subsections: CD16_SUBSECTIONS },
 ];
 
 export const domainMeta = (domain: string) => DOMAIN_CATALOGUE.find((d) => d.domain === domain);

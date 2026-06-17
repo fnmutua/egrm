@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import bcrypt from 'bcryptjs';
 import { and, eq, sql } from 'drizzle-orm';
 import type { ConfigDomain } from '@egrm/core';
+import { DEFAULT_CD16_AI } from '@egrm/config-schemas';
 import { validateConfig, defaultNotificationPack, defaultStaffProfileFields, DEFAULT_ATTACHMENT_KINDS, DEFAULT_ATTACHMENT_POLICY, DEFAULT_CORRESPONDENCE_POLICY, mergeMissingNotificationItems, mergeMissingIntakeFormDefaults, type Cd06IntakeForms } from '@egrm/config-schemas';
 import type { Cd09Notifications, Cd10OrgAccess } from '@egrm/config-schemas';
 import { db, pool, schema } from './client.js';
@@ -750,6 +751,11 @@ export async function runSeed() {
     satisfaction_survey: true,
     custom_dashboards: true,
     ai_assistance: true,
+  }, admin!.id);
+
+  await upsertActiveConfig(kisip!.id, 'cd16_ai', {
+    ...DEFAULT_CD16_AI,
+    enabled: true,
   }, admin!.id);
 
   await upsertActiveConfig(kisip!.id, 'cd10_org_access', kisipOrgAccess, admin!.id);

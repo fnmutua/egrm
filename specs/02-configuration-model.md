@@ -144,7 +144,7 @@ Modeled on the proven `plus-admin` dynamic-dashboard system (dashboard → secti
 | Audience & scoping | widgets render only for permitted roles; data auto-filtered to the viewer's jurisdiction scope and sensitivity clearance |
 
 ### CD-16 Chatbot & AI assistance (opt-in)
-Detailed in spec 05 §7. Default-off; each capability independently switchable:
+Detailed in [16-ai-integration.md](16-ai-integration.md). Default-off; each capability independently switchable:
 
 | Item | Notes |
 |---|---|
@@ -153,7 +153,7 @@ Detailed in spec 05 §7. Default-off; each capability independently switchable:
 | **Staff/triage capabilities** | per-capability flags + model choice: auto-categorization, sensitivity detection, semantic dedupe, summarization, translation, draft responses, KB answer assist |
 | **Safety policy** | PII redaction before external calls, sensitive-class processing policy, confidence thresholds, per-capability kill switches (audited) |
 
-Platform-level AI governance rules (human-in-the-loop, audit of every suggestion, sensitive fail-safe) are **not** configurable — see spec 05 §7.3.
+Platform-level AI governance rules (human-in-the-loop, audit of every suggestion, sensitive fail-safe) are **not** configurable — see [16-ai-integration.md](16-ai-integration.md) §4.
 
 ### CD-17 Complainant correspondence
 Detailed in spec 15. Per tenant:

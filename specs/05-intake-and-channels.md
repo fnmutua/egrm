@@ -12,7 +12,7 @@ All channels normalize into one **standardized intake dataset** and one unified 
 | **SMS** | Notifications always; optional structured intake | Provider profile, sender ID, opt-in rules | If intake enabled: free-text → `requires_completion` triage queue |
 | **Hotline / IVR** | Operator-assisted | Telephony metadata fields (call id, operator), scripts, callback policy | As assisted intake |
 | **Email (inbound)** | Semi-structured | Monitored mailboxes, parsing rules, auto-ack | Subject/body → summary/description; `requires_completion` |
-| **Chatbot** (opt-in, §7) | Conversational self-service (web widget, WhatsApp) | AI provider profile, persona/tone, languages, scope of questions, escalation-to-human rules | Guided slot-filling to the same channel minimum as USSD; transcript attached; `requires_completion` if incomplete |
+| **Chatbot** (opt-in) | Conversational self-service (web widget, WhatsApp) | AI provider profile, persona/tone, languages, scope of questions, escalation-to-human rules | Guided slot-filling to the same channel minimum as USSD; transcript attached; `requires_completion` if incomplete |
 | **Partner API** | System-to-system | API keys, field mapping, allowed case types | Full dataset per API contract |
 
 Chatbot intake is **default-off platform-wide** and activates only by explicit tenant opt-in (KUSP2 prohibits it via FR-PUB-15 — its tenant profile keeps the flag off; other tenants may enable it).
@@ -93,45 +93,10 @@ ack(case)      -> channel-appropriate acknowledgement payload
 
 Adapters are stateless against the intake pipeline; new channels (e.g. WhatsApp later) are added by implementing the contract + a config block, with no core changes.
 
-## 7. Chatbot & AI assistance (opt-in modules, CD-16)
+## 7. Chatbot & AI assistance
 
-Both are feature-flagged off by default and configured per tenant. Precedent: the KISIP codebase already runs an AI document service (separate `document_ai` Postgres database, chunked document embeddings, OpenAI/xAI keys) — the generic platform formalizes that pattern behind governance rules.
+Opt-in modules configured in **CD-16** and activated via **CD-14** feature flags (`chatbot_intake`, `ai_assistance`). Both default off.
 
-### 7.1 Chatbot intake (conversational channel)
+The chatbot is a **channel adapter** (§6) feeding the standard intake pipeline. Staff AI capabilities are suggestion-only with mandatory human acceptance.
 
-A chatbot is **just another channel adapter** feeding the standard intake pipeline — it never has its own case-creation path.
-
-| Aspect | Specification |
-|---|---|
-| **Surfaces** | Web portal widget; WhatsApp/Telegram via gateway adapter; same engine behind both |
-| **Conversation design** | Guided **slot-filling** over the case type's form definition (CD-06): the bot asks for the configured channel-minimum fields (like USSD), confirms a read-back summary, then submits. Free-form storytelling is allowed — the AI extracts candidate field values, but every extracted value is **confirmed with the complainant before submission** |
-| **Scope control** | Tenant-configured allowed intents: file a case, check status (reference + verifier, same rules as portal tracking), answer FAQs from the knowledge base (RAG over published articles only). Anything else → polite refusal + handoff |
-| **Human handoff** | Always available ("talk to a person") → creates an assisted-intake callback request or transfers to hotline; mandatory automatic handoff when sensitivity signals fire (§7.3) |
-| **Transparency** | The bot identifies itself as automated at conversation start (configurable text, presence enforced — same pattern as the free-of-charge statement); transcript stored on the case as channel metadata |
-| **Anonymity & consent** | Anonymous path supported per tenant policy; consent captured conversationally before any PII is taken, recorded on `consent_record` like any channel |
-
-### 7.2 AI assistance for staff & triage
-
-Each capability is an independent flag (tenant may enable some and not others):
-
-| Capability | What it does | Guardrail |
-|---|---|---|
-| **Auto-categorization** | Suggests category, case type, priority from the description | Suggestion only — pre-fills triage fields, staff confirm; confidence shown |
-| **Sensitivity detection** | Flags probable GBV/SEA-SH, corruption, threats-of-harm content at intake | High-recall trigger: a positive flag immediately applies the sensitivity class's *restrictions* (visibility, redaction) pending human confirmation; never auto-dismisses |
-| **Semantic duplicate detection** | Embedding similarity against recent cases, augmenting the rule-based dedupe (spec 05 §2) | Same outcomes as configured dedupe rule: warn / link / merge queue |
-| **Summarization** | Case summary, timeline digest, thread recap for handover/escalation | Labeled as AI-generated; regenerable; never replaces the original text |
-| **Translation & language detection** | Detects submission language; provides working translations for staff | Original always preserved; outbound complainant messages use human-approved templates, not machine translation, unless tenant opts in |
-| **Draft responses** | Suggests replies/resolution summaries from canned responses + case context | Staff edit/approve before send; drafts logged |
-| **KB answer assist (RAG)** | Answers public FAQ questions from published knowledge-base articles with citations | Published, non-sensitive content only; "I don't know" fallback |
-
-### 7.3 AI governance (platform rules, non-configurable)
-
-1. **Human in the loop for every case decision.** AI never changes status, assigns, closes, rejects, or sends complainant-facing free text on its own. Its outputs are suggestions that a permissioned human accepts — acceptance is the audited action.
-2. **Sensitive-case fail-safe.** Sensitivity signals escalate restrictions immediately but only a designated human can clear them. Sensitive-case content is excluded from AI processing unless the tenant's sensitivity policy explicitly allows it (and then only via the approved provider).
-3. **PII minimization.** PII fields are stripped/pseudonymized before prompts leave the platform; provider profile declares data residency and a no-training contractual flag; on-prem/local model deployment supported for gov-hosted tenants.
-4. **Full audit.** Every AI call logged: capability, model/provider+version, input hash, suggestion, confidence, accept/reject decision and deciding user. Suggestions are reproducible evidence in appeals.
-5. **Evaluation & drift.** Per-capability quality dashboards (acceptance rate, override rate, false-positive sensitivity flags); tenant can disable any capability instantly (kill switch, audited like notification switches).
-
-### CD-16 config block (summary)
-
-Provider profiles (OpenAI/Azure/xAI/local; keys in vault), per-capability enable flags + model selection, chatbot persona/locales/intents/handoff rules, PII redaction policy, sensitivity-processing policy, confidence thresholds, RAG corpus selection.
+**Full specification:** [16-ai-integration.md](16-ai-integration.md) — capabilities, governance, data model (`ai_interaction`, `chatbot_session`), APIs, PII redaction, UI, and implementation plan.

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, desc, eq } from 'drizzle-orm';
 import { CONFIG_DOMAINS, canAccessConfigDomain, configDomainPermission, type ConfigDomain } from '@egrm/core';
-import { validateConfig, type Cd10OrgAccess } from '@egrm/config-schemas';
+import { validateConfig, type Cd10OrgAccess, aiProviderProfile } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
 import { writeAudit } from '../services/audit.js';
 import { invalidateConfigCache } from '../services/config.js';
@@ -13,6 +13,7 @@ import {
   submitMetaWhatsAppTemplate,
   MetaApiError,
 } from '../services/meta-whatsapp.js';
+import { probeAiProviderProfile } from '../services/ai-provider.js';
 
 function parseDomain(value: string): ConfigDomain | undefined {
   return (CONFIG_DOMAINS as readonly string[]).includes(value) ? (value as ConfigDomain) : undefined;
@@ -249,6 +250,26 @@ export default async function configRoutes(app: FastifyInstance) {
         });
       }
       return reply.code(outcome.code).send(outcome.body);
+    },
+  );
+
+  /** Test CD-16 provider profile: ping + list models for chat/embedding lookups. */
+  app.post(
+    '/api/v1/config/ai/test-profile',
+    { onRequest: [app.requirePermission('admin:ai_config')] },
+    async (req, reply) => {
+      const parsed = aiProviderProfile.safeParse((req.body as { profile?: unknown })?.profile);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'invalid_profile', issues: parsed.error.issues });
+      }
+
+      try {
+        const result = await probeAiProviderProfile(parsed.data);
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return reply.code(502).send({ error: 'provider_probe_failed', message });
+      }
     },
   );
 

@@ -112,7 +112,7 @@ Components (logical; deployable as a modular monolith initially):
 - Multi-channel grievance intake, case management, workflow/SLA/escalation, appeals, referrals, tasks, notifications, knowledge base, reporting/dashboards, admin configuration, audit, public portal with status tracking, sensitive-case module, multi-language.
 
 ### In scope — opt-in modules (default off)
-- Chatbot intake and AI assistance (auto-categorization, sensitivity detection, semantic dedupe, summarization, translation, draft responses, KB answer assist) — governed, per-tenant opt-in (spec 05 §7). KUSP2 prohibits chatbot intake (FR-PUB-15), so its profile keeps the flag off.
+- Chatbot intake and AI assistance — governed, per-tenant opt-in ([16-ai-integration.md](16-ai-integration.md)). KUSP2 prohibits chatbot intake (FR-PUB-15), so its profile keeps the flag off.
 
 ### Out of scope (v1)
 - Offline-first mobile sync (low-bandwidth web + assisted intake + USSD cover the need).

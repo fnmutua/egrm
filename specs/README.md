@@ -15,7 +15,7 @@ Derived from:
 | 02 | [02-configuration-model.md](02-configuration-model.md) | The configuration registry: 17 config domains (CD-01…CD-17), governance, worked YAML example |
 | 03 | [03-domain-model.md](03-domain-model.md) | Entities & data model: case, party/PII, events, SLA clocks, workflow versions, audit |
 | 04 | [04-workflow-engine.md](04-workflow-engine.md) | Server-side state machine, atomic action API, guards, SLA engine, escalation rules, closure pipeline, appeals |
-| 05 | [05-intake-and-channels.md](05-intake-and-channels.md) | Channel matrix, intake pipeline, standardized intake dataset, public portal, adapters, chatbot & AI assistance (opt-in) |
+| 05 | [05-intake-and-channels.md](05-intake-and-channels.md) | Channel matrix, intake pipeline, standardized intake dataset, public portal, adapters |
 | 06 | [06-notifications.md](06-notifications.md) | Event catalogue, declarative rules, templates, delivery, logging |
 | 07 | [07-security-access-control.md](07-security-access-control.md) | AuthN/SSO/MFA, permission catalogue, 3-axis scoping, sensitivity classes, PII encryption, audit |
 | 08 | [08-reporting-kpis.md](08-reporting-kpis.md) | Standard KPI set, admin-configurable dashboards (semantic layer + widget builder), exports, transparency page |
@@ -26,11 +26,12 @@ Derived from:
 | 13 | [13-staff-console-case-handling.md](13-staff-console-case-handling.md) | Staff case detail workspace: tabs, status form, assignment, CD-09 alert toggles, API contracts, Phase 2 backlog |
 | 14 | [14-case-attachments-and-documents.md](14-case-attachments-and-documents.md) | Attachment kinds, staged upload, atomic workflow linkage, console Documents tab, security & exports |
 | 15 | [15-complainant-correspondence.md](15-complainant-correspondence.md) | Case thread, staff ↔ complainant messages, logged contact, CD-17 policy, portal reply, notification hooks |
+| 16 | [16-ai-integration.md](16-ai-integration.md) | Chatbot intake, staff/triage AI, CD-16, provider adapters, PII redaction, governance, APIs, data model |
 
 ## Reading guide
 
 - **Product/business view:** 01 → 02 → 11 → 10
-- **Engineering view:** 03 → 04 → 05 → 06 → 07 → 09 → 13 (staff case UI) → 14 (attachments) → 15 (correspondence)
+- **Engineering view:** 03 → 04 → 05 → 06 → 07 → 09 → 13 (staff case UI) → 14 (attachments) → 15 (correspondence) → 16 (AI, opt-in)
 - **Procurement/compliance view:** 10 (maps ~1:1 onto the KUSP2 compliance matrix) → 07 → 08
 
 ## Status

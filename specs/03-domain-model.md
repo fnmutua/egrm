@@ -121,7 +121,7 @@ Constraints: `reference` unique per tenant; a partial unique index for duplicate
 - **`config_version`**: registry storage (domain, version, body jsonb, status, author, note).
 - **`knowledge_article` / `faq` / `canned_response`**: knowledge module.
 - **`dashboard_def` / `dashboard_section` / `dashboard_widget`**: admin-built dashboard config (CD-15); widget definitions reference semantic-layer datasets, never raw tables (spec 08 §2).
-- **`ai_interaction`**: audit record for every AI call (capability, provider/model+version, input hash, suggestion, confidence, accept/reject + deciding user) and chatbot transcripts linked to cases (spec 05 §7).
+- **`ai_interaction`**: audit record for every AI call — see [16-ai-integration.md](16-ai-integration.md) §6.
 - **`saved_view`**: per-user/shared queue definitions (filters, columns, sort).
 - **`retention_policy` / `retention_job_run`**: scheduled anonymization/archival with run logs.
 
