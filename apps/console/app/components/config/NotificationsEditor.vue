@@ -236,7 +236,7 @@ function waAuthHeaderRow(): ProviderField {
   const headers = (wa?.headers ?? []) as ProviderField[];
   let row = headers.find((h) => h.key?.toLowerCase() === 'authorization');
   if (!row) {
-    row = { key: 'Authorization', value: 'Bearer ', secret: true };
+    row = { key: 'Authorization', value: 'Bearer ', secret: false };
     headers.push(row);
     if (wa) wa.headers = headers;
   }
@@ -251,7 +251,7 @@ const waAccessToken = computed({
   set(raw: string) {
     const row = waAuthHeaderRow();
     row.key = 'Authorization';
-    row.secret = true;
+    row.secret = false;
     const trimmed = raw.trim().replace(/^Bearer\s*/i, '');
     row.value = trimmed ? `Bearer ${trimmed}` : 'Bearer ';
     metaTemplatesLoaded.value = false;
@@ -1882,9 +1882,9 @@ function varToken(name: string) {
 
           <div class="grid sm:grid-cols-2 gap-3">
             <UFormField label="Access token" help="Permanent token from Meta → WhatsApp → API Setup. Enter this first." class="sm:col-span-2" required>
-              <UInput
+              <PasswordInput
                 v-model="waAccessToken"
-                type="password"
+                default-visible
                 class="w-full font-mono text-xs"
                 placeholder="EAAxxxx…"
                 autocomplete="off"

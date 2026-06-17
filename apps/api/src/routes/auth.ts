@@ -15,6 +15,12 @@ import {
 } from '../services/auth-policy.js';
 import { getUserModel } from '../services/user-model.js';
 import { createRefreshSession, consumeRefreshSession } from '../services/refresh-sessions.js';
+import {
+  countUnreadStaffInbox,
+  listStaffInbox,
+  markAllStaffInboxRead,
+  updateStaffInboxNotification,
+} from '../services/staff-inbox.js';
 
 const loginBody = z.object({
   email: z.string().email(),
@@ -23,6 +29,16 @@ const loginBody = z.object({
 
 const refreshBody = z.object({
   refresh_token: z.string().min(1),
+});
+
+const inboxListQuery = z.object({
+  status: z.enum(['all', 'unread', 'dismissed']).default('all'),
+  page: z.coerce.number().int().min(1).default(1),
+  page_size: z.coerce.number().int().min(1).max(100).default(30),
+});
+
+const inboxActionBody = z.object({
+  action: z.enum(['read', 'unread', 'dismiss']),
 });
 
 async function issueTokens(
@@ -217,5 +233,39 @@ export default async function authRoutes(app: FastifyInstance) {
       },
       tenant: req.tenant,
     };
+  });
+
+  app.get('/api/v1/me/notifications/unread-count', { onRequest: [app.authenticate] }, async (req) => {
+    const unread_count = await countUnreadStaffInbox(req.tenant.id, req.user.sub);
+    return { unread_count };
+  });
+
+  app.get('/api/v1/me/notifications', { onRequest: [app.authenticate] }, async (req, reply) => {
+    const parsed = inboxListQuery.safeParse(req.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_query', issues: parsed.error.issues });
+    return listStaffInbox(req.tenant.id, req.user.sub, {
+      status: parsed.data.status,
+      page: parsed.data.page,
+      pageSize: parsed.data.page_size,
+    });
+  });
+
+  app.post('/api/v1/me/notifications/mark-all-read', { onRequest: [app.authenticate] }, async (req) => {
+    const updated = await markAllStaffInboxRead(req.tenant.id, req.user.sub);
+    return { ok: true, updated };
+  });
+
+  app.patch('/api/v1/me/notifications/:id', { onRequest: [app.authenticate] }, async (req, reply) => {
+    const parsed = inboxActionBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+    const { id } = req.params as { id: string };
+    const result = await updateStaffInboxNotification(
+      req.tenant.id,
+      req.user.sub,
+      id,
+      parsed.data.action,
+    );
+    if ('error' in result) return reply.code(result.code).send({ error: result.error });
+    return { ok: true };
   });
 }

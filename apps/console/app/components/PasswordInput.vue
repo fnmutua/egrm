@@ -6,9 +6,12 @@ const props = withDefaults(
     autocomplete?: string;
     required?: boolean;
     id?: string;
+    /** Start with value visible (not masked). */
+    defaultVisible?: boolean;
   }>(),
   {
     modelValue: '',
+    defaultVisible: false,
   },
 );
 
@@ -16,7 +19,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: string];
 }>();
 
-const show = ref(false);
+const show = ref(props.defaultVisible);
 </script>
 
 <template>

@@ -5,6 +5,7 @@ import { db, schema } from '../db/client.js';
 import { decryptPII } from './crypto.js';
 import { getActiveConfig } from './config.js';
 import { env } from '../env.js';
+import { createStaffInboxEntries, resolveInAppUserIds } from './staff-inbox.js';
 
 type RecipientSelector = NotificationRule['to'][number];
 
@@ -246,6 +247,54 @@ async function deliverMessage(
   throw new DeliveryError(`Unsupported channel: ${channel}`, channel, false);
 }
 
+/** Process in-app first so SMTP/API failures cannot block staff inbox delivery. */
+function sortLogsForDispatch<T extends { channel: string }>(logs: T[]): T[] {
+  const rank = (channel: string) => (channel === 'in_app' ? 0 : 1);
+  return [...logs].sort((a, b) => rank(a.channel) - rank(b.channel));
+}
+
+async function finalizeOutbox(
+  outboxId: string,
+  outbox: { attempts: number },
+  processedCount: number,
+  failures: number,
+  extraError?: string,
+): Promise<void> {
+  const remaining = await db
+    .select({ id: schema.notificationLog.id })
+    .from(schema.notificationLog)
+    .where(and(eq(schema.notificationLog.outboxId, outboxId), eq(schema.notificationLog.status, 'queued')));
+
+  const totalFailures = failures + remaining.length;
+  const allFailed = processedCount + remaining.length > 0 && totalFailures >= processedCount + remaining.length;
+
+  await db
+    .update(schema.notificationOutbox)
+    .set({
+      status: allFailed ? 'failed' : 'done',
+      lastError:
+        extraError ??
+        (totalFailures > 0 ? `${totalFailures} delivery failure(s)` : null),
+      processedAt: new Date(),
+      attempts: outbox.attempts + 1,
+    })
+    .where(eq(schema.notificationOutbox.id, outboxId));
+}
+
+/** Resume outboxes left in `processing` (e.g. API restart mid-dispatch). */
+export async function resumeStuckNotificationOutboxes(): Promise<void> {
+  const stuck = await db
+    .select({ id: schema.notificationOutbox.id })
+    .from(schema.notificationOutbox)
+    .where(eq(schema.notificationOutbox.status, 'processing'));
+
+  for (const row of stuck) {
+    await dispatchNotificationOutbox(row.id).catch((err) => {
+      console.error('[notifications] resume stuck outbox failed', row.id, err);
+    });
+  }
+}
+
 /** Process all queued notification_log rows for an outbox entry. */
 export async function dispatchNotificationOutbox(outboxId: string): Promise<void> {
   const [outbox] = await db
@@ -261,10 +310,12 @@ export async function dispatchNotificationOutbox(outboxId: string): Promise<void
     .set({ status: 'processing' })
     .where(eq(schema.notificationOutbox.id, outboxId));
 
-  const logs = await db
-    .select()
-    .from(schema.notificationLog)
-    .where(and(eq(schema.notificationLog.outboxId, outboxId), eq(schema.notificationLog.status, 'queued')));
+  const logs = sortLogsForDispatch(
+    await db
+      .select()
+      .from(schema.notificationLog)
+      .where(and(eq(schema.notificationLog.outboxId, outboxId), eq(schema.notificationLog.status, 'queued'))),
+  );
 
   if (logs.length === 0) {
     await db
@@ -328,8 +379,10 @@ export async function dispatchNotificationOutbox(outboxId: string): Promise<void
       };
 
   let failures = 0;
+  let dispatchError: string | undefined;
 
-  for (const log of logs) {
+  try {
+    for (const log of logs) {
     const selector = log.recipientSelector as RecipientSelector | null;
     if (!selector || !caseRow) {
       await db
@@ -337,6 +390,44 @@ export async function dispatchNotificationOutbox(outboxId: string): Promise<void
         .set({ status: 'failed:no_recipient', updatedAt: new Date(), attempts: log.attempts + 1 })
         .where(eq(schema.notificationLog.id, log.id));
       failures += 1;
+      continue;
+    }
+
+    const { subject, body } = renderTemplateBody(cfg, log.templateId, log.locale, log.channel, vars);
+
+    if (log.channel === 'in_app') {
+      const userIds = await resolveInAppUserIds(outbox.tenantId, selector, caseRow);
+      if (userIds.length === 0) {
+        await db
+          .update(schema.notificationLog)
+          .set({ status: 'failed:no_recipient', updatedAt: new Date(), attempts: log.attempts + 1 })
+          .where(eq(schema.notificationLog.id, log.id));
+        failures += 1;
+        continue;
+      }
+
+      const delivered = await createStaffInboxEntries({
+        tenantId: outbox.tenantId,
+        userIds,
+        caseId: caseRow.id,
+        notificationLogId: log.id,
+        eventKind: log.eventKind,
+        title: subject,
+        body,
+      });
+
+      await db
+        .update(schema.notificationLog)
+        .set({
+          status: delivered > 0 ? 'sent' : 'failed:no_recipient',
+          providerMessageId: `in_app-${delivered}`,
+          renderedPreview: body.slice(0, 2000),
+          updatedAt: new Date(),
+          attempts: log.attempts + 1,
+        })
+        .where(eq(schema.notificationLog.id, log.id));
+
+      if (delivered === 0) failures += 1;
       continue;
     }
 
@@ -349,8 +440,6 @@ export async function dispatchNotificationOutbox(outboxId: string): Promise<void
       failures += 1;
       continue;
     }
-
-    const { subject, body } = renderTemplateBody(cfg, log.templateId, log.locale, log.channel, vars);
 
     let lastMessageId: string | undefined;
     let sent = 0;
@@ -395,15 +484,11 @@ export async function dispatchNotificationOutbox(outboxId: string): Promise<void
         .where(eq(schema.notificationLog.id, log.id));
       failures += 1;
     }
+    }
+  } catch (err) {
+    dispatchError = err instanceof Error ? err.message : String(err);
+    console.error('[notifications] dispatch interrupted', outboxId, err);
+  } finally {
+    await finalizeOutbox(outboxId, outbox, logs.length, failures, dispatchError);
   }
-
-  await db
-    .update(schema.notificationOutbox)
-    .set({
-      status: failures > 0 && failures === logs.length ? 'failed' : 'done',
-      lastError: failures > 0 ? `${failures} delivery failure(s)` : null,
-      processedAt: new Date(),
-      attempts: outbox.attempts + 1,
-    })
-    .where(eq(schema.notificationOutbox.id, outboxId));
 }

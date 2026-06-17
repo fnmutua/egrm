@@ -1417,7 +1417,12 @@ onMounted(async () => {
       <UCard :ui="{ body: 'p-0' }">
         <template #header>
           <div class="flex items-center justify-between gap-2">
-            <span class="font-medium">Notifications</span>
+            <div>
+              <span class="font-medium">Notification delivery log</span>
+              <p class="text-xs text-muted font-normal mt-0.5">
+                All channels for this case. Your personal in-app alerts are under Notifications in the sidebar.
+              </p>
+            </div>
             <UButton
               size="xs"
               variant="ghost"

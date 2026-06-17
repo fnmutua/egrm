@@ -15,6 +15,7 @@ import unitRoutes from './routes/units.js';
 import roleRoutes from './routes/roles.js';
 import userRoutes from './routes/users.js';
 import dashboardRoutes from './routes/dashboards.js';
+import { resumeStuckNotificationOutboxes } from './services/notification-dispatch.js';
 
 const app = Fastify({ logger: true });
 
@@ -39,6 +40,9 @@ try {
   console.log(`[server] starting on 0.0.0.0:${env.API_PORT}`);
   await app.listen({ port: env.API_PORT, host: '0.0.0.0' });
   console.log(`[server] listening on 0.0.0.0:${env.API_PORT}`);
+  resumeStuckNotificationOutboxes().catch((err) => {
+    console.error('[notifications] startup resume failed', err);
+  });
 } catch (err) {
   app.log.error(err);
   process.exit(1);

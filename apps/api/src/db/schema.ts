@@ -247,6 +247,21 @@ export const notificationLog = pgTable('notification_log', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Staff in-app notification inbox (delivered from CD-09 in_app channel). */
+export const staffInboxNotification = pgTable('staff_inbox_notification', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenant.id),
+  userId: uuid('user_id').notNull().references(() => appUser.id),
+  caseId: uuid('case_id').references(() => grmCase.id),
+  notificationLogId: uuid('notification_log_id').references(() => notificationLog.id),
+  eventKind: text('event_kind').notNull(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  readAt: timestamp('read_at', { withTimezone: true }),
+  dismissedAt: timestamp('dismissed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Case file attachments — staged then linked on workflow actions (spec 14). */
 export const caseAttachment = pgTable('case_attachment', {
   id: uuid('id').primaryKey().defaultRandom(),

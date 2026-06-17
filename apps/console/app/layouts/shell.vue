@@ -4,6 +4,7 @@ import { canAccessAdminConsole, canAccessAdminPage } from '@egrm/core';
 const { user, logout } = useAuth();
 const { loadDashboards, visibleDashboards, loading: dashboardsLoading } = useDashboards();
 const { count: caseCount, loadCaseCount } = useCaseCount();
+const { unreadCount: notificationUnread, loadUnreadCount } = useNotificationInbox();
 const { count: staffUserCount, loadStaffUserCount } = useStaffUserCount();
 const route = useRoute();
 
@@ -15,6 +16,14 @@ const nav = computed(() => [[
     icon: 'i-lucide-inbox',
     to: '/cases',
     badge: caseCount.value != null ? caseCount.value.toLocaleString() : undefined,
+  },
+  {
+    label: 'Notifications',
+    icon: 'i-lucide-bell',
+    to: '/notifications',
+    badge: notificationUnread.value != null && notificationUnread.value > 0
+      ? notificationUnread.value.toLocaleString()
+      : undefined,
   },
   { label: 'Reports', icon: 'i-lucide-bar-chart-3', to: '/', disabled: true, badge: 'Phase 4' },
 ]]);
@@ -43,7 +52,7 @@ watch(() => route.fullPath, () => (drawerOpen.value = false));
 
 onMounted(async () => {
   if (user.value) {
-    await Promise.all([loadDashboards(), loadCaseCount(), loadStaffUserCount()]);
+    await Promise.all([loadDashboards(), loadCaseCount(), loadStaffUserCount(), loadUnreadCount()]);
   }
 });
 
@@ -51,15 +60,17 @@ watch(user, async (u) => {
   if (!u) {
     caseCount.value = null;
     staffUserCount.value = null;
+    notificationUnread.value = null;
     return;
   }
   if (!visibleDashboards.value.length) await loadDashboards();
-  await Promise.all([loadCaseCount(), loadStaffUserCount()]);
+  await Promise.all([loadCaseCount(), loadStaffUserCount(), loadUnreadCount()]);
 });
 
 watch(() => route.path, (path) => {
   if (path === '/' && user.value) loadDashboards();
   if (path.startsWith('/cases') && user.value) loadCaseCount();
+  if (path === '/notifications' && user.value) loadUnreadCount();
   if (path.startsWith('/admin/settings') && user.value) loadStaffUserCount();
 });
 
