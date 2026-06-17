@@ -349,6 +349,10 @@ const whatsappTemplateBody = templateChannelBody.extend({
   wa_template_name: z.string().optional(),
   wa_template_language: z.string().optional(),
   wa_body_param_keys: z.array(z.string()).optional(),
+  /** Meta URL button index (0-based) when template has a track link button. */
+  wa_url_button_index: z.number().int().min(0).max(2).optional(),
+  /** CD-09 variable key for the URL button dynamic segment (usually case.reference). */
+  wa_url_button_param_key: z.string().optional(),
 });
 
 type TemplateVariants = Record<string, {
@@ -360,6 +364,8 @@ type TemplateVariants = Record<string, {
     wa_template_name?: string;
     wa_template_language?: string;
     wa_body_param_keys?: string[];
+    wa_url_button_index?: number;
+    wa_url_button_param_key?: string;
   };
   in_app?: { body: string };
 }>;
@@ -702,6 +708,8 @@ export function defaultNotificationPack(): Cd09Notifications {
             wa_template_name: 'kisip_case_registered',
             wa_template_language: 'en_US',
             wa_body_param_keys: ['party.name', 'case.reference', 'tenant.name', 'tracking.url'],
+            wa_url_button_index: 0,
+            wa_url_button_param_key: 'case.reference',
           },
           email: {
             subject: 'Grievance registered — {{case.reference}}',
@@ -720,6 +728,8 @@ export function defaultNotificationPack(): Cd09Notifications {
             wa_template_name: 'kisip_case_registered',
             wa_template_language: 'en_US',
             wa_body_param_keys: ['party.name', 'case.reference', 'tenant.name', 'tracking.url'],
+            wa_url_button_index: 0,
+            wa_url_button_param_key: 'case.reference',
           },
           email: {
             subject: 'Malalamiko yamepokelewa — {{case.reference}}',
@@ -738,7 +748,7 @@ export function defaultNotificationPack(): Cd09Notifications {
       variants: {
         en: {
           sms: { body: '{{tenant.name}}: reference {{case.reference}} registered. Track: {{tracking.url}}' },
-          whatsapp: { body: 'Hello {{party.name}}, your grievance reference {{case.reference}} has been registered with {{tenant.name}}. You may track progress and view status updates at any time using this link: {{tracking.url}} Thank you.', wa_template_name: 'kisip_case_registered', wa_template_language: 'en_US', wa_body_param_keys: ['party.name', 'case.reference', 'tenant.name', 'tracking.url'] },
+          whatsapp: { body: 'Hello {{party.name}}, your grievance reference {{case.reference}} has been registered with {{tenant.name}}. You may track progress and view status updates at any time using this link: {{tracking.url}} Thank you.', wa_template_name: 'kisip_case_registered', wa_template_language: 'en_US', wa_body_param_keys: ['party.name', 'case.reference', 'tenant.name', 'tracking.url'], wa_url_button_index: 0, wa_url_button_param_key: 'case.reference' },
           email: {
             subject: 'Reference {{case.reference}}',
             body: 'Your submission {{case.reference}} has been registered.\nTrack: {{tracking.url}}',
@@ -746,7 +756,7 @@ export function defaultNotificationPack(): Cd09Notifications {
         },
         sw: {
           sms: { body: '{{tenant.name}}: rejeleo {{case.reference}} limepokelewa. Fuatilia: {{tracking.url}}' },
-          whatsapp: { body: 'Habari {{party.name}}, rejeleo {{case.reference}} limepokelewa na {{tenant.name}}. Fuatilia: {{tracking.url}} Asante.', wa_template_name: 'kisip_case_registered', wa_template_language: 'en_US', wa_body_param_keys: ['party.name', 'case.reference', 'tenant.name', 'tracking.url'] },
+          whatsapp: { body: 'Habari {{party.name}}, rejeleo {{case.reference}} limepokelewa na {{tenant.name}}. Fuatilia: {{tracking.url}} Asante.', wa_template_name: 'kisip_case_registered', wa_template_language: 'en_US', wa_body_param_keys: ['party.name', 'case.reference', 'tenant.name', 'tracking.url'], wa_url_button_index: 0, wa_url_button_param_key: 'case.reference' },
           email: {
             subject: 'Rejeleo {{case.reference}}',
             body: 'Wasilisho lako {{case.reference}} limepokelewa.\nFuatilia: {{tracking.url}}',

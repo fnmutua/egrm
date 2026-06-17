@@ -31,6 +31,10 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === '1' || v === 'true'),
+  /** Meta webhook verification token (GET hub.verify_token). */
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
+  /** Meta app secret for X-Hub-Signature-256 validation on inbound webhooks. */
+  META_APP_SECRET: z.string().optional(),
 });
 
 const parsed = envSchema.parse(process.env);

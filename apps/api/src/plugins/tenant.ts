@@ -52,6 +52,7 @@ async function resolveTenant(req: FastifyRequest): Promise<TenantContext | undef
 export default fp(async function tenantPlugin(app: FastifyInstance) {
   app.addHook('onRequest', async (req, reply) => {
     if (req.url === '/health') return;
+    if (req.url?.startsWith('/api/v1/webhooks/whatsapp')) return;
     const tenant = await resolveTenant(req);
     if (!tenant) {
       return reply.code(421).send({ error: 'unknown_tenant', message: 'No tenant resolved for this request' });

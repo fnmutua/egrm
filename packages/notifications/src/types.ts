@@ -39,6 +39,13 @@ export interface OutboundSms {
   body: string;
 }
 
+export interface WhatsAppTemplateUrlButton {
+  /** Meta template button index (0-based). */
+  index: number;
+  /** Dynamic suffix for URL button (e.g. case reference for track?ref={{1}}). */
+  param: string;
+}
+
 export interface OutboundWhatsApp {
   to: string;
   /** Rendered preview / fallback plain-text body. */
@@ -48,6 +55,8 @@ export interface OutboundWhatsApp {
   templateLanguage?: string;
   /** Values for template body {{1}}, {{2}}, … in order. */
   templateParams?: string[];
+  /** URL button parameters when the approved template includes call-to-action buttons. */
+  templateUrlButtons?: WhatsAppTemplateUrlButton[];
 }
 
 export interface SendResult {

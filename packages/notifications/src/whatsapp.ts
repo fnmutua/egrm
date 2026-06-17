@@ -43,8 +43,22 @@ function metaRequestBody(to: string, message: OutboundWhatsApp): Record<string, 
       name: templateName,
       language: { code: language },
     };
+    const components: Record<string, unknown>[] = [];
     if (parameters.length > 0) {
-      template.components = [{ type: 'body', parameters }];
+      components.push({ type: 'body', parameters });
+    }
+    for (const btn of message.templateUrlButtons ?? []) {
+      const param = String(btn.param ?? '').trim();
+      if (!param) continue;
+      components.push({
+        type: 'button',
+        sub_type: 'url',
+        index: String(btn.index),
+        parameters: [{ type: 'text', text: param }],
+      });
+    }
+    if (components.length > 0) {
+      template.components = components;
     }
     return {
       messaging_product: 'whatsapp',

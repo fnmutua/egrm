@@ -15,6 +15,8 @@ type WhatsAppTemplateVariant = {
   wa_template_name?: string;
   wa_template_language?: string;
   wa_body_param_keys?: string[];
+  wa_url_button_index?: number;
+  wa_url_button_param_key?: string;
 };
 
 export function renderTemplateBody(
@@ -47,6 +49,7 @@ export function whatsappSendOptions(
   templateName?: string;
   templateLanguage?: string;
   templateParams?: string[];
+  templateUrlButtons?: { index: number; param: string }[];
 } {
   const { body } = renderTemplateBody(cfg, templateId, locale, 'whatsapp', vars);
   const tpl = cfg.templates.find((t) => t.id === templateId);
@@ -67,7 +70,14 @@ export function whatsappSendOptions(
       : sender.template_body_param_keys ?? [];
   const templateParams = paramKeys.map((key: string) => vars[key] ?? '');
 
-  return { body, templateName, templateLanguage, templateParams };
+  const urlButtonIndex = variant?.wa_url_button_index;
+  const urlButtonKey = variant?.wa_url_button_param_key?.trim();
+  const templateUrlButtons =
+    urlButtonIndex != null && urlButtonKey
+      ? [{ index: urlButtonIndex, param: vars[urlButtonKey] ?? '' }]
+      : undefined;
+
+  return { body, templateName, templateLanguage, templateParams, templateUrlButtons };
 }
 
 async function ancestorUnitIds(tenantId: string, unitId: string | null): Promise<Set<string>> {
@@ -244,6 +254,7 @@ async function deliverMessage(
       templateName: wa.templateName,
       templateLanguage: wa.templateLanguage,
       templateParams: wa.templateParams,
+      templateUrlButtons: wa.templateUrlButtons,
     });
   }
   if (channel === 'in_app') {

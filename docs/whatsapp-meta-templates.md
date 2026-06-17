@@ -104,6 +104,15 @@ Hello {{1}},
 Your grievance reference {{2}} has been registered with {{3}}. You may track progress and view status updates at any time using this link: {{4}} Thank you.
 ```
 
+**Buttons (add in Meta before submit):**
+
+| # | Type | Label | URL / payload |
+|---|------|-------|----------------|
+| 0 | Visit website | Track online | `https://YOUR_PORTAL_DOMAIN/track?ref={{1}}` — dynamic segment = case reference |
+| 1 | Quick reply | Check status | *(no URL — user tap sends inbound webhook)* |
+
+CD-09 maps button 0 via **URL button index** `0` and param key `case.reference` (see `wa_url_button_index` / `wa_url_button_param_key` on the WhatsApp variant).
+
 **Sample values:**
 
 | Var | Sample |
@@ -267,6 +276,28 @@ Create as separate **language** entries in Meta (same template name, language `s
 
 ---
 
+## Inbound webhook (Check status button)
+
+When a complainant taps **Check status** on the acknowledgement template (or sends a status message within the 24h session window), Meta POSTs to your API.
+
+| Item | Value |
+|------|--------|
+| Callback URL | `https://YOUR_API_HOST/api/v1/webhooks/whatsapp/meta` |
+| Verify token | Same as API env `WHATSAPP_WEBHOOK_VERIFY_TOKEN` |
+| App secret | API env `META_APP_SECRET` (validates `X-Hub-Signature-256`) |
+| Subscribe fields | `messages` |
+
+**Behaviour:**
+
+1. Resolve tenant from `metadata.phone_number_id` (must match CD-09 WhatsApp sender).
+2. Match complainant by phone hash; return up to 5 recent grievance statuses.
+3. If the message includes a reference (e.g. `GRM-2026-001234`), verify it against the sender phone and return that case only.
+4. Reply with plain text inside the 24h window (`NOTIFICATIONS_DEV_LOG_ONLY=1` logs locally).
+
+**Local tunnel:** use ngrok or Railway public URL; Meta cannot reach `localhost`.
+
+---
+
 ## Testing
 
 From repo root (API running, CD-09 saved with token in DB):
@@ -306,13 +337,15 @@ Skipped if the same name + language already exists on Meta.
 
 ## Rollout checklist
 
-1. [ ] Create & approve `kisip_case_registered` in Meta
+1. [ ] Create & approve `kisip_case_registered` in Meta (with Track + Check status buttons)
 2. [ ] Create & approve `kisip_status_update` in Meta
 3. [ ] Configure CD-09 sender + template mappings in Console; publish config
 4. [ ] Set `PUBLIC_PORTAL_BASE_URL` on Railway API
-5. [ ] Test intake case → WhatsApp delivered
-6. [ ] Add remaining templates (`closed`, `satisfaction`, `new_message`, …) as needed
-7. [ ] Optional: Swahili language variants
+5. [ ] Register webhook URL + `WHATSAPP_WEBHOOK_VERIFY_TOKEN` / `META_APP_SECRET` on Meta app
+6. [ ] Test intake case → WhatsApp delivered (URL button uses case reference)
+7. [ ] Test **Check status** quick reply → status text reply
+8. [ ] Add remaining templates (`closed`, `satisfaction`, `new_message`, …) as needed
+9. [ ] Optional: Swahili language variants
 
 ---
 
@@ -322,6 +355,7 @@ Skipped if the same name + language already exists on Meta.
 |------|------|
 | CD-09 schema & defaults | `packages/config-schemas/src/cd09-notifications.ts` |
 | Meta send (template / text) | `packages/notifications/src/whatsapp.ts` |
+| Inbound webhook | `apps/api/src/routes/whatsapp-webhook.ts`, `apps/api/src/services/whatsapp-webhook.ts` |
 | Param resolution | `apps/api/src/services/notification-dispatch.ts` → `whatsappSendOptions()` |
 | Console editor | `apps/console/app/components/config/NotificationsEditor.vue` |
 | Test script | `apps/api/scripts/test-wa-post.mjs` |

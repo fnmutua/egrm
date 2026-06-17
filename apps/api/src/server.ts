@@ -16,6 +16,7 @@ import roleRoutes from './routes/roles.js';
 import userRoutes from './routes/users.js';
 import dashboardRoutes from './routes/dashboards.js';
 import aiRoutes from './routes/ai.js';
+import whatsappWebhookRoutes from './routes/whatsapp-webhook.js';
 import { resumeStuckNotificationOutboxes } from './services/notification-dispatch.js';
 
 const app = Fastify({ logger: true });
@@ -29,6 +30,7 @@ await app.register(authPlugin);
 app.get('/health', async () => ({ status: 'ok', service: 'egrm-api' }));
 
 await app.register(authRoutes);
+await app.register(whatsappWebhookRoutes);
 await app.register(configRoutes);
 await app.register(publicRoutes);
 await app.register(caseRoutes);
