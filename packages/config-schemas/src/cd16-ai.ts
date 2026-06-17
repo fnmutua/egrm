@@ -27,6 +27,8 @@ export type AiCapability = (typeof AI_CAPABILITIES)[number];
 
 export const CHATBOT_INTENTS = ['file_case', 'check_status', 'kb_faq', 'handoff'] as const;
 
+export const CHATBOT_MODES = ['guided', 'conversational'] as const;
+
 export const AI_DATA_RESIDENCY = ['us', 'eu', 'uk', 'apac', 'on_prem', 'unknown'] as const;
 
 const profileKey = z
@@ -143,6 +145,10 @@ export const cd16Ai = z
             tone: z.enum(['respectful', 'neutral', 'formal']).default('respectful'),
           })
           .default({}),
+        /** guided = legacy step-by-step forms; conversational = natural dialogue with AI extraction. */
+        mode: z.enum(['guided', 'conversational']).default('conversational'),
+        /** When false (default), sensitive grievances are still taken in and flagged for officer review. */
+        handoff_on_sensitive: z.boolean().default(false),
         limits: aiTokenLimits.default({
           max_output_tokens: 1024,
           temperature: 0.3,

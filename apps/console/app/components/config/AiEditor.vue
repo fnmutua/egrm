@@ -8,6 +8,7 @@ import {
   AI_PROVIDER_KINDS,
   AI_PROVIDER_PRESETS,
   CHATBOT_INTENTS,
+  CHATBOT_MODES,
   DEFAULT_CD16_AI,
   applyAiProviderPreset,
   type AiCapability,
@@ -34,6 +35,11 @@ const capabilityItems = AI_CAPABILITIES.map((c) => ({
 const intentItems = CHATBOT_INTENTS.map((i) => ({
   value: i,
   label: i.replaceAll('_', ' '),
+}));
+
+const modeItems = CHATBOT_MODES.map((m) => ({
+  value: m,
+  label: m === 'conversational' ? 'Conversational (natural dialogue)' : 'Guided (step-by-step menu)',
 }));
 
 const profileKeys = computed(() => Object.keys(props.payload.provider_profiles ?? {}));
@@ -436,6 +442,9 @@ watch(profileKeys, (keys) => {
         <USwitch v-model="payload.chatbot.enabled" />
       </div>
       <div v-if="payload.chatbot.enabled" class="grid sm:grid-cols-2 gap-4">
+        <UFormField label="Conversation mode" class="sm:col-span-2">
+          <USelectMenu v-model="payload.chatbot.mode" :items="modeItems" value-key="value" label-key="label" class="w-full" />
+        </UFormField>
         <UFormField label="Provider profile">
           <USelectMenu v-model="payload.chatbot.profile" :items="profileItems" value-key="value" label-key="label" class="w-full" />
         </UFormField>

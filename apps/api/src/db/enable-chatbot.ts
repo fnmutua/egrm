@@ -127,6 +127,7 @@ async function main() {
           ...DEFAULT_CD16_AI.chatbot,
           ...c.chatbot,
           enabled: true,
+          mode: 'conversational',
           profile: c.chatbot?.profile ?? DEFAULT_CD16_AI.chatbot?.profile ?? 'openai_primary',
         },
       };

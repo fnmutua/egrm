@@ -5,25 +5,34 @@ import { normalizeCd06IntakeForms } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
 import { getActiveConfig } from './config.js';
 import { chatCompletion } from './ai-completion.js';
-import { hashRedactedPrompt, redactIntakeText } from './ai-redaction.js';
+import { hashRedactedPrompt } from './ai-redaction.js';
 import { createCase } from './intake.js';
 import { coerceIntakeStringArray, coerceIntakeString } from './intake-values.js';
 import { searchIntakeUnits } from './intake-units.js';
 import { verifyCaseByReference } from './correspondence.js';
 import { loadChatbotConfig, parseJsonFromModel } from './ai-shared.js';
-
-type TranscriptEntry = { role: 'user' | 'assistant'; text: string; at: string };
-
-export interface ChatbotSlotsState {
-  proposed: Record<string, unknown>;
-  confirmed: Record<string, unknown>;
-  anonymous: boolean | null;
-  consent: boolean;
-  field_queue: string[];
-  status_reference?: string;
-}
+import {
+  applyNarrativeAndExtraction,
+  buildFieldQueue,
+  extractFromNarrative,
+  fieldIsEmpty,
+  fieldLabel,
+  parseSlots,
+  pendingFields,
+  readBackText,
+  resolveChatbotProfile,
+  resolveFieldValue,
+  slotsToJson,
+  type ChatbotSlotsState,
+  type TranscriptEntry,
+} from './chatbot-intake.js';
+import { conversationalWelcome, handleConversationalTurn } from './chatbot-conversational.js';
 
 type SessionRow = typeof schema.chatbotSession.$inferSelect;
+
+function isConversationalMode(cd16: Cd16Ai): boolean {
+  return cd16.chatbot.mode !== 'guided';
+}
 
 const INTENT_LABELS: Record<string, Record<string, string>> = {
   file_case: { en: 'File a grievance', sw: 'Wasilisha malalamiko' },
@@ -32,53 +41,13 @@ const INTENT_LABELS: Record<string, Record<string, string>> = {
   handoff: { en: 'Talk to a person', sw: 'Zungumza na mtu' },
 };
 
-const extractSchema = z.object({
-  summary: z.string().optional(),
-  description: z.string().optional(),
-  categories: z.array(z.string()).optional(),
-  unit_hint: z.string().optional(),
-  name: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().optional(),
-  date_occurred: z.string().optional(),
-  expected_outcome: z.string().optional(),
-  sensitivity_signal: z.boolean().optional(),
-});
-
-function nowIso(): string {
-  return new Date().toISOString();
-}
-
-function parseSlots(raw: Record<string, unknown>): ChatbotSlotsState {
-  const proposed = (raw.proposed as Record<string, unknown>) ?? {};
-  const confirmed = (raw.confirmed as Record<string, unknown>) ?? {};
-  return {
-    proposed,
-    confirmed,
-    anonymous: typeof raw.anonymous === 'boolean' ? raw.anonymous : null,
-    consent: raw.consent === true,
-    field_queue: Array.isArray(raw.field_queue) ? (raw.field_queue as string[]) : [],
-    status_reference: typeof raw.status_reference === 'string' ? raw.status_reference : undefined,
-  };
-}
-
-function slotsToJson(slots: ChatbotSlotsState): Record<string, unknown> {
-  return { ...slots };
-}
-
-function resolveChatbotProfile(cd16: Cd16Ai): { key: string; profile: Cd16Ai['provider_profiles'][string] } | null {
-  const key =
-    cd16.chatbot.profile ??
-    Object.entries(cd16.provider_profiles).find(([, p]) => p.enabled)?.[0];
-  if (!key) return null;
-  const profile = cd16.provider_profiles[key];
-  if (!profile?.enabled) return null;
-  return { key, profile };
-}
-
 function disclosureText(cd16: Cd16Ai, locale: string): string {
   const d = cd16.chatbot.automated_agent_disclosure;
   return d[locale] ?? d.en ?? Object.values(d)[0] ?? '';
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
 }
 
 function intentMenu(cd16: Cd16Ai, locale: string): string {
@@ -113,61 +82,6 @@ function isNo(text: string): boolean {
   return /^(no|n|hapana|false|0)$/i.test(text.trim());
 }
 
-function fieldLabel(form: Cd06IntakeForms, key: string, locale: string): string {
-  const field = form.fields.find((f) => f.key === key);
-  const label = field?.label;
-  if (!label) return key.replaceAll('_', ' ');
-  return label[locale] ?? label.en ?? Object.values(label)[0] ?? key;
-}
-
-function buildFieldQueue(form: Cd06IntakeForms, channelMinimum: string[], anonymous: boolean): string[] {
-  const keys = new Set<string>(channelMinimum);
-  for (const field of form.fields) {
-    if (!field.enabled || !field.required) continue;
-    if (field.section === 'complainant' && anonymous) continue;
-    keys.add(field.key);
-  }
-  const order = [
-    'unit_id',
-    'categories',
-    'summary',
-    'description',
-    'name',
-    'phone',
-    'email',
-    'date_occurred',
-    'expected_outcome',
-  ];
-  const queue: string[] = [];
-  for (const k of order) {
-    if (keys.has(k)) queue.push(k);
-  }
-  for (const k of keys) {
-    if (!queue.includes(k)) queue.push(k);
-  }
-  return queue;
-}
-
-function fieldIsEmpty(key: string, val: unknown): boolean {
-  if (val === undefined || val === null || val === '') return true;
-  if (key === 'categories') return coerceIntakeStringArray(val).length === 0;
-  return false;
-}
-
-function pendingFields(slots: ChatbotSlotsState): string[] {
-  if (slots.field_queue.length) {
-    return slots.field_queue.filter((k) => fieldIsEmpty(k, slots.confirmed[k]));
-  }
-  return [];
-}
-
-function summarizeFromText(text: string): string {
-  const trimmed = text.trim();
-  if (!trimmed) return '';
-  const first = trimmed.split(/[.!?\n]/).find((part) => part.trim().length > 0)?.trim() ?? trimmed;
-  return first.length > 200 ? `${first.slice(0, 197)}...` : first;
-}
-
 function formatCapturedValue(
   form: Cd06IntakeForms,
   taxonomy: Cd03Taxonomy,
@@ -193,66 +107,6 @@ function formatCapturedValue(
   const text = coerceIntakeString(val) ?? String(val);
   if (text.length > 60) return `${label}: ${text.slice(0, 57)}...`;
   return `${label}: ${text}`;
-}
-
-async function applyNarrativeAndExtraction(
-  tenantId: string,
-  form: Cd06IntakeForms,
-  taxonomy: Cd03Taxonomy,
-  slots: ChatbotSlotsState,
-  narrative: string,
-  proposed: Record<string, unknown>,
-  locale: string,
-): Promise<void> {
-  const trimmed = narrative.trim();
-  slots.proposed = { ...slots.proposed, narrative: trimmed, ...proposed };
-
-  const intakeKeys = [
-    'summary',
-    'description',
-    'categories',
-    'name',
-    'phone',
-    'email',
-    'date_occurred',
-    'expected_outcome',
-  ] as const;
-  for (const key of intakeKeys) {
-    const val = proposed[key];
-    if (key === 'description' || fieldIsEmpty(key, val) || !fieldIsEmpty(key, slots.confirmed[key])) continue;
-    slots.confirmed[key] = key === 'categories' ? coerceIntakeStringArray(val) : String(val).trim();
-  }
-
-  if (trimmed) {
-    slots.confirmed.description = trimmed;
-  }
-  if (fieldIsEmpty('summary', slots.confirmed.summary)) {
-    const fromAi = coerceIntakeString(proposed.summary);
-    const desc = coerceIntakeString(slots.confirmed.description) ?? trimmed;
-    slots.confirmed.summary = fromAi ?? summarizeFromText(desc);
-  }
-
-  if (fieldIsEmpty('unit_id', slots.confirmed.unit_id) && proposed.unit_hint) {
-    const resolved = await resolveFieldValue(
-      tenantId,
-      form,
-      taxonomy,
-      'unit_id',
-      String(proposed.unit_hint),
-      locale,
-    );
-    if (resolved.ok) {
-      slots.confirmed.unit_id = resolved.value;
-    } else {
-      slots.proposed.unit_hint = proposed.unit_hint;
-    }
-  }
-
-  if (slots.anonymous === true) {
-    for (const key of ['name', 'phone', 'email'] as const) {
-      delete slots.confirmed[key];
-    }
-  }
 }
 
 function buildIntakeCollectionReply(
@@ -337,70 +191,6 @@ function promptForField(
   return `Please provide your ${label.toLowerCase()}:`;
 }
 
-async function resolveFieldValue(
-  tenantId: string,
-  form: Cd06IntakeForms,
-  taxonomy: Cd03Taxonomy,
-  key: string,
-  text: string,
-  locale: string,
-): Promise<{ ok: true; value: unknown } | { ok: false; message: string }> {
-  const field = form.fields.find((f) => f.key === key);
-  if (key === 'unit_id') {
-    const units = await searchIntakeUnits(tenantId, { q: text.trim(), limit: 5 });
-    if (units.length === 0) {
-      return { ok: false, message: 'I could not find that location. Please try a different spelling.' };
-    }
-    if (units.length === 1) {
-      return { ok: true, value: units[0]!.id };
-    }
-    const list = units.map((u, i) => `${i + 1}. ${u.breadcrumb}`).join('\n');
-    return {
-      ok: false,
-      message: `I found several locations. Please reply with the number:\n${list}`,
-    };
-  }
-  if (key === 'categories' || field?.type === 'multiselect') {
-    const t = text.trim();
-    const byNum = Number.parseInt(t, 10);
-    const active = taxonomy.categories.filter((c) => c.active !== false);
-    if (!Number.isNaN(byNum) && byNum >= 1 && byNum <= active.length) {
-      return { ok: true, value: [active[byNum - 1]!.code] };
-    }
-    const match = active.find((c) => c.code.toLowerCase() === t.toLowerCase());
-    if (match) return { ok: true, value: [match.code] };
-    return { ok: false, message: 'Please choose a valid category number or code from the list.' };
-  }
-  if (!text.trim()) {
-    return { ok: false, message: 'Please enter a value.' };
-  }
-  return { ok: true, value: text.trim() };
-}
-
-function readBackText(form: Cd06IntakeForms, taxonomy: Cd03Taxonomy, slots: ChatbotSlotsState, locale: string): string {
-  const lines: string[] = ['Please review your grievance before submitting:\n'];
-  for (const key of slots.field_queue) {
-    const val = slots.confirmed[key];
-    if (val === undefined || val === '') continue;
-    const label = fieldLabel(form, key, locale);
-    if (key === 'categories') {
-      const codes = coerceIntakeStringArray(val);
-      const names = codes.map((code) => {
-        const c = taxonomy.categories.find((x) => x.code === code);
-        return c?.label[locale] ?? c?.label.en ?? code;
-      });
-      lines.push(`• ${label}: ${names.join(', ')}`);
-    } else if (key === 'unit_id') {
-      lines.push(`• ${label}: (selected location)`);
-    } else {
-      lines.push(`• ${label}: ${String(val)}`);
-    }
-  }
-  if (slots.anonymous) lines.push('• Submitted anonymously');
-  lines.push('\nIf this looks correct, use the Submit button below. To change something, tell me which field to update.');
-  return lines.join('\n');
-}
-
 async function hotlineMessage(tenantId: string, locale: string): Promise<string> {
   const [cd08, identity] = await Promise.all([
     getActiveConfig<Cd08Channels>(tenantId, 'cd08_channels'),
@@ -465,93 +255,6 @@ async function answerFaq(tenantId: string, cd16: Cd16Ai, query: string, locale: 
   return locale === 'sw'
     ? 'Samahani, sina jibu la uhakika kwa swali hilo. Unaweza kuwasiliana na afisa.'
     : "I'm not sure about that. You can talk to an officer for help.";
-}
-
-async function extractFromNarrative(
-  tenantId: string,
-  sessionId: string,
-  cd16: Cd16Ai,
-  narrative: string,
-  taxonomy: Cd03Taxonomy,
-  anonymous: boolean,
-): Promise<{ proposed: Record<string, unknown>; sensitivity: boolean }> {
-  const profileRef = resolveChatbotProfile(cd16);
-  if (!profileRef) return { proposed: {}, sensitivity: false };
-
-  const redacted = redactIntakeText(narrative, cd16.safety);
-  const categoryLines = taxonomy.categories
-    .filter((c) => c.active !== false)
-    .map((c) => `- ${c.code}: ${c.label.en ?? c.code}`)
-    .join('\n');
-  const contactHint = anonymous
-    ? 'Do not extract name, phone, or email for anonymous submissions.'
-    : 'Extract name, phone, or email only when clearly stated in the narrative.';
-  const prompt = [
-    'You triage and extract grievance intake fields from a complainant narrative.',
-    'Return ONLY JSON with these keys (omit keys not present in the text):',
-    '{',
-    '  "summary": "short title, max 120 chars",',
-    '  "description": "structured restatement if helpful; otherwise omit",',
-    '  "categories": ["code"],',
-    '  "unit_hint": "settlement, village, or location name if mentioned",',
-    '  "name": "complainant name if stated",',
-    '  "phone": "phone if stated",',
-    '  "email": "email if stated",',
-    '  "date_occurred": "ISO date or natural date if stated",',
-    '  "expected_outcome": "desired resolution if stated",',
-    '  "sensitivity_signal": false',
-    '}',
-    '',
-    'Set sensitivity_signal true only for imminent harm, violence, or serious safety threats.',
-    contactHint,
-    '',
-    `Allowed category codes:\n${categoryLines}`,
-    '',
-    'Narrative:',
-    redacted,
-  ].join('\n');
-
-  try {
-    const result = await chatCompletion(
-      profileRef.profile,
-      [
-        { role: 'system', content: 'Extract and triage intake fields. JSON only.' },
-        { role: 'user', content: prompt },
-      ],
-      { json_mode: true },
-    );
-    const parsed = extractSchema.parse(parseJsonFromModel(result.content));
-    const proposed: Record<string, unknown> = {};
-    if (parsed.summary) proposed.summary = parsed.summary.trim();
-    if (parsed.description) proposed.description = parsed.description.trim();
-    if (parsed.categories?.length) {
-      const allowed = new Set(taxonomy.categories.map((c) => c.code));
-      proposed.categories = parsed.categories.filter((c) => allowed.has(c));
-    }
-    if (parsed.unit_hint) proposed.unit_hint = parsed.unit_hint.trim();
-    if (parsed.name) proposed.name = parsed.name.trim();
-    if (parsed.phone) proposed.phone = parsed.phone.trim();
-    if (parsed.email) proposed.email = parsed.email.trim();
-    if (parsed.date_occurred) proposed.date_occurred = parsed.date_occurred.trim();
-    if (parsed.expected_outcome) proposed.expected_outcome = parsed.expected_outcome.trim();
-
-    await db.insert(schema.aiInteraction).values({
-      tenantId,
-      chatbotSessionId: sessionId,
-      capability: 'chatbot_extract',
-      providerProfileId: profileRef.key,
-      model: profileRef.profile.default_model,
-      inputHash: hashRedactedPrompt([redacted]),
-      suggestion: { proposed, sensitivity_signal: parsed.sensitivity_signal ?? false },
-      status: 'completed',
-      decision: 'pending',
-      latencyMs: result.latency_ms,
-    });
-
-    return { proposed, sensitivity: parsed.sensitivity_signal === true };
-  } catch {
-    return { proposed: {}, sensitivity: false };
-  }
 }
 
 async function loadSession(tenantId: string, sessionId: string): Promise<SessionRow | null> {
@@ -636,7 +339,10 @@ export async function createChatbotSession(
 
   const loc = locale && cfg.cd16.chatbot.locales.includes(locale) ? locale : cfg.cd16.chatbot.locales[0] ?? 'en';
   const disclosure = disclosureText(cfg.cd16, loc);
-  const welcome = intentMenu(cfg.cd16, loc);
+  const conversational = isConversationalMode(cfg.cd16);
+  const welcome = conversational
+    ? conversationalWelcome(cfg.cd16, loc)
+    : intentMenu(cfg.cd16, loc);
   const transcript: TranscriptEntry[] = [
     { role: 'assistant', text: disclosure, at: nowIso() },
     { role: 'assistant', text: welcome, at: nowIso() },
@@ -648,7 +354,7 @@ export async function createChatbotSession(
       tenantId,
       channel: 'web_widget',
       locale: loc,
-      phase: 'choose_intent',
+      phase: conversational ? 'converse' : 'choose_intent',
       slots: slotsToJson({
         proposed: {},
         confirmed: {},
@@ -723,6 +429,71 @@ export async function handleChatbotMessage(
   let readback = false;
   let sensitivityFlagged = session.sensitivityFlagged;
 
+  if (isConversationalMode(cd16)) {
+    const profileRef = resolveChatbotProfile(cd16);
+    const profileKey = profileRef?.key ?? 'default';
+    const profile =
+      profileRef?.profile ??
+      Object.values(cd16.provider_profiles).find((p) => p.enabled) ??
+      Object.values(cd16.provider_profiles)[0];
+    if (!profile) {
+      return { ok: false, code: 503, error: 'ai_not_configured' };
+    }
+
+    const conv = await handleConversationalTurn(
+      tenantId,
+      sessionId,
+      cd16,
+      form,
+      taxonomy,
+      slots,
+      transcript,
+      text,
+      loc,
+      intent,
+      phase,
+      profileKey,
+      profile,
+      {
+        answerFaq: (query) => answerFaq(tenantId, cd16, query, loc),
+        hotlineMessage: () => hotlineMessage(tenantId, loc),
+      },
+    );
+
+    intent = conv.intent;
+    phase = conv.phase;
+    slots = conv.slots;
+    handoff = conv.handoff;
+    done = conv.done;
+    readback = conv.readback;
+    sensitivityFlagged = conv.sensitivityFlagged;
+    replies.push(...conv.replies);
+
+    for (const r of conv.replies) {
+      transcript = appendTranscript(transcript, 'assistant', r);
+    }
+
+    session = await saveSession(session, {
+      intent,
+      phase,
+      slots,
+      transcript,
+      handoffReason: handoff ? 'user_requested' : session.handoffReason,
+      sensitivityFlagged,
+      endedAt: done && handoff ? new Date() : null,
+      locale: loc,
+    });
+
+    return {
+      ok: true,
+      replies,
+      slots,
+      handoff: handoff || undefined,
+      done: done || undefined,
+      readback: readback || undefined,
+    };
+  }
+
   if (phase === 'choose_intent') {
     const picked = parseIntent(text, cd16.chatbot.allowed_intents);
     if (!picked) {
@@ -787,7 +558,7 @@ export async function handleChatbotMessage(
       taxonomy,
       anonymous,
     );
-    if (sensitivity) {
+    if (sensitivity && cd16.chatbot.handoff_on_sensitive) {
       sensitivityFlagged = true;
       phase = 'handoff';
       handoff = true;
@@ -799,7 +570,8 @@ export async function handleChatbotMessage(
       replies.push(await hotlineMessage(tenantId, loc));
       done = true;
     } else {
-      await applyNarrativeAndExtraction(tenantId, form, taxonomy, slots, text, proposed, loc);
+      if (sensitivity) sensitivityFlagged = true;
+      await applyNarrativeAndExtraction(tenantId, form, taxonomy, slots, text, proposed, loc, text);
       if (!slots.consent && !anonymous && form.consent_text) {
         phase = 'file_consent';
         const consentMsg = form.consent_text[loc] ?? form.consent_text.en ?? Object.values(form.consent_text)[0];
