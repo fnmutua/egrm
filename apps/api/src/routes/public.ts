@@ -30,6 +30,28 @@ import {
   loadCorrespondenceConfig,
   verifyCaseByReference,
 } from '../services/correspondence.js';
+import {
+  confirmChatbotSession,
+  createChatbotSession,
+  getChatbotMeta,
+  handleChatbotMessage,
+} from '../services/chatbot.js';
+
+const chatbotSessionBody = z.object({
+  locale: z.string().min(2).max(8).optional(),
+});
+
+const chatbotMessageBody = z.object({
+  text: z.string().min(1).max(4000),
+  locale: z.string().min(2).max(8).optional(),
+});
+
+const chatbotConfirmBody = z.object({
+  slots: z.record(z.string(), z.unknown()).optional(),
+  submit: z.boolean(),
+  anonymous: z.boolean().optional(),
+  consent: z.boolean().optional(),
+});
 
 const submitBody = z.object({
   anonymous: z.boolean().default(false),
@@ -387,5 +409,58 @@ export default async function publicRoutes(app: FastifyInstance) {
       message: needsApproval ? model.registration_approval.pending_message : 'Registration complete. You may sign in.',
       user_id: user!.id,
     });
+  });
+
+  app.get('/api/v1/public/chatbot/meta', { config: rateLimit }, async (req) => {
+    return getChatbotMeta(req.tenant.id);
+  });
+
+  app.post('/api/v1/public/chatbot/sessions', { config: rateLimit }, async (req, reply) => {
+    const parsed = chatbotSessionBody.safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+    const result = await createChatbotSession(req.tenant.id, parsed.data.locale);
+    if (!result.ok) return reply.code(result.code).send({ error: result.error });
+    return reply.code(201).send({
+      session_id: result.session_id,
+      disclosure_text: result.disclosure_text,
+      persona: result.persona,
+      intents: result.intents,
+      replies: result.replies,
+    });
+  });
+
+  app.post('/api/v1/public/chatbot/sessions/:id/messages', { config: rateLimit }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const parsed = chatbotMessageBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+    const result = await handleChatbotMessage(req.tenant.id, id, parsed.data.text, parsed.data.locale);
+    if (!result.ok) return reply.code(result.code).send({ error: result.error });
+    return {
+      replies: result.replies,
+      slots: result.slots,
+      handoff: result.handoff,
+      done: result.done,
+      readback: result.readback,
+    };
+  });
+
+  app.post('/api/v1/public/chatbot/sessions/:id/confirm', { config: rateLimit }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const parsed = chatbotConfirmBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+    const result = await confirmChatbotSession(req.tenant.id, id, parsed.data);
+    if (!result.ok) {
+      return reply.code(result.code).send({
+        error: result.error,
+        message: result.message,
+        details: result.details,
+      });
+    }
+    return {
+      case_id: result.case_id,
+      reference: result.reference,
+      tracking_pin: result.tracking_pin,
+      requires_completion: result.requires_completion,
+    };
   });
 }

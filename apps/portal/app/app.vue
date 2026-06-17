@@ -33,5 +33,6 @@ useHead(() => ({
 <template>
   <UApp>
     <NuxtPage />
+    <ChatbotWidget />
   </UApp>
 </template>

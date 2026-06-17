@@ -7,7 +7,7 @@ import { getActiveConfig } from './config.js';
 import { chatCompletion } from './ai-completion.js';
 import { hashRedactedPrompt, redactIntakeText } from './ai-redaction.js';
 import { createCase } from './intake.js';
-import { coerceIntakeString, coerceIntakeStringArray } from './intake-values.js';
+import { coerceIntakeStringArray } from './intake-values.js';
 import { searchIntakeUnits } from './intake-units.js';
 import { verifyCaseByReference } from './correspondence.js';
 import { loadChatbotConfig, parseJsonFromModel } from './ai-shared.js';
@@ -143,9 +143,15 @@ function buildFieldQueue(form: Cd06IntakeForms, channelMinimum: string[], anonym
   return queue;
 }
 
+function fieldIsEmpty(key: string, val: unknown): boolean {
+  if (val === undefined || val === null || val === '') return true;
+  if (key === 'categories') return coerceIntakeStringArray(val).length === 0;
+  return false;
+}
+
 function pendingFields(slots: ChatbotSlotsState): string[] {
   if (slots.field_queue.length) {
-    return slots.field_queue.filter((k) => slots.confirmed[k] === undefined || slots.confirmed[k] === '');
+    return slots.field_queue.filter((k) => fieldIsEmpty(k, slots.confirmed[k]));
   }
   return [];
 }
@@ -234,7 +240,7 @@ function readBackText(form: Cd06IntakeForms, taxonomy: Cd03Taxonomy, slots: Chat
     }
   }
   if (slots.anonymous) lines.push('• Submitted anonymously');
-  lines.push('\nIf this looks correct, tap **Submit** below. To change something, tell me which field to update.');
+  lines.push('\nIf this looks correct, use the Submit button below. To change something, tell me which field to update.');
   return lines.join('\n');
 }
 
@@ -280,7 +286,7 @@ async function answerFaq(tenantId: string, cd16: Cd16Ai, query: string, locale: 
           { role: 'system', content: 'Respond with JSON only.' },
           { role: 'user', content: prompt },
         ],
-        { json_mode: true, max_tokens: cd16.chatbot.limits.max_output_tokens },
+        { json_mode: true },
       );
       const parsed = z.object({ answer: z.string() }).parse(parseJsonFromModel(result.content));
       await db.insert(schema.aiInteraction).values({
@@ -332,7 +338,7 @@ async function extractFromNarrative(
         { role: 'system', content: 'Extract intake fields. JSON only.' },
         { role: 'user', content: prompt },
       ],
-      { json_mode: true, max_tokens: cd16.chatbot.limits.max_output_tokens },
+      { json_mode: true },
     );
     const parsed = extractSchema.parse(parseJsonFromModel(result.content));
     const proposed: Record<string, unknown> = {};
