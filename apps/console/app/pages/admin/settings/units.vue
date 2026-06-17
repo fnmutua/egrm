@@ -470,14 +470,6 @@ onMounted(async () => {
 
 <template>
   <div v-if="user" class="p-4 sm:p-8">
-    <UBreadcrumb
-      :items="[
-        { label: 'Programme admin', to: '/admin', icon: 'i-lucide-shield' },
-        { label: 'Settings', to: '/admin/settings' },
-        { label: 'Jurisdiction units' },
-      ]"
-      class="mb-4"
-    />
     <div class="flex items-start justify-between gap-3 mb-6 flex-wrap">
       <div>
         <h1 class="text-2xl font-semibold">Jurisdiction units</h1>

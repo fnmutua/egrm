@@ -10,6 +10,7 @@ import { allocateReference } from './reference.js';
 import { enqueueNotifications } from './notifications.js';
 import { scheduleOutboxDispatch } from './notification-queue.js';
 import { coerceIntakeString, coerceIntakeStringArray } from './intake-values.js';
+import { intakeUnitLevelCodes } from './intake-units.js';
 import { attachIntakeFiles, validateIntakeAttachments, type IntakeAttachmentInput } from './attachments.js';
 
 export interface IntakeInput {
@@ -129,8 +130,9 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
       .where(and(eq(schema.unit.tenantId, input.tenantId), eq(schema.unit.id, unitId)))
       .limit(1);
     if (!unitRow) return { ok: false, code: 422, error: 'unknown_unit' };
-    const unitLevelAllowsIntake = intakeLevels.some(
-      (l) => l.code.toLowerCase() === unitRow!.levelCode.toLowerCase(),
+    const allowedLevelCodes = await intakeUnitLevelCodes(input.tenantId, hierarchy);
+    const unitLevelAllowsIntake = allowedLevelCodes.some(
+      (code) => code.toLowerCase() === unitRow!.levelCode.toLowerCase(),
     );
     if (!unitLevelAllowsIntake) {
       return { ok: false, code: 422, error: 'unit_not_at_intake_level' };

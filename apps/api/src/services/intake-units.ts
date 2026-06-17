@@ -28,6 +28,38 @@ function intakeLevelCodes(hierarchy: Cd02Hierarchy): string[] {
   return hierarchyIntakeLevels(hierarchy).map((l) => l.code.toLowerCase());
 }
 
+/** Intake level filter — falls back when CD-02 intake levels have no units in the tree. */
+export async function intakeUnitLevelCodes(
+  tenantId: string,
+  hierarchy: Cd02Hierarchy,
+): Promise<string[]> {
+  const configured = intakeLevelCodes(hierarchy);
+  if (!configured.length) return [];
+
+  const unitLevels = await db
+    .select({
+      levelCode: schema.unit.levelCode,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(schema.unit)
+    .where(and(eq(schema.unit.tenantId, tenantId), eq(schema.unit.active, true)))
+    .groupBy(schema.unit.levelCode);
+
+  const countByLevel = new Map(
+    unitLevels.map((r) => [r.levelCode.toLowerCase(), Number(r.n)]),
+  );
+
+  const configuredWithUnits = configured.filter((c) => (countByLevel.get(c) ?? 0) > 0);
+  if (configuredWithUnits.length > 0) return configuredWithUnits;
+
+  for (const level of hierarchy.levels) {
+    const code = level.code.toLowerCase();
+    if ((countByLevel.get(code) ?? 0) > 0) return [code];
+  }
+
+  return configured;
+}
+
 async function loadAncestorMap(tenantId: string, seeds: UnitRow[]): Promise<Map<string, UnitRow>> {
   const byId = new Map<string, UnitRow>();
   for (const u of seeds) byId.set(u.id, u);
@@ -86,7 +118,7 @@ export async function searchIntakeUnits(
   const hierarchy = await getActiveConfig<Cd02Hierarchy>(tenantId, 'cd02_hierarchy');
   if (!hierarchy) return [];
 
-  const levelCodes = intakeLevelCodes(hierarchy);
+  const levelCodes = await intakeUnitLevelCodes(tenantId, hierarchy);
   if (!levelCodes.length) return [];
 
   const levelFilter = sql`lower(${schema.unit.levelCode}) in (${sql.join(
@@ -117,9 +149,26 @@ export async function searchIntakeUnits(
   }
 
   const q = opts.q?.trim() ?? '';
-  if (q.length < 2) return [];
-
   const limit = Math.min(Math.max(opts.limit ?? 40, 1), 50);
+
+  if (q.length < 2) {
+    const rows = await db
+      .select({
+        id: schema.unit.id,
+        levelCode: schema.unit.levelCode,
+        parentId: schema.unit.parentId,
+        name: schema.unit.name,
+      })
+      .from(schema.unit)
+      .where(baseWhere)
+      .orderBy(asc(schema.unit.name))
+      .limit(limit);
+
+    if (!rows.length) return [];
+    const byId = await loadAncestorMap(tenantId, rows);
+    return toResults(rows, hierarchy, byId);
+  }
+
   const rows = await db
     .select({
       id: schema.unit.id,

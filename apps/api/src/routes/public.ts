@@ -120,14 +120,10 @@ export default async function publicRoutes(app: FastifyInstance) {
       })
       .parse(req.query);
 
-    if (!query.q && !query.id) {
-      return reply.code(400).send({ error: 'q_or_id_required' });
-    }
-
     const units = await searchIntakeUnits(req.tenant.id, {
       q: query.q,
       id: query.id,
-      limit: query.limit,
+      limit: query.limit ?? 40,
     });
     return { units };
   });

@@ -202,14 +202,11 @@ watch(anonymous, () => {
       <div class="flex-1 overflow-y-auto overflow-x-hidden">
         <!-- Sticky title — content scrolls beneath -->
         <header class="sticky top-0 z-20 border-b border-default bg-default px-4 sm:px-6 py-4">
-          <div class="flex items-start gap-3 max-w-6xl mx-auto w-full">
-            <UButton to="/cases" variant="ghost" icon="i-lucide-arrow-left" size="sm" class="mt-0.5 shrink-0" />
-            <div class="min-w-0 flex-1">
-              <h1 class="text-xl font-semibold">File assisted case</h1>
-              <p class="text-sm text-muted">
-                Capture a grievance received in person, by phone, letter, or other assisted channel.
-              </p>
-            </div>
+          <div class="max-w-6xl mx-auto w-full">
+            <h1 class="text-xl font-semibold">File assisted case</h1>
+            <p class="text-sm text-muted">
+              Capture a grievance received in person, by phone, letter, or other assisted channel.
+            </p>
           </div>
         </header>
 

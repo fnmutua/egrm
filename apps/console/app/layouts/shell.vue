@@ -232,8 +232,11 @@ const dashLinkClass = (active: boolean) => [
     </aside>
 
     <!-- Page content -->
-    <main class="flex-1 min-w-0">
-      <slot />
+    <main class="flex-1 min-w-0 flex flex-col">
+      <AppPageBreadcrumb v-if="user" />
+      <div class="flex-1 min-w-0">
+        <slot />
+      </div>
     </main>
   </div>
 </template>

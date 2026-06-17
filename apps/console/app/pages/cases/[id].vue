@@ -9,6 +9,7 @@ definePageMeta({ layout: 'shell' });
 const route = useRoute();
 const { api } = useApi();
 const { user, fetchMe } = useAuth();
+const { setPageBreadcrumb, clearPageBreadcrumb } = usePageBreadcrumbs();
 const toast = useToast();
 const caseId = computed(() => String(route.params.id));
 const { stageFile, removeStaged, downloadFile } = useCaseAttachmentUpload(caseId.value);
@@ -856,13 +857,25 @@ onMounted(async () => {
   if (!(await fetchMe())) return navigateTo('/login');
   await Promise.all([loadCase(), loadAttachmentKinds()]);
 });
+
+watch(
+  () => detail.value?.case.reference,
+  (reference) => {
+    if (!reference) return;
+    setPageBreadcrumb([
+      { label: 'Cases', to: '/cases', icon: 'i-lucide-inbox' },
+      { label: reference },
+    ]);
+  },
+  { immediate: true },
+);
+
+onUnmounted(clearPageBreadcrumb);
 </script>
 
 <template>
   <div v-if="user && detail" class="relative flex flex-col h-[100dvh] max-h-[100dvh] overflow-hidden bg-default">
     <header class="shrink-0 z-20 border-b border-default bg-default px-4 sm:px-8 pt-4">
-      <UButton to="/cases" variant="ghost" icon="i-lucide-arrow-left" class="mb-4">All cases</UButton>
-
       <div class="flex items-start justify-between mb-4">
         <div class="min-w-0">
           <div class="flex items-center gap-3 flex-wrap">

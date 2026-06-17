@@ -115,6 +115,36 @@ export const kisipOrgAccess = {
   },
 };
 
+async function seedDemoUnitsIfEmpty(tenantId: string) {
+  const [existing] = await db
+    .select({ id: schema.unit.id })
+    .from(schema.unit)
+    .where(eq(schema.unit.tenantId, tenantId))
+    .limit(1);
+  if (existing) return;
+
+  async function insertUnit(
+    levelCode: string,
+    parentId: string | null,
+    name: string,
+    code: string,
+  ) {
+    const [row] = await db
+      .insert(schema.unit)
+      .values({ tenantId, levelCode, parentId, name, code, active: true })
+      .returning();
+    return row!;
+  }
+
+  const national = await insertUnit('national', null, 'Kenya', 'KE');
+  const county = await insertUnit('county', national.id, 'Demo County', 'DEMO-COUNTY');
+  const subcounty = await insertUnit('subcounty', county.id, 'Demo Sub-county', 'DEMO-SUB');
+  const ward = await insertUnit('ward', subcounty.id, 'Demo Ward', 'DEMO-WARD');
+  await insertUnit('settlement', ward.id, 'Demo Settlement A', 'DEMO-SET-A');
+  await insertUnit('settlement', ward.id, 'Demo Settlement B', 'DEMO-SET-B');
+  console.log('  Demo jurisdiction units seeded (2 settlements). Replace via Admin → Jurisdiction units.');
+}
+
 async function upsertActiveConfig(tenantId: string, domain: ConfigDomain, payload: unknown, changedBy: string) {
   const parsed = validateConfig(domain, payload);
   if (!parsed.success) {
@@ -651,7 +681,7 @@ export async function runSeed() {
     correspondence_policy: DEFAULT_CORRESPONDENCE_POLICY,
   }, admin!.id);
 
-  // Jurisdiction units are NOT seeded — import via Admin → Units (template generated from CD-02).
+  await seedDemoUnitsIfEmpty(kisip!.id);
 
   await upsertActiveConfig(kisip!.id, 'cd14_features', {
     appeals: true,

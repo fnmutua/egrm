@@ -331,14 +331,6 @@ function rowActions(row: StaffUser) {
 
 <template>
   <div v-if="user" class="p-4 sm:p-8">
-    <UBreadcrumb
-      :items="[
-        { label: 'Programme admin', to: '/admin', icon: 'i-lucide-shield' },
-        { label: 'Settings', to: '/admin/settings' },
-        { label: 'Users' },
-      ]"
-      class="mb-4"
-    />
     <div class="flex flex-wrap items-start justify-between gap-3 mb-6">
       <div>
         <h1 class="text-2xl font-semibold mb-1">Users</h1>
