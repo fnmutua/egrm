@@ -3,6 +3,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -306,5 +307,33 @@ export const threadEntry = pgTable('thread_entry', {
   authorUserId: uuid('author_user_id').references(() => appUser.id),
   authorPartyId: uuid('author_party_id').references(() => party.id),
   inReplyToId: uuid('in_reply_to_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** AI provider calls and staff decisions (spec 16 §6.1). */
+export const aiInteraction = pgTable('ai_interaction', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenant.id),
+  caseId: uuid('case_id').references(() => grmCase.id),
+  chatbotSessionId: uuid('chatbot_session_id'),
+  capability: text('capability').notNull(),
+  providerProfileId: text('provider_profile_id'),
+  model: text('model'),
+  inputHash: text('input_hash'),
+  inputTokenCount: integer('input_token_count'),
+  outputTokenCount: integer('output_token_count'),
+  suggestion: jsonb('suggestion').$type<Record<string, unknown>>().notNull().default({}),
+  confidence: real('confidence'),
+  status: text('status', {
+    enum: ['completed', 'failed', 'blocked_policy', 'redacted_empty'],
+  })
+    .notNull()
+    .default('completed'),
+  error: text('error'),
+  decision: text('decision', { enum: ['accepted', 'edited', 'rejected', 'pending'] }).default('pending'),
+  decidedBy: uuid('decided_by').references(() => appUser.id),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+  appliedEventId: uuid('applied_event_id').references(() => caseEvent.id),
+  latencyMs: integer('latency_ms'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

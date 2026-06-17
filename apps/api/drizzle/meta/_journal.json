@@ -99,6 +99,13 @@
       "when": 1781271000000,
       "tag": "0014_staff_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1781272000000,
+      "tag": "0015_ai_interaction",
+      "breakpoints": true
     }
   ]
 }
