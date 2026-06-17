@@ -34,6 +34,39 @@ function isUnread(n: StaffInboxNotification): boolean {
   return !n.read_at && !n.dismissed_at;
 }
 
+function isDismissed(n: StaffInboxNotification): boolean {
+  return Boolean(n.dismissed_at);
+}
+
+function isReadActive(n: StaffInboxNotification): boolean {
+  return Boolean(n.read_at) && !n.dismissed_at;
+}
+
+function rowClass(n: StaffInboxNotification) {
+  const interactive = n.case_id && canViewCases.value;
+  if (isDismissed(n)) {
+    return [
+      interactive ? 'cursor-pointer' : '',
+      'bg-muted/30 opacity-75 hover:bg-muted/40',
+    ].filter(Boolean).join(' ');
+  }
+  if (isUnread(n)) {
+    return [
+      interactive ? 'cursor-pointer' : '',
+      'bg-primary/5 hover:bg-primary/10 [&>td:first-child]:border-l-2 [&>td:first-child]:border-l-primary',
+    ].filter(Boolean).join(' ');
+  }
+  return interactive ? 'hover:bg-elevated/50 cursor-pointer' : 'hover:bg-elevated/30';
+}
+
+const filterButtonProps = (value: typeof statusFilter.value) => {
+  const active = statusFilter.value === value;
+  if (!active) return { variant: 'outline' as const, color: 'neutral' as const };
+  if (value === 'unread') return { variant: 'soft' as const, color: 'primary' as const };
+  if (value === 'dismissed') return { variant: 'soft' as const, color: 'neutral' as const };
+  return { variant: 'soft' as const, color: 'success' as const };
+};
+
 async function load() {
   loading.value = true;
   try {
@@ -101,7 +134,8 @@ watch(page, () => void load());
       <div>
         <h1 class="text-xl font-semibold">Notifications</h1>
         <p class="text-muted text-sm">
-          {{ total }} in-app alert(s) for you<span v-if="unreadCount > 0"> · {{ unreadCount }} unread</span>
+          {{ total }} in-app alert(s) for you
+          <span v-if="unreadCount > 0" class="text-primary font-medium"> · {{ unreadCount }} unread</span>
         </p>
       </div>
       <UButton
@@ -120,11 +154,19 @@ watch(page, () => void load());
         v-for="f in filterItems"
         :key="f.value"
         size="sm"
-        :variant="statusFilter === f.value ? 'soft' : 'outline'"
+        v-bind="filterButtonProps(f.value)"
         @click="statusFilter = f.value"
       >
         {{ f.label }}
-        <UBadge v-if="f.value === 'unread' && unreadCount > 0" size="xs" class="ml-1.5">{{ unreadCount }}</UBadge>
+        <UBadge
+          v-if="f.value === 'unread' && unreadCount > 0"
+          size="xs"
+          color="primary"
+          variant="solid"
+          class="ml-1.5"
+        >
+          {{ unreadCount }}
+        </UBadge>
       </UButton>
     </div>
 
@@ -150,14 +192,30 @@ watch(page, () => void load());
               v-for="n in items"
               :key="n.id"
               class="transition-colors"
-              :class="n.case_id && canViewCases ? 'hover:bg-elevated/50 cursor-pointer' : 'hover:bg-elevated/30'"
+              :class="rowClass(n)"
               @click="openCase(n)"
             >
               <td class="py-3.5 px-4 font-medium whitespace-nowrap">
-                <span :class="isUnread(n) ? 'text-default' : 'text-muted'">{{ n.title }}</span>
-                <UBadge v-if="isUnread(n)" size="xs" color="primary" variant="subtle" class="ml-1.5">Unread</UBadge>
+                <span
+                  :class="isUnread(n)
+                    ? 'text-default font-semibold'
+                    : isDismissed(n)
+                      ? 'text-muted line-through decoration-muted/60'
+                      : 'text-muted'"
+                >
+                  {{ n.title }}
+                </span>
+                <UBadge v-if="isUnread(n)" size="xs" color="primary" variant="solid" class="ml-1.5">Unread</UBadge>
+                <UBadge v-else-if="isReadActive(n)" size="xs" color="success" variant="subtle" class="ml-1.5">Read</UBadge>
+                <UBadge v-else-if="isDismissed(n)" size="xs" color="neutral" variant="subtle" class="ml-1.5">Dismissed</UBadge>
               </td>
-              <td class="py-3.5 px-4 max-w-sm truncate text-muted" :title="n.body">{{ n.body }}</td>
+              <td
+                class="py-3.5 px-4 max-w-sm truncate"
+                :class="isUnread(n) ? 'text-default' : 'text-muted'"
+                :title="n.body"
+              >
+                {{ n.body }}
+              </td>
               <td class="py-3.5 px-4 whitespace-nowrap">
                 <UBadge size="xs" color="neutral" variant="subtle">{{ formatEventKind(n.event_kind) }}</UBadge>
               </td>

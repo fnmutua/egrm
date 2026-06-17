@@ -26,6 +26,7 @@ import {
   validateAssignableRoles,
   type StaffUserManagerContext,
 } from '../services/role-hierarchy.js';
+import { searchAssignableUnits } from '../services/assignable-units.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -225,6 +226,16 @@ export default async function userRoutes(app: FastifyInstance) {
   app.get('/api/v1/users/field-schema', { onRequest: [requireStaffUserManager] }, async (req) => {
     const model = await getUserModel(req.tenant.id);
     return userFieldSchema(model);
+  });
+
+  app.get('/api/v1/users/assignable-units', { onRequest: [requireStaffUserManager] }, async (req) => {
+    const q = req.query as { q?: string; id?: string; limit?: string };
+    const units = await searchAssignableUnits(req.tenant.id, {
+      q: q.q,
+      id: q.id,
+      limit: q.limit ? Number(q.limit) : undefined,
+    });
+    return { units };
   });
 
   app.get('/api/v1/users', { onRequest: [requireStaffUserManager] }, async (req) => {

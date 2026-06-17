@@ -33,15 +33,9 @@ interface TenantRole {
   label: string;
 }
 
-interface UnitRow {
-  id: string;
-  name: string;
-  levelCode: string;
-}
-
 const users = ref<StaffUser[]>([]);
 const roles = ref<TenantRole[]>([]);
-const units = ref<UnitRow[]>([]);
+const metaLoading = ref(true);
 const loading = ref(true);
 const saving = ref(false);
 const search = ref('');
@@ -99,11 +93,6 @@ const editRoleItems = computed(() => {
   return items;
 });
 
-const unitItems = computed(() => [
-  { value: null, label: '(no jurisdiction)' },
-  ...units.value.map((u) => ({ value: u.id, label: `${u.name} (${u.levelCode})` })),
-]);
-
 const filteredUsers = computed(() => {
   const q = search.value.trim().toLowerCase();
   return users.value.filter((u) => {
@@ -126,12 +115,16 @@ async function loadUsers() {
 }
 
 async function loadMeta() {
-  const [r, u] = await Promise.all([
-    api<{ roles: TenantRole[] }>('/api/v1/roles', { query: { manageable: '1' } }),
-    api<{ units: UnitRow[] }>('/api/v1/units?all=1'),
-  ]);
-  roles.value = r.roles;
-  units.value = u.units;
+  metaLoading.value = true;
+  try {
+    const r = await api<{ roles: TenantRole[] }>('/api/v1/roles', { query: { manageable: '1' } });
+    roles.value = r.roles;
+  } catch (e: unknown) {
+    roles.value = [];
+    toast.add({ title: apiError(e, 'Could not load roles'), color: 'error' });
+  } finally {
+    metaLoading.value = false;
+  }
 }
 
 async function reload() {
@@ -433,17 +426,12 @@ function rowActions(row: StaffUser) {
               value-key="value"
               label-key="label"
               class="w-full"
+              :loading="metaLoading"
               placeholder="Select role…"
             />
           </UFormField>
           <UFormField label="Jurisdiction unit">
-            <USelectMenu
-              v-model="createForm.unit_id"
-              :items="unitItems"
-              value-key="value"
-              label-key="label"
-              class="w-full"
-            />
+            <JurisdictionUnitSelect v-model="createForm.unit_id" />
           </UFormField>
           <label class="flex items-center gap-2 text-sm">
             <UCheckbox v-model="createForm.active" />
@@ -487,17 +475,12 @@ function rowActions(row: StaffUser) {
                   value-key="value"
                   label-key="label"
                   class="w-full"
+                  :loading="metaLoading"
                   placeholder="Select role…"
                 />
               </UFormField>
               <UFormField label="Jurisdiction">
-                <USelectMenu
-                  v-model="row.unit_id"
-                  :items="unitItems"
-                  value-key="value"
-                  label-key="label"
-                  class="w-full"
-                />
+                <JurisdictionUnitSelect v-model="row.unit_id" />
               </UFormField>
             </div>
           </div>
@@ -538,16 +521,12 @@ function rowActions(row: StaffUser) {
                 value-key="value"
                 label-key="label"
                 class="w-full"
+                :loading="metaLoading"
+                placeholder="Select role…"
               />
             </UFormField>
             <UFormField label="Jurisdiction">
-              <USelectMenu
-                v-model="row.unit_id"
-                :items="unitItems"
-                value-key="value"
-                label-key="label"
-                class="w-full"
-              />
+              <JurisdictionUnitSelect v-model="row.unit_id" />
             </UFormField>
           </div>
         </div>

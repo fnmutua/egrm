@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 import { and, eq, sql } from 'drizzle-orm';
 import type { ConfigDomain } from '@egrm/core';
 import { validateConfig, defaultNotificationPack, defaultStaffProfileFields, DEFAULT_ATTACHMENT_KINDS, DEFAULT_ATTACHMENT_POLICY, DEFAULT_CORRESPONDENCE_POLICY, mergeMissingNotificationItems, mergeMissingIntakeFormDefaults, type Cd06IntakeForms } from '@egrm/config-schemas';
-import type { Cd09Notifications } from '@egrm/config-schemas';
+import type { Cd09Notifications, Cd10OrgAccess } from '@egrm/config-schemas';
 import { db, pool, schema } from './client.js';
 import { syncRolesFromOrgAccess } from '../services/org-access.js';
 
@@ -74,7 +74,7 @@ export const kisipOrgAccess = {
     require_jurisdiction_scope: false,
     require_role_assignment: true,
     default_assignment_days: 0,
-    staff_email_domains: ['kisip.local'],
+    staff_email_domains: [],
     contractor_role_names: [],
     profile_fields: defaultStaffProfileFields(),
     registration_approval: {
@@ -172,6 +172,68 @@ async function upsertActiveConfig(tenantId: string, domain: ConfigDomain, payloa
     changedBy,
     activatedAt: new Date(),
   });
+}
+
+/** Clear staff email domain allowlist on active CD-10 (empty list = any domain). */
+async function ensureStaffEmailDomainsOpen(tenantId: string, changedBy: string) {
+  const [active] = await db
+    .select({
+      id: schema.configVersion.id,
+      version: schema.configVersion.version,
+      payload: schema.configVersion.payload,
+    })
+    .from(schema.configVersion)
+    .where(
+      and(
+        eq(schema.configVersion.tenantId, tenantId),
+        eq(schema.configVersion.domain, 'cd10_org_access'),
+        eq(schema.configVersion.status, 'active'),
+      ),
+    )
+    .limit(1);
+
+  if (!active) return;
+
+  const current = active.payload as Cd10OrgAccess;
+  const domains = current.user_model?.staff_email_domains ?? [];
+  if (domains.length === 0) return;
+
+  const merged: Cd10OrgAccess = {
+    ...current,
+    user_model: { ...current.user_model, staff_email_domains: [] },
+  };
+
+  const parsed = validateConfig('cd10_org_access', merged);
+  if (!parsed.success) {
+    throw new Error(`CD-10 merge invalid: ${JSON.stringify(parsed.error.issues, null, 2)}`);
+  }
+
+  const [maxRow] = await db
+    .select({ max: sql<number>`coalesce(max(${schema.configVersion.version}), 0)::int` })
+    .from(schema.configVersion)
+    .where(and(eq(schema.configVersion.tenantId, tenantId), eq(schema.configVersion.domain, 'cd10_org_access')));
+
+  const nextVersion = (maxRow?.max ?? 0) + 1;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.configVersion)
+      .set({ status: 'retired' })
+      .where(eq(schema.configVersion.id, active.id));
+
+    await tx.insert(schema.configVersion).values({
+      tenantId,
+      domain: 'cd10_org_access',
+      version: nextVersion,
+      status: 'active',
+      payload: parsed.data,
+      changeNote: 'seed: open staff email domains',
+      changedBy,
+      activatedAt: new Date(),
+    });
+  });
+
+  console.log('  CD-10: staff email domain restriction removed (any domain allowed).');
 }
 
 /** Merge new platform notification templates/rules (e.g. thread.*) into an existing active CD-09 pack. */
@@ -691,6 +753,7 @@ export async function runSeed() {
   }, admin!.id);
 
   await upsertActiveConfig(kisip!.id, 'cd10_org_access', kisipOrgAccess, admin!.id);
+  await ensureStaffEmailDomainsOpen(kisip!.id, admin!.id);
 
   console.log('Seed complete.');
   console.log(`  Tenant: kisip (${kisip!.id})`);
