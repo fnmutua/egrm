@@ -182,6 +182,7 @@ const heroSubtitle = computed(
               {{ loc }}
             </button>
           </div>
+          <PortalStaffLoginButton />
           <UButton to="/submit" size="sm">
             <span class="sm:hidden">{{ ui.submitShort }}</span>
             <span class="hidden sm:inline">{{ ui.submit }}</span>

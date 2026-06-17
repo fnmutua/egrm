@@ -28,7 +28,10 @@ const logoFailed = ref(false);
           {{ p?.name ?? 'Grievance Portal' }}
         </span>
       </NuxtLink>
-      <slot />
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <PortalStaffLoginButton />
+        <slot />
+      </div>
     </div>
   </header>
 </template>

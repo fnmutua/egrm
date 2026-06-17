@@ -96,6 +96,7 @@ railway run pnpm db:seed
    | Variable | Example |
    |----------|---------|
    | `NUXT_PUBLIC_API_BASE` | `https://egrm-api-production.up.railway.app` |
+   | `NUXT_PUBLIC_CONSOLE_URL` | `https://your-console.up.railway.app` (staff login link in portal header) |
    | `NUXT_PUBLIC_TENANT` | `kisip` |
    | `NODE_ENV` | `production` |
 
