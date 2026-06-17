@@ -161,7 +161,8 @@ async function buildCaseWhere(
     );
   }
 
-  conditions.push(sensitivityListFilter(access, userId));
+  const sensitivity = sensitivityListFilter(access, userId);
+  if (sensitivity) conditions.push(sensitivity);
 
   for (const f of filters) {
     if (f.field === 'unit_id' && ['eq', 'in'].includes(f.op)) {

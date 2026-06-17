@@ -93,11 +93,22 @@ export async function expandUnitSubtrees(tenantId: string, rootIds: string[]): P
   return allowed;
 }
 
+/** Users with full sensitive clearance — see all cases in list queries. */
+function hasSensitiveClearance(permissions: string[]): boolean {
+  return (
+    permissions.includes('admin:*') ||
+    hasPermission(permissions, 'sensitive:read') ||
+    hasPermission(permissions, 'sensitive:handle')
+  );
+}
+
 /** SQL fragment: hide sensitive cases unless the user has clearance or is assignee. */
 export function sensitivityListFilter(
-  access: Pick<UserAccess, 'sensitiveClasses'>,
+  access: Pick<UserAccess, 'sensitiveClasses' | 'permissions'>,
   userId: string,
-): SQL {
+): SQL | undefined {
+  if (hasSensitiveClearance(access.permissions)) return undefined;
+
   const parts: SQL[] = [eq(schema.grmCase.sensitivity, 'standard'), eq(schema.grmCase.assigneeId, userId)];
   if (access.sensitiveClasses.length > 0) {
     parts.push(inArray(schema.grmCase.sensitivity, access.sensitiveClasses));
@@ -148,7 +159,7 @@ export async function caseVisibilityFilter(
 /** Whether a case row is visible to the user (detail endpoint). */
 export async function canAccessCase(
   tenantId: string,
-  access: Pick<UserAccess, 'tenantWide' | 'jurisdictionRoots' | 'sensitiveClasses'>,
+  access: Pick<UserAccess, 'tenantWide' | 'jurisdictionRoots' | 'sensitiveClasses' | 'permissions'>,
   userId: string,
   caseRow: { unitId: string | null; assigneeId: string | null; sensitivity: string },
 ): Promise<boolean> {
@@ -161,7 +172,13 @@ export async function canAccessCase(
   }
 
   if (caseRow.sensitivity !== 'standard' && caseRow.sensitivity !== '') {
-    if (!access.sensitiveClasses.includes(caseRow.sensitivity)) return false;
+    if (
+      hasSensitiveClearance(access.permissions) ||
+      access.sensitiveClasses.includes(caseRow.sensitivity)
+    ) {
+      return true;
+    }
+    return false;
   }
 
   return true;
