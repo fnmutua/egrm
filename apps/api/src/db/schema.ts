@@ -310,12 +310,31 @@ export const threadEntry = pgTable('thread_entry', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Conversational intake sessions (spec 16 §6.2). */
+export const chatbotSession = pgTable('chatbot_session', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenant.id),
+  channel: text('channel').notNull().default('web_widget'),
+  externalThreadId: text('external_thread_id'),
+  locale: text('locale').notNull().default('en'),
+  intent: text('intent'),
+  phase: text('phase').notNull().default('welcome'),
+  slots: jsonb('slots').$type<Record<string, unknown>>().notNull().default({}),
+  transcript: jsonb('transcript').$type<{ role: 'user' | 'assistant'; text: string; at: string }[]>().notNull().default([]),
+  caseId: uuid('case_id').references(() => grmCase.id),
+  handoffReason: text('handoff_reason'),
+  handoffTaskId: uuid('handoff_task_id'),
+  sensitivityFlagged: boolean('sensitivity_flagged').notNull().default(false),
+  endedAt: timestamp('ended_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** AI provider calls and staff decisions (spec 16 §6.1). */
 export const aiInteraction = pgTable('ai_interaction', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenant.id),
   caseId: uuid('case_id').references(() => grmCase.id),
-  chatbotSessionId: uuid('chatbot_session_id'),
+  chatbotSessionId: uuid('chatbot_session_id').references(() => chatbotSession.id),
   capability: text('capability').notNull(),
   providerProfileId: text('provider_profile_id'),
   model: text('model'),

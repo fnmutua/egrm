@@ -5,6 +5,7 @@ import { db, schema } from '../db/client.js';
 import { getActiveConfig } from './config.js';
 import { chatCompletion } from './ai-completion.js';
 import { hashRedactedPrompt, redactIntakeText } from './ai-redaction.js';
+import { parseJsonFromModel, resolveProfileForCapability } from './ai-shared.js';
 
 const triageResponseSchema = z.object({
   categories: z.array(z.string()).default([]),
@@ -24,26 +25,11 @@ export type IntakeTriageSuggestion = z.infer<typeof triageResponseSchema> & {
   applied_sensitivity?: string;
 };
 
-function parseJsonFromModel(raw: string): unknown {
-  const trimmed = raw.trim();
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const body = fenced ? fenced[1]!.trim() : trimmed;
-  return JSON.parse(body) as unknown;
-}
-
 function resolveProfile(
   ai: Cd16Ai,
   capKey: 'auto_categorize' | 'sensitivity_detect',
 ): { key: string; profile: Cd16Ai['provider_profiles'][string] } | null {
-  const cap = ai.capabilities[capKey];
-  if (!cap.enabled) return null;
-  const key =
-    cap.profile ??
-    Object.entries(ai.provider_profiles).find(([, profile]) => profile.enabled)?.[0];
-  if (!key) return null;
-  const profile = ai.provider_profiles[key];
-  if (!profile?.enabled) return null;
-  return { key, profile };
+  return resolveProfileForCapability(ai, capKey);
 }
 
 function buildTriagePrompt(
@@ -425,6 +411,18 @@ export async function decideAiInteraction(
   }
   if (row.decision !== 'pending') {
     return { ok: false as const, code: 409 as const, error: 'already_decided' };
+  }
+
+  if (row.capability === 'draft_response') {
+    await db
+      .update(schema.aiInteraction)
+      .set({
+        decision: parsed.decision,
+        decidedBy: actorId,
+        decidedAt: new Date(),
+      })
+      .where(eq(schema.aiInteraction.id, interactionId));
+    return { ok: true as const, interaction_id: interactionId };
   }
 
   const suggestion = (row.suggestion ?? {}) as IntakeTriageSuggestion & Record<string, unknown>;

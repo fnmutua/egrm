@@ -760,6 +760,7 @@ export async function runSeed() {
       ...DEFAULT_CD16_AI.capabilities,
       auto_categorize: { enabled: true, profile: 'openai_primary', min_confidence: 0.6 },
       sensitivity_detect: { enabled: true, profile: 'openai_primary', min_confidence: 0.5 },
+      draft_response: { enabled: true, profile: 'openai_primary' },
     },
   }, admin!.id);
 

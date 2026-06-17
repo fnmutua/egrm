@@ -176,6 +176,7 @@ async function buildTemplateVars(
     unitId: string | null;
     partyId: string | null;
   },
+  eventData?: Record<string, unknown>,
 ): Promise<Record<string, string>> {
   const [identity, unitRow, partyRow] = await Promise.all([
     getActiveConfig<Cd01Identity>(tenantId, 'cd01_identity'),
@@ -190,6 +191,8 @@ async function buildTemplateVars(
   const tenantName = identity?.name ?? 'GRM';
   const trackUrl = `${env.PUBLIC_PORTAL_BASE_URL.replace(/\/$/, '')}/track?ref=${encodeURIComponent(caseRow.reference)}`;
   const partyName = partyRow[0]?.nameEnc ? decryptPII(partyRow[0].nameEnc) : '';
+  const actionTaken = String(eventData?.action_taken ?? '');
+  const updateSummary = String(eventData?.update_summary ?? '');
 
   return {
     'case.reference': caseRow.reference,
@@ -197,6 +200,8 @@ async function buildTemplateVars(
     'case.status_label': caseRow.status,
     'case.level': caseRow.levelCode,
     'case.unit_name': unitRow[0]?.name ?? caseRow.levelCode,
+    'case.action_taken': actionTaken,
+    'case.update_summary': updateSummary,
     'tenant.name': tenantName,
     'tenant.short_name': tenantName.split(/\s+/)[0] ?? tenantName,
     'party.name': partyName || 'Complainant',
@@ -389,14 +394,19 @@ export async function dispatchNotificationOutbox(outboxId: string): Promise<void
     caseRow = c ?? null;
   }
 
+  const outboxPayload = outbox.payload as { data?: Record<string, unknown> } | null;
+  const eventData = outboxPayload?.data ?? {};
+
   const vars = caseRow
-    ? await buildTemplateVars(outbox.tenantId, caseRow)
+    ? await buildTemplateVars(outbox.tenantId, caseRow, eventData)
     : {
         'case.reference': '',
         'case.status': '',
         'case.status_label': '',
         'case.level': '',
         'case.unit_name': '',
+        'case.action_taken': String(eventData.action_taken ?? ''),
+        'case.update_summary': String(eventData.update_summary ?? ''),
         'tenant.name': 'GRM',
         'tenant.short_name': 'GRM',
         'party.name': 'Complainant',

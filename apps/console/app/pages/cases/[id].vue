@@ -119,6 +119,7 @@ const assignError = ref('');
 const selectedToStatus = ref<string | null>(null);
 const actionTaken = ref('');
 const updateSummary = ref('');
+const workflowBundleLoading = ref(false);
 const transitionFields = ref<Record<string, string>>({});
 const selectedAssigneeId = ref<string | null>(null);
 const notifications = ref<CaseNotification[]>([]);
@@ -687,6 +688,59 @@ function resetTransitionForm() {
   actionError.value = '';
 }
 
+async function suggestWorkflowBundle() {
+  if (!selectedToStatus.value) {
+    toast.add({
+      title: 'Select new status first',
+      description: 'Choose the target status, then AI can draft the workflow fields.',
+      color: 'warning',
+    });
+    return;
+  }
+  const extraFields = selectedTransition.value?.requires?.fields ?? [];
+  workflowBundleLoading.value = true;
+  try {
+    const res = await api<{
+      interaction_id: string;
+      suggestion: { drafts?: Record<string, string> };
+    }>(`/api/v1/cases/${caseId.value}/ai/suggest`, {
+      method: 'POST',
+      body: {
+        capability: 'draft_response',
+        params: {
+          context: 'workflow_transition',
+          bundle: true,
+          to_status: selectedToStatus.value,
+          extra_fields: extraFields.length ? extraFields : undefined,
+        },
+      },
+    });
+    const drafts = res.suggestion.drafts ?? {};
+    if (drafts.action_taken) actionTaken.value = drafts.action_taken;
+    if (drafts.update_summary) updateSummary.value = drafts.update_summary;
+    for (const field of extraFields) {
+      if (drafts[field]) transitionFields.value[field] = drafts[field]!;
+    }
+    await api(`/api/v1/ai/interactions/${res.interaction_id}/decide`, {
+      method: 'POST',
+      body: { decision: 'accepted' },
+    });
+    toast.add({
+      title: 'AI drafts inserted',
+      description: 'Review all fields before saving the workflow action.',
+      color: 'success',
+    });
+  } catch (e: unknown) {
+    toast.add({
+      title: 'Could not generate drafts',
+      description: apiErrorMessage(e),
+      color: 'error',
+    });
+  } finally {
+    workflowBundleLoading.value = false;
+  }
+}
+
 async function runTransition() {
   if (!selectedToStatus.value || !canSubmitTransition.value) return;
   actionLoading.value = true;
@@ -996,40 +1050,58 @@ onUnmounted(clearPageBreadcrumb);
                   Jurisdiction officers and the complainant are notified when you save.
                 </p>
 
-                <div class="min-w-0 w-full max-w-full">
-                  <UFormField label="New status" required>
-                    <USelectMenu
-                      v-model="selectedToStatus"
-                      :items="statusItems"
-                      value-key="value"
-                      label-key="label"
-                      placeholder="Select new status…"
-                      class="w-full max-w-full"
-                    />
-                  </UFormField>
-                </div>
-                <div class="hidden sm:block" />
+                <p v-if="!selectedToStatus" class="col-span-1 sm:col-span-2 text-xs text-muted">
+                  Select <span class="font-medium text-default">new status</span> first — AI uses it to draft workflow text.
+                </p>
 
                 <div class="col-span-1 sm:col-span-2 min-w-0 w-full max-w-full">
-                  <UFormField label="Action taken" required help="What you did to move this case forward.">
-                    <UTextarea v-model="actionTaken" class="w-full max-w-full" :rows="3" placeholder="e.g. Reviewed intake details and opened investigation" />
-                  </UFormField>
+                  <div class="flex flex-wrap items-end gap-3">
+                    <UFormField label="New status" required class="flex-1 min-w-[12rem]">
+                      <USelectMenu
+                        v-model="selectedToStatus"
+                        :items="statusItems"
+                        value-key="value"
+                        label-key="label"
+                        placeholder="Select new status…"
+                        class="w-full max-w-full"
+                      />
+                    </UFormField>
+                    <UButton
+                      type="button"
+                      size="sm"
+                      variant="soft"
+                      color="primary"
+                      icon="i-lucide-sparkles"
+                      class="shrink-0"
+                      :loading="workflowBundleLoading"
+                      :disabled="!selectedToStatus"
+                      :title="selectedToStatus ? 'Draft workflow fields for this transition' : 'Select new status first'"
+                      @click="suggestWorkflowBundle"
+                    >
+                      Suggest with AI
+                    </UButton>
+                  </div>
                 </div>
 
-                <div class="col-span-1 sm:col-span-2 min-w-0 w-full max-w-full">
-                  <UFormField label="What was updated" required help="Summary of changes for the timeline and records.">
-                    <UTextarea v-model="updateSummary" class="w-full max-w-full" :rows="3" placeholder="e.g. Status set to Investigation; assigned for field visit" />
-                  </UFormField>
+                <div class="col-span-1 sm:col-span-2 min-w-0 w-full max-w-full space-y-1.5">
+                  <span class="text-sm font-medium">Action taken <span class="text-error">*</span></span>
+                  <p class="text-xs text-muted">What you did to move this case forward.</p>
+                  <UTextarea v-model="actionTaken" class="w-full max-w-full" :rows="3" placeholder="e.g. Reviewed intake details and opened investigation" />
+                </div>
+
+                <div class="col-span-1 sm:col-span-2 min-w-0 w-full max-w-full space-y-1.5">
+                  <span class="text-sm font-medium">What was updated <span class="text-error">*</span></span>
+                  <p class="text-xs text-muted">Summary of changes for the timeline and records.</p>
+                  <UTextarea v-model="updateSummary" class="w-full max-w-full" :rows="3" placeholder="e.g. Status set to Investigation; assigned for field visit" />
                 </div>
 
                 <div
                   v-for="field in selectedTransition?.requires?.fields ?? []"
                   :key="field"
-                  class="col-span-1 sm:col-span-2 min-w-0 w-full max-w-full"
+                  class="col-span-1 sm:col-span-2 min-w-0 w-full max-w-full space-y-1.5"
                 >
-                  <UFormField :label="field.replaceAll('_', ' ')" required>
-                    <UTextarea v-model="transitionFields[field]" class="w-full max-w-full" :rows="field === 'resolution_summary' ? 4 : 2" />
-                  </UFormField>
+                  <span class="text-sm font-medium capitalize">{{ field.replaceAll('_', ' ') }} <span class="text-error">*</span></span>
+                  <UTextarea v-model="transitionFields[field]" class="w-full max-w-full" :rows="field === 'resolution_summary' ? 4 : 2" />
                 </div>
 
                 <div v-if="requiredAttachmentKinds.length || selectedToStatus" class="col-span-1 sm:col-span-2 space-y-3 pt-1 border-t border-default">
