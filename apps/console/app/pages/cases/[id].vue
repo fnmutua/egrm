@@ -2,12 +2,14 @@
 import type { TimelineItem } from '@nuxt/ui';
 import { kindsForChannel, threadChannelLabel } from '@egrm/config-schemas';
 import { buildThreadTree, hasPermission } from '@egrm/core';
+import { apiErrorMessage } from '~/utils/api-errors';
 
 definePageMeta({ layout: 'shell' });
 
 const route = useRoute();
 const { api } = useApi();
 const { user, fetchMe } = useAuth();
+const toast = useToast();
 const caseId = computed(() => String(route.params.id));
 const { stageFile, removeStaged, downloadFile } = useCaseAttachmentUpload(caseId.value);
 
@@ -131,6 +133,14 @@ const stagingUpload = ref(false);
 const docUploadKind = ref('evidence');
 const docUploadNote = ref('');
 const docFileInput = ref<HTMLInputElement | null>(null);
+const renamingId = ref<string | null>(null);
+const renameValue = ref('');
+
+const canUploadAttachment = computed(() => hasPermission(user.value?.permissions ?? [], 'attachment:upload'));
+const canDownloadAttachment = computed(() => hasPermission(user.value?.permissions ?? [], 'attachment:download'));
+const canRenameAttachment = computed(() => hasPermission(user.value?.permissions ?? [], 'attachment:rename'));
+const canDeleteAttachment = computed(() => hasPermission(user.value?.permissions ?? [], 'attachment:delete_soft'));
+const canRemoveStagedAttachment = computed(() => canUploadAttachment.value || canDeleteAttachment.value);
 
 const threadEntries = ref<ThreadEntry[]>([]);
 const threadLoading = ref(false);
@@ -320,6 +330,44 @@ const optionalTransitionKinds = computed(() => {
 
 const stagedKindCodes = computed(() => new Set(stagedAttachments.value.map((a) => a.kind)));
 
+function normalizedFilename(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function isDuplicateDocument(filename: string): boolean {
+  const key = normalizedFilename(filename);
+  if (stagedAttachments.value.some((a) => normalizedFilename(a.filename) === key)) return true;
+  if (attachments.value.some((a) => normalizedFilename(a.filename) === key)) return true;
+  if (composeStaged.value.some((a) => normalizedFilename(a.filename) === key)) return true;
+  return false;
+}
+
+function hasStagedKind(kind: string): boolean {
+  return stagedAttachments.value.some((a) => a.kind === kind);
+}
+
+function notifyDuplicateDocument(filename: string) {
+  toast.add({
+    title: 'Duplicate document',
+    description: `"${filename}" is already on this case or pending upload.`,
+    color: 'warning',
+  });
+}
+
+const UPLOAD_ERROR_MESSAGES: Record<string, string> = {
+  duplicate_attachment: 'This file was already uploaded to this case.',
+  attachment_policy_violation: 'File upload violates attachment policy.',
+  unknown_attachment_kind: 'Unknown document type.',
+};
+
+function notifyUploadError(e: unknown, fallback = 'Could not upload document.') {
+  toast.add({
+    title: 'Upload failed',
+    description: apiErrorMessage(e, UPLOAD_ERROR_MESSAGES) || fallback,
+    color: 'error',
+  });
+}
+
 const attachmentsRequirementMet = computed(() =>
   requiredAttachmentKinds.value.every((r) => stagedKindCodes.value.has(r.kind)),
 );
@@ -407,10 +455,24 @@ async function loadAttachments() {
 }
 
 async function onStageFile(file: File, kind: string) {
+  if (isDuplicateDocument(file.name)) {
+    notifyDuplicateDocument(file.name);
+    return;
+  }
+  if (hasStagedKind(kind)) {
+    toast.add({
+      title: 'Document type already attached',
+      description: 'Remove the existing file for this type before choosing another.',
+      color: 'warning',
+    });
+    return;
+  }
   stagingUpload.value = true;
   try {
     const res = await stageFile(file, kind);
     stagedAttachments.value.push({ id: res.attachment_id, kind, filename: file.name });
+  } catch (e: unknown) {
+    notifyUploadError(e);
   } finally {
     stagingUpload.value = false;
   }
@@ -425,8 +487,47 @@ async function onTransitionFileInput(kind: string, event: Event) {
 }
 
 async function removeStagedAttachment(item: StagedAttachment) {
+  if (!canRemoveStagedAttachment.value) return;
   await removeStaged(item.id);
   stagedAttachments.value = stagedAttachments.value.filter((a) => a.id !== item.id);
+}
+
+function startRename(doc: CaseAttachment) {
+  renamingId.value = doc.id;
+  renameValue.value = doc.filename;
+}
+
+function cancelRename() {
+  renamingId.value = null;
+  renameValue.value = '';
+}
+
+async function renameDocument(id: string) {
+  const filename = renameValue.value.trim();
+  if (!filename) return;
+  try {
+    await api(`/api/v1/cases/${route.params.id}/attachments/${id}`, {
+      method: 'PATCH',
+      body: { filename },
+    });
+    cancelRename();
+    attachmentsLoaded.value = false;
+    await loadAttachments();
+    toast.add({ title: 'File renamed', color: 'success' });
+  } catch (e: unknown) {
+    notifyUploadError(e, 'Could not rename file.');
+  }
+}
+
+async function deleteDocument(doc: CaseAttachment) {
+  try {
+    await api(`/api/v1/cases/${route.params.id}/attachments/${doc.id}`, { method: 'DELETE' });
+    attachmentsLoaded.value = false;
+    await loadAttachments();
+    toast.add({ title: 'Document removed', description: doc.filename, color: 'success' });
+  } catch (e: unknown) {
+    notifyUploadError(e, 'Could not delete document.');
+  }
 }
 
 async function onDocFileChange(event: Event) {
@@ -436,9 +537,27 @@ async function onDocFileChange(event: Event) {
   stagingUpload.value = true;
   try {
     const ids: string[] = [];
+    let skipped = 0;
     for (const file of files) {
-      const res = await stageFile(file, docUploadKind.value);
-      ids.push(res.attachment_id);
+      if (isDuplicateDocument(file.name)) {
+        skipped += 1;
+        continue;
+      }
+      try {
+        const res = await stageFile(file, docUploadKind.value);
+        ids.push(res.attachment_id);
+      } catch (e: unknown) {
+        notifyUploadError(e);
+      }
+    }
+    if (skipped > 0) {
+      toast.add({
+        title: 'Duplicate document',
+        description: skipped === 1
+          ? 'Skipped 1 file already on this case.'
+          : `Skipped ${skipped} files already on this case.`,
+        color: 'warning',
+      });
     }
     if (ids.length) {
       await api(`/api/v1/cases/${route.params.id}/attachments`, {
@@ -654,10 +773,17 @@ async function onComposeFileChange(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   if (!file) return;
+  if (isDuplicateDocument(file.name)) {
+    notifyDuplicateDocument(file.name);
+    input.value = '';
+    return;
+  }
   stagingUpload.value = true;
   try {
     const res = await stageFile(file, docUploadKind.value);
     composeStaged.value.push({ id: res.attachment_id, kind: docUploadKind.value, filename: file.name });
+  } catch (e: unknown) {
+    notifyUploadError(e);
   } finally {
     stagingUpload.value = false;
     input.value = '';
@@ -733,32 +859,35 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="user && detail" class="p-4 sm:p-8">
-    <UButton to="/cases" variant="ghost" icon="i-lucide-arrow-left" class="mb-4">All cases</UButton>
+  <div v-if="user && detail" class="relative flex flex-col h-[100dvh] max-h-[100dvh] overflow-hidden bg-default">
+    <header class="shrink-0 z-20 border-b border-default bg-default px-4 sm:px-8 pt-4">
+      <UButton to="/cases" variant="ghost" icon="i-lucide-arrow-left" class="mb-4">All cases</UButton>
 
-    <div class="flex items-start justify-between mb-4">
-      <div>
-        <div class="flex items-center gap-3 flex-wrap">
-          <h1 class="text-2xl font-semibold font-mono">{{ detail.case.reference }}</h1>
-          <UBadge :color="(tagColor[detail.case.status_tag] as any) ?? 'neutral'">{{ detail.case.status }}</UBadge>
-          <UBadge v-if="detail.case.anonymous" color="neutral" variant="subtle">anonymous</UBadge>
+      <div class="flex items-start justify-between mb-4">
+        <div class="min-w-0">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h1 class="text-2xl font-semibold font-mono">{{ detail.case.reference }}</h1>
+            <UBadge :color="(tagColor[detail.case.status_tag] as any) ?? 'neutral'">{{ detail.case.status }}</UBadge>
+            <UBadge v-if="detail.case.anonymous" color="neutral" variant="subtle">anonymous</UBadge>
+          </div>
+          <p class="text-muted mt-1">{{ detail.case.summary }}</p>
         </div>
-        <p class="text-muted mt-1">{{ detail.case.summary }}</p>
       </div>
-    </div>
 
-    <UTabs v-model="activeTab" :items="tabItems" class="mb-6" />
+      <UTabs v-model="activeTab" :items="tabItems" class="pb-0" />
+    </header>
 
-    <div v-if="activeTab === 'overview'" class="space-y-2 max-w-3xl">
-      <details open class="group rounded-lg border border-default bg-default">
+    <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 sm:px-8 py-4">
+    <div v-if="activeTab === 'overview'" class="space-y-2 max-w-6xl w-full">
+      <details open class="group rounded-lg border border-default bg-default w-full">
         <summary class="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium hover:bg-elevated/40 rounded-lg [&::-webkit-details-marker]:hidden">
           <UIcon name="i-lucide-chevron-right" class="size-4 text-muted transition-transform group-open:rotate-90" />
           Case details
         </summary>
         <div class="px-4 pb-4 pt-0 border-t border-default">
-          <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm pt-3">
+          <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm pt-3 w-full">
             <div><dt class="text-muted text-xs">Categories</dt><dd>{{ detail.case.categories.join(', ') || '—' }}</dd></div>
-            <div><dt class="text-muted text-xs">Channel</dt><dd class="capitalize">{{ detail.case.channel }}</dd></div>
+            <div><dt class="text-muted text-xs">Channel</dt><dd class="capitalize">{{ detail.case.channel.replace(/_/g, ' ') }}</dd></div>
             <div><dt class="text-muted text-xs">Level</dt><dd class="capitalize">{{ detail.case.level }}</dd></div>
             <div><dt class="text-muted text-xs">Location</dt><dd>{{ detail.case.unit ?? '—' }}</dd></div>
             <div><dt class="text-muted text-xs">Priority</dt><dd class="capitalize">{{ detail.case.priority }}</dd></div>
@@ -794,31 +923,23 @@ onMounted(async () => {
             <div><dt class="text-muted text-xs">Sensitivity</dt><dd class="capitalize">{{ detail.case.sensitivity }}</dd></div>
             <div><dt class="text-muted text-xs">Occurred</dt><dd>{{ detail.case.date_occurred ? new Date(detail.case.date_occurred).toLocaleDateString() : '—' }}</dd></div>
             <div><dt class="text-muted text-xs">Received</dt><dd>{{ new Date(detail.case.created_at).toLocaleString() }}</dd></div>
+            <div v-if="detail.case.summary" class="sm:col-span-2">
+              <dt class="text-muted text-xs">Summary</dt>
+              <dd class="font-medium">{{ detail.case.summary }}</dd>
+            </div>
+            <div v-if="detail.case.description" class="sm:col-span-2">
+              <dt class="text-muted text-xs">Describe your grievance</dt>
+              <dd class="whitespace-pre-wrap">{{ detail.case.description }}</dd>
+            </div>
+            <div v-if="detail.case.expected_outcome" class="sm:col-span-2">
+              <dt class="text-muted text-xs">Expected outcome</dt>
+              <dd class="whitespace-pre-wrap">{{ detail.case.expected_outcome }}</dd>
+            </div>
           </dl>
         </div>
       </details>
 
-      <details v-if="detail.case.description" class="group rounded-lg border border-default bg-default">
-        <summary class="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium hover:bg-elevated/40 rounded-lg [&::-webkit-details-marker]:hidden">
-          <UIcon name="i-lucide-chevron-right" class="size-4 text-muted transition-transform group-open:rotate-90" />
-          Description
-        </summary>
-        <div class="px-4 pb-4 pt-0 border-t border-default">
-          <p class="text-sm whitespace-pre-wrap pt-3">{{ detail.case.description }}</p>
-        </div>
-      </details>
-
-      <details v-if="detail.case.expected_outcome" class="group rounded-lg border border-default bg-default">
-        <summary class="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium hover:bg-elevated/40 rounded-lg [&::-webkit-details-marker]:hidden">
-          <UIcon name="i-lucide-chevron-right" class="size-4 text-muted transition-transform group-open:rotate-90" />
-          Expected outcome
-        </summary>
-        <div class="px-4 pb-4 pt-0 border-t border-default">
-          <p class="text-sm whitespace-pre-wrap pt-3">{{ detail.case.expected_outcome }}</p>
-        </div>
-      </details>
-
-      <details class="group rounded-lg border border-default bg-default">
+      <details class="group rounded-lg border border-default bg-default w-full">
         <summary class="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium hover:bg-elevated/40 rounded-lg [&::-webkit-details-marker]:hidden">
           <UIcon name="i-lucide-chevron-right" class="size-4 text-muted transition-transform group-open:rotate-90" />
           Complainant
@@ -826,7 +947,7 @@ onMounted(async () => {
         </summary>
         <div class="px-4 pb-4 pt-0 border-t border-default">
           <div v-if="detail.case.anonymous" class="text-sm text-muted pt-3">Anonymous submission — no personal data collected.</div>
-          <dl v-else-if="detail.complainant" class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm pt-3">
+          <dl v-else-if="detail.complainant" class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm pt-3 w-full">
             <div><dt class="text-muted text-xs">Name</dt><dd class="font-medium">{{ detail.complainant.name ?? '—' }}</dd></div>
             <div><dt class="text-muted text-xs">Phone</dt><dd>{{ detail.complainant.phone ?? '—' }}</dd></div>
             <div><dt class="text-muted text-xs">Email</dt><dd>{{ detail.complainant.email ?? '—' }}</dd></div>
@@ -843,46 +964,55 @@ onMounted(async () => {
     </div>
 
     <div v-else-if="activeTab === 'actions'">
-      <UCard class="max-w-2xl">
+      <UCard class="max-w-6xl w-full">
         <template #header><span class="font-medium">Workflow actions</span></template>
         <div class="space-y-6">
           <div v-if="transitionActions.length" class="space-y-4">
             <div>
               <div class="text-xs text-muted uppercase tracking-wide mb-3">Update status</div>
-              <p class="text-xs text-muted mb-4">
-                Current status: <span class="font-medium text-default">{{ detail.case.status }}</span>.
-                Jurisdiction officers and the complainant are notified when you save.
-              </p>
-              <div class="space-y-4">
-                <UFormField label="New status" required>
-                  <USelectMenu
-                    v-model="selectedToStatus"
-                    :items="statusItems"
-                    value-key="value"
-                    label-key="label"
-                    placeholder="Select new status…"
-                    class="w-full"
-                  />
-                </UFormField>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 w-full">
+                <p class="col-span-1 sm:col-span-2 text-xs text-muted">
+                  Current status: <span class="font-medium text-default">{{ detail.case.status }}</span>.
+                  Jurisdiction officers and the complainant are notified when you save.
+                </p>
 
-                <UFormField label="Action taken" required help="What you did to move this case forward.">
-                  <UTextarea v-model="actionTaken" class="w-full" :rows="3" placeholder="e.g. Reviewed intake details and opened investigation" />
-                </UFormField>
+                <div class="min-w-0 w-full max-w-full">
+                  <UFormField label="New status" required>
+                    <USelectMenu
+                      v-model="selectedToStatus"
+                      :items="statusItems"
+                      value-key="value"
+                      label-key="label"
+                      placeholder="Select new status…"
+                      class="w-full max-w-full"
+                    />
+                  </UFormField>
+                </div>
+                <div class="hidden sm:block" />
 
-                <UFormField label="What was updated" required help="Summary of changes for the timeline and records.">
-                  <UTextarea v-model="updateSummary" class="w-full" :rows="3" placeholder="e.g. Status set to Investigation; assigned for field visit" />
-                </UFormField>
+                <div class="col-span-1 sm:col-span-2 min-w-0 w-full max-w-full">
+                  <UFormField label="Action taken" required help="What you did to move this case forward.">
+                    <UTextarea v-model="actionTaken" class="w-full max-w-full" :rows="3" placeholder="e.g. Reviewed intake details and opened investigation" />
+                  </UFormField>
+                </div>
 
-                <UFormField
+                <div class="col-span-1 sm:col-span-2 min-w-0 w-full max-w-full">
+                  <UFormField label="What was updated" required help="Summary of changes for the timeline and records.">
+                    <UTextarea v-model="updateSummary" class="w-full max-w-full" :rows="3" placeholder="e.g. Status set to Investigation; assigned for field visit" />
+                  </UFormField>
+                </div>
+
+                <div
                   v-for="field in selectedTransition?.requires?.fields ?? []"
                   :key="field"
-                  :label="field.replaceAll('_', ' ')"
-                  required
+                  class="col-span-1 sm:col-span-2 min-w-0 w-full max-w-full"
                 >
-                  <UTextarea v-model="transitionFields[field]" class="w-full" :rows="field === 'resolution_summary' ? 4 : 2" />
-                </UFormField>
+                  <UFormField :label="field.replaceAll('_', ' ')" required>
+                    <UTextarea v-model="transitionFields[field]" class="w-full max-w-full" :rows="field === 'resolution_summary' ? 4 : 2" />
+                  </UFormField>
+                </div>
 
-                <div v-if="requiredAttachmentKinds.length || selectedToStatus" class="space-y-3 pt-1 border-t border-default">
+                <div v-if="requiredAttachmentKinds.length || selectedToStatus" class="col-span-1 sm:col-span-2 space-y-3 pt-1 border-t border-default">
                   <p class="text-sm font-medium">Documents</p>
                   <p v-if="requiredAttachmentKinds.length" class="text-xs text-muted">
                     Required for this transition:
@@ -896,14 +1026,16 @@ onMounted(async () => {
                     class="flex flex-wrap items-center gap-2"
                   >
                     <span class="text-sm min-w-40">{{ req.label }}</span>
-                    <label class="cursor-pointer">
+                    <label class="cursor-pointer" :class="hasStagedKind(req.kind) ? 'pointer-events-none opacity-60' : ''">
                       <input
                         type="file"
                         class="hidden"
                         accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
                         @change="onTransitionFileInput(req.kind, $event)"
                       />
-                      <UButton size="xs" variant="soft" :loading="stagingUpload" as="span">Choose file</UButton>
+                      <UButton size="xs" variant="soft" :loading="stagingUpload" :disabled="hasStagedKind(req.kind)" as="span">
+                        {{ hasStagedKind(req.kind) ? 'Attached' : 'Choose file' }}
+                      </UButton>
                     </label>
                   </div>
                   <div
@@ -929,12 +1061,20 @@ onMounted(async () => {
                       class="flex items-center justify-between text-sm gap-2 py-1"
                     >
                       <span class="truncate">{{ item.filename }} <span class="text-muted">({{ item.kind }})</span></span>
-                      <UButton size="xs" variant="ghost" color="error" @click="removeStagedAttachment(item)">Remove</UButton>
+                      <UButton
+                        v-if="canRemoveStagedAttachment"
+                        size="xs"
+                        variant="ghost"
+                        color="error"
+                        @click="removeStagedAttachment(item)"
+                      >
+                        Remove
+                      </UButton>
                     </div>
                   </div>
                 </div>
 
-                <div class="flex flex-wrap gap-2 pt-1">
+                <div class="col-span-1 sm:col-span-2 flex flex-wrap gap-2 pt-1">
                   <UButton :loading="actionLoading" :disabled="!canSubmitTransition" @click="runTransition">
                     Update status
                   </UButton>
@@ -959,7 +1099,7 @@ onMounted(async () => {
       <UCard>
         <template #header><span class="font-medium">Case documents</span></template>
         <div class="space-y-6">
-          <div class="grid sm:grid-cols-2 gap-3">
+          <div v-if="canUploadAttachment" class="grid sm:grid-cols-2 gap-3">
             <UFormField label="Document type">
               <USelectMenu
                 v-model="docUploadKind"
@@ -973,7 +1113,7 @@ onMounted(async () => {
               <UInput v-model="docUploadNote" class="w-full" placeholder="e.g. Site visit photos" />
             </UFormField>
           </div>
-          <div>
+          <div v-if="canUploadAttachment">
             <input
               ref="docFileInput"
               type="file"
@@ -986,6 +1126,9 @@ onMounted(async () => {
               Upload documents
             </UButton>
           </div>
+          <p v-else-if="!canRenameAttachment && !canDeleteAttachment" class="text-sm text-muted">
+            You can view documents on this case but cannot upload or manage them.
+          </p>
 
           <div v-if="attachmentsLoading" class="text-sm text-muted">Loading…</div>
           <div v-else-if="attachments.length === 0" class="text-sm text-muted">No documents yet.</div>
@@ -997,19 +1140,57 @@ onMounted(async () => {
                   <th class="py-2 pr-3">File</th>
                   <th class="py-2 pr-3">Size</th>
                   <th class="py-2 pr-3">Uploaded</th>
-                  <th class="py-2 w-20" />
+                  <th class="py-2 w-28" />
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="doc in attachments" :key="doc.id" class="border-b border-default">
                   <td class="py-2 pr-3">{{ doc.kind_label }}</td>
-                  <td class="py-2 pr-3 truncate max-w-xs">{{ doc.filename }}</td>
+                  <td class="py-2 pr-3 min-w-0">
+                    <div v-if="renamingId === doc.id" class="flex items-center gap-1 min-w-0 max-w-md">
+                      <UInput
+                        v-model="renameValue"
+                        size="xs"
+                        class="flex-1 min-w-0"
+                        @keyup.enter="renameDocument(doc.id)"
+                      />
+                      <UButton size="xs" icon="i-lucide-check" aria-label="Save file name" @click="renameDocument(doc.id)" />
+                      <UButton size="xs" variant="ghost" icon="i-lucide-x" aria-label="Cancel rename" @click="cancelRename" />
+                    </div>
+                    <span v-else class="truncate block max-w-xs">{{ doc.filename }}</span>
+                  </td>
                   <td class="py-2 pr-3 text-muted">{{ formatBytes(doc.size_bytes) }}</td>
                   <td class="py-2 pr-3 text-muted text-xs">
                     {{ doc.uploaded_by_name ?? '—' }} · {{ new Date(doc.created_at).toLocaleDateString() }}
                   </td>
                   <td class="py-2">
-                    <UButton size="xs" variant="ghost" icon="i-lucide-download" @click="downloadFile(doc.id, doc.filename)" />
+                    <div class="flex items-center gap-0.5">
+                      <UButton
+                        v-if="canDownloadAttachment"
+                        size="xs"
+                        variant="ghost"
+                        icon="i-lucide-download"
+                        aria-label="Download"
+                        @click="downloadFile(doc.id, doc.filename)"
+                      />
+                      <UButton
+                        v-if="canRenameAttachment"
+                        size="xs"
+                        variant="ghost"
+                        icon="i-lucide-pencil"
+                        aria-label="Rename"
+                        @click="startRename(doc)"
+                      />
+                      <UButton
+                        v-if="canDeleteAttachment"
+                        size="xs"
+                        variant="ghost"
+                        color="error"
+                        icon="i-lucide-trash-2"
+                        aria-label="Delete"
+                        @click="deleteDocument(doc)"
+                      />
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -1346,6 +1527,7 @@ onMounted(async () => {
           </template>
         </UTimeline>
       </UCard>
+    </div>
     </div>
   </div>
 </template>

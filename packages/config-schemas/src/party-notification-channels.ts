@@ -78,6 +78,23 @@ export function normalizePartyNotificationChannels(
   return { ok: true, channels };
 }
 
+/** Staff-assisted intake: default to configured channels the complainant contact supports. */
+export function inferDefaultPartyNotificationChannels(
+  cfg: Cd09Notifications,
+  contact: { phone: string | null; email: string | null },
+): PartyNotificationChannel[] {
+  const channels: PartyNotificationChannel[] = [];
+  for (const ch of configuredPartyNotificationChannels(cfg)) {
+    if (ch.value === 'email' && contact.email) {
+      if (!channels.includes('email')) channels.push('email');
+    }
+    if ((ch.value === 'sms' || ch.value === 'whatsapp') && contact.phone) {
+      if (!channels.includes(ch.value)) channels.push(ch.value);
+    }
+  }
+  return channels;
+}
+
 /** Filter rule channels by complainant opt-in; non-party channels (e.g. in_app) pass through. */
 export function filterChannelsForPartyPreference(
   channels: string[],

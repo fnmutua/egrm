@@ -22,11 +22,23 @@ import {
   deleteStagedAttachment,
   getAttachmentDownload,
   listCaseAttachments,
+  renameActiveAttachment,
+  softDeleteActiveAttachment,
   stageCaseAttachment,
 } from '../services/attachments.js';
 import { createStaffThreadMessage, listCaseThread } from '../services/correspondence.js';
 import { clearSeedCases, countSeedCases, seedCases } from '../services/seed-cases.js';
 import multipart from '@fastify/multipart';
+import { coerceIntakeString } from '../services/intake-values.js';
+
+function coerceSourceChannel(raw: unknown): string {
+  const direct = coerceIntakeString(raw);
+  if (direct) return direct;
+  if (raw && typeof raw === 'object' && 'value' in raw) {
+    return coerceIntakeString((raw as { value: unknown }).value) ?? '';
+  }
+  return typeof raw === 'string' ? raw.trim() : '';
+}
 
 const listQuery = z.object({
   status: z.string().optional(),
@@ -39,7 +51,7 @@ const listQuery = z.object({
 const assistedBody = z.object({
   anonymous: z.boolean().default(false),
   consent: z.boolean().default(false),
-  source_channel: z.string().min(1),
+  source_channel: z.unknown().transform(coerceSourceChannel).pipe(z.string().min(1, 'source_channel_required')),
   values: z.record(z.string(), z.unknown()),
 });
 
@@ -57,6 +69,10 @@ const caseActionBody = z.object({
 const commitAttachmentsBody = z.object({
   attachment_ids: z.array(z.string().uuid()).min(1),
   note: z.string().optional(),
+});
+
+const patchAttachmentBody = z.object({
+  filename: z.string().min(1).max(255),
 });
 
 const threadBody = z.object({
@@ -548,11 +564,86 @@ export default async function caseRoutes(app: FastifyInstance) {
       .send(result.data);
   });
 
-  app.delete('/api/v1/cases/:id/attachments/:aid', { onRequest: [app.requirePermission('attachment:upload')] }, async (req, reply) => {
+  app.patch('/api/v1/cases/:id/attachments/:aid', { onRequest: [app.requirePermission('attachment:rename')] }, async (req, reply) => {
+    const parsed = patchAttachmentBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
     const { id, aid } = req.params as { id: string; aid: string };
-    const result = await deleteStagedAttachment(req.tenant.id, id, aid, req.user.sub);
-    if ('error' in result) return reply.code(result.code).send({ error: result.error });
-    return { ok: true };
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const result = await renameActiveAttachment(
+      req.tenant.id,
+      id,
+      aid,
+      access,
+      req.user.sub,
+      parsed.data.filename,
+    );
+    if ('error' in result) {
+      return reply.code(result.code).send({ error: result.error, message: result.message });
+    }
+
+    await writeAudit({
+      tenantId: req.tenant.id,
+      actorId: req.user.sub,
+      action: 'attachment.renamed',
+      entity: 'case_attachment',
+      entityId: aid,
+      data: { case_id: id, filename: result.filename },
+    });
+
+    return { ok: true, filename: result.filename };
+  });
+
+  app.delete('/api/v1/cases/:id/attachments/:aid', { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { id, aid } = req.params as { id: string; aid: string };
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const perms = req.user.permissions;
+    const canDelete = hasPermission(perms, 'attachment:delete_soft');
+    const canUpload = hasPermission(perms, 'attachment:upload');
+
+    const [row] = await db
+      .select({ status: schema.caseAttachment.status })
+      .from(schema.caseAttachment)
+      .where(
+        and(
+          eq(schema.caseAttachment.tenantId, req.tenant.id),
+          eq(schema.caseAttachment.caseId, id),
+          eq(schema.caseAttachment.id, aid),
+        ),
+      )
+      .limit(1);
+    if (!row) return reply.code(404).send({ error: 'not_found' });
+
+    if (row.status === 'staging') {
+      if (!canUpload && !canDelete) {
+        return reply.code(403).send({ error: 'forbidden', required: 'attachment:upload' });
+      }
+      const result = await deleteStagedAttachment(req.tenant.id, id, aid, req.user.sub, {
+        allowOtherUploader: canDelete,
+      });
+      if ('error' in result) return reply.code(result.code).send({ error: result.error });
+      return { ok: true };
+    }
+
+    if (row.status === 'active') {
+      if (!canDelete) {
+        return reply.code(403).send({ error: 'forbidden', required: 'attachment:delete_soft' });
+      }
+      const result = await softDeleteActiveAttachment(req.tenant.id, id, aid, access, req.user.sub);
+      if ('error' in result) return reply.code(result.code).send({ error: result.error });
+
+      await writeAudit({
+        tenantId: req.tenant.id,
+        actorId: req.user.sub,
+        action: 'attachment.deleted',
+        entity: 'case_attachment',
+        entityId: aid,
+        data: { case_id: id, filename: result.filename },
+      });
+
+      return { ok: true };
+    }
+
+    return reply.code(404).send({ error: 'not_found' });
   });
 
   app.post('/api/v1/cases/:id/actions', { onRequest: [app.authenticate] }, async (req, reply) => {
@@ -595,7 +686,13 @@ export default async function caseRoutes(app: FastifyInstance) {
       values: parsed.data.values,
       staffActorId: req.user.sub,
     });
-    if (!result.ok) return reply.code(result.code).send({ error: result.error, details: result.details });
+    if (!result.ok) {
+      return reply.code(result.code).send({
+        error: result.error,
+        message: result.message,
+        details: result.details,
+      });
+    }
 
     await writeAudit({
       tenantId: req.tenant.id,
@@ -606,6 +703,7 @@ export default async function caseRoutes(app: FastifyInstance) {
       data: { reference: result.reference, channel: parsed.data.source_channel },
     });
     return reply.code(201).send({
+      case_id: result.caseId,
       reference: result.reference,
       status: result.status,
       tracking_pin: result.trackingPin,

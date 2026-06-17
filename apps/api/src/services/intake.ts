@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { and, eq, gte } from 'drizzle-orm';
 import type { Cd02Hierarchy, Cd04Workflow, Cd06IntakeForms, Cd07Numbering, Cd09Notifications } from '@egrm/config-schemas';
-import { configuredPartyNotificationChannels, normalizePartyNotificationChannels, type PartyNotificationChannel } from '@egrm/config-schemas';
+import { configuredPartyNotificationChannels, inferDefaultPartyNotificationChannels, normalizePartyNotificationChannels, type PartyNotificationChannel } from '@egrm/config-schemas';
 import { intakeLevels as hierarchyIntakeLevels } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
 import { encryptPII, piiLookupHash } from './crypto.js';
@@ -95,8 +95,15 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
 
   let partyNotificationChannels: PartyNotificationChannel[] = [];
   if (!input.anonymous && notifications) {
+    const selected = input.values.notification_channels;
+    const hasSelection = Array.isArray(selected) && selected.length > 0;
+    const channelInput = hasSelection
+      ? selected
+      : input.staffActorId
+        ? inferDefaultPartyNotificationChannels(notifications, { phone, email })
+        : selected;
     const channelResult = normalizePartyNotificationChannels(
-      input.values.notification_channels,
+      channelInput,
       notifications,
       { phone, email },
     );

@@ -242,7 +242,7 @@ export async function stageCaseAttachment(input: {
         ),
       )
       .limit(1);
-    if (dup && policy.duplicate_detection === 'block') {
+    if (dup) {
       return { error: 'duplicate_attachment', message: 'This file was already uploaded to this case' };
     }
   }
@@ -335,6 +335,112 @@ export async function listCaseAttachments(
       uploaded_by_name: r.uploaderName,
       created_at: r.createdAt.toISOString(),
     }));
+}
+
+function normalizeAttachmentFilename(raw: string): string | null {
+  const name = raw.trim().replace(/\\/g, '/').split('/').pop()?.trim() ?? '';
+  if (!name || name.length > 255 || name.includes('\0')) return null;
+  return name;
+}
+
+export async function renameActiveAttachment(
+  tenantId: string,
+  caseId: string,
+  attachmentId: string,
+  access: UserAccess,
+  actorId: string,
+  filename: string,
+): Promise<{ ok: true; filename: string } | { error: string; code: number; message?: string }> {
+  if (!hasPermission(access.permissions, 'attachment:rename')) {
+    return { error: 'forbidden', code: 403 };
+  }
+
+  const normalized = normalizeAttachmentFilename(filename);
+  if (!normalized) {
+    return { error: 'invalid_filename', code: 400, message: 'Enter a valid file name.' };
+  }
+
+  const [caseRow] = await db
+    .select({ unitId: schema.grmCase.unitId, assigneeId: schema.grmCase.assigneeId, sensitivity: schema.grmCase.sensitivity })
+    .from(schema.grmCase)
+    .where(and(eq(schema.grmCase.tenantId, tenantId), eq(schema.grmCase.id, caseId)))
+    .limit(1);
+  if (!caseRow) return { error: 'not_found', code: 404 };
+
+  const allowed = await canAccessCase(tenantId, access, actorId, caseRow);
+  if (!allowed) return { error: 'not_found', code: 404 };
+
+  const [row] = await db
+    .select()
+    .from(schema.caseAttachment)
+    .where(
+      and(
+        eq(schema.caseAttachment.tenantId, tenantId),
+        eq(schema.caseAttachment.caseId, caseId),
+        eq(schema.caseAttachment.id, attachmentId),
+        eq(schema.caseAttachment.status, 'active'),
+      ),
+    )
+    .limit(1);
+  if (!row) return { error: 'not_found', code: 404 };
+
+  if (row.visibility === 'restricted' && !hasPermission(access.permissions, 'attachment:read_protected')) {
+    return { error: 'forbidden', code: 403 };
+  }
+
+  await db
+    .update(schema.caseAttachment)
+    .set({ filename: normalized, title: normalized })
+    .where(eq(schema.caseAttachment.id, attachmentId));
+
+  return { ok: true, filename: normalized };
+}
+
+export async function softDeleteActiveAttachment(
+  tenantId: string,
+  caseId: string,
+  attachmentId: string,
+  access: UserAccess,
+  actorId: string,
+): Promise<{ ok: true; filename: string } | { error: string; code: number }> {
+  if (!hasPermission(access.permissions, 'attachment:delete_soft')) {
+    return { error: 'forbidden', code: 403 };
+  }
+
+  const [caseRow] = await db
+    .select({ unitId: schema.grmCase.unitId, assigneeId: schema.grmCase.assigneeId, sensitivity: schema.grmCase.sensitivity })
+    .from(schema.grmCase)
+    .where(and(eq(schema.grmCase.tenantId, tenantId), eq(schema.grmCase.id, caseId)))
+    .limit(1);
+  if (!caseRow) return { error: 'not_found', code: 404 };
+
+  const allowed = await canAccessCase(tenantId, access, actorId, caseRow);
+  if (!allowed) return { error: 'not_found', code: 404 };
+
+  const [row] = await db
+    .select()
+    .from(schema.caseAttachment)
+    .where(
+      and(
+        eq(schema.caseAttachment.tenantId, tenantId),
+        eq(schema.caseAttachment.caseId, caseId),
+        eq(schema.caseAttachment.id, attachmentId),
+        eq(schema.caseAttachment.status, 'active'),
+      ),
+    )
+    .limit(1);
+  if (!row) return { error: 'not_found', code: 404 };
+
+  if (row.visibility === 'restricted' && !hasPermission(access.permissions, 'attachment:read_protected')) {
+    return { error: 'forbidden', code: 403 };
+  }
+
+  await db
+    .update(schema.caseAttachment)
+    .set({ status: 'deleted_soft', deletedAt: new Date() })
+    .where(eq(schema.caseAttachment.id, attachmentId));
+
+  return { ok: true, filename: row.filename };
 }
 
 export async function getAttachmentDownload(
@@ -526,6 +632,7 @@ export async function deleteStagedAttachment(
   caseId: string,
   attachmentId: string,
   actorId: string,
+  opts?: { allowOtherUploader?: boolean },
 ): Promise<{ ok: true } | { error: string; code: number }> {
   const [row] = await db
     .select()
@@ -540,7 +647,9 @@ export async function deleteStagedAttachment(
     )
     .limit(1);
   if (!row) return { error: 'not_found', code: 404 };
-  if (row.uploadedBy && row.uploadedBy !== actorId) return { error: 'forbidden', code: 403 };
+  if (!opts?.allowOtherUploader && row.uploadedBy && row.uploadedBy !== actorId) {
+    return { error: 'forbidden', code: 403 };
+  }
 
   await deleteAttachmentBlob(row.storageKey);
   await db.delete(schema.caseAttachment).where(eq(schema.caseAttachment.id, attachmentId));

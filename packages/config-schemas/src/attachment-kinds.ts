@@ -128,7 +128,7 @@ export const DEFAULT_ATTACHMENT_POLICY: AttachmentPolicy = {
   allowed_mime_default: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
   block_executable: true,
   malware_scan: false,
-  duplicate_detection: 'warn',
+  duplicate_detection: 'block',
   intake_enabled: true,
   intake_max_files: 5,
 };

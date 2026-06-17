@@ -20,6 +20,7 @@ export const PERMISSIONS = [
   'attachment:upload',
   'attachment:download',
   'attachment:read_protected',
+  'attachment:rename',
   'attachment:delete_soft',
   // Sensitive cases (combined with sensitivity-class designation)
   'sensitive:read',

@@ -28,7 +28,7 @@ export const kisipOrgAccess = {
       permissions: [
         'case:read', 'case:create_assisted', 'case:transition', 'case:assign',
         'thread:reply_external', 'thread:note_internal', 'thread:read',
-        'attachment:upload', 'attachment:download', 'task:manage',
+        'attachment:upload', 'attachment:download', 'attachment:rename', 'attachment:delete_soft', 'task:manage',
       ],
       sensitive_classes: [],
       mfa_required: false,

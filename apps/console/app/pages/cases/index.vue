@@ -1,6 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'shell' });
 
+import { hasPermission } from '@egrm/core';
 import { useDashboardUnitFilter } from '~/composables/useDashboardUnitFilter';
 import { CASE_LIST_FILTER_OPTIONS, useCaseListFilterPrefs } from '~/composables/useCaseListFilterPrefs';
 
@@ -13,6 +14,7 @@ const { prefs, setFilter, activeCount } = useCaseListFilterPrefs();
 const { effectiveUnitId, hasActiveFilter, resetFilter: resetUnitFilter, setEnabled } = useDashboardUnitFilter('cases');
 
 const isAdmin = computed(() => canAdmin());
+const canFileCase = computed(() => hasPermission(user.value?.permissions ?? [], 'case:create_assisted'));
 
 interface CaseRow {
   id: string;
@@ -241,6 +243,14 @@ async function downloadExcel() {
       />
       <DashboardUnitFilter v-if="prefs.unit" scope="cases" auto-skip-top />
       <div class="flex gap-2 sm:ml-auto flex-wrap items-center">
+          <UButton
+            v-if="canFileCase"
+            to="/cases/new"
+            icon="i-lucide-file-plus"
+            size="sm"
+          >
+            File case
+          </UButton>
           <USelectMenu
             v-if="prefs.status"
             v-model="status"
