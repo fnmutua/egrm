@@ -23,10 +23,29 @@ onMounted(() => {
   loadMeta();
 });
 
+const enabled = computed(() => meta.value?.enabled === true);
+const persona = computed(() => meta.value?.persona ?? 'Assistant');
+
+const messagesEl = ref<HTMLElement | null>(null);
+
+function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
+  nextTick(() => {
+    const el = messagesEl.value;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  });
+}
+
+watch(
+  () => [messages.value.length, messages.value.at(-1)?.text, loading.value, error.value, submitResult.value],
+  () => scrollToBottom(),
+);
+
 watch(open, async (isOpen) => {
   if (isOpen && !messages.value.length) {
     await startSession(locale.value);
   }
+  if (isOpen) scrollToBottom('instant');
 });
 
 async function onSend() {
@@ -44,9 +63,6 @@ function onClose() {
   open.value = false;
   reset();
 }
-
-const enabled = computed(() => meta.value?.enabled === true);
-const persona = computed(() => meta.value?.persona ?? 'Assistant');
 </script>
 
 <template>
@@ -80,7 +96,7 @@ const persona = computed(() => meta.value?.persona ?? 'Assistant');
           />
         </div>
 
-        <div class="flex-1 overflow-y-auto p-4 space-y-3" aria-live="polite">
+        <div ref="messagesEl" class="flex-1 overflow-y-auto p-4 space-y-3" aria-live="polite">
           <div
             v-for="(msg, i) in messages"
             :key="i"
