@@ -37,6 +37,11 @@ const extractSchema = z.object({
   description: z.string().optional(),
   categories: z.array(z.string()).optional(),
   unit_hint: z.string().optional(),
+  name: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  date_occurred: z.string().optional(),
+  expected_outcome: z.string().optional(),
   sensitivity_signal: z.boolean().optional(),
 });
 
@@ -154,6 +159,158 @@ function pendingFields(slots: ChatbotSlotsState): string[] {
     return slots.field_queue.filter((k) => fieldIsEmpty(k, slots.confirmed[k]));
   }
   return [];
+}
+
+function summarizeFromText(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return '';
+  const first = trimmed.split(/[.!?\n]/).find((part) => part.trim().length > 0)?.trim() ?? trimmed;
+  return first.length > 200 ? `${first.slice(0, 197)}...` : first;
+}
+
+function formatCapturedValue(
+  form: Cd06IntakeForms,
+  taxonomy: Cd03Taxonomy,
+  key: string,
+  val: unknown,
+  locale: string,
+): string {
+  const label = fieldLabel(form, key, locale);
+  if (key === 'categories') {
+    const codes = coerceIntakeStringArray(val);
+    const names = codes.map((code) => {
+      const c = taxonomy.categories.find((x) => x.code === code);
+      return c?.label[locale] ?? c?.label.en ?? code;
+    });
+    return `${label}: ${names.join(', ')}`;
+  }
+  if (key === 'description') {
+    return locale === 'sw' ? 'maelezo ya malalamiko' : 'grievance details';
+  }
+  if (key === 'unit_id') {
+    return locale === 'sw' ? 'eneo' : 'location';
+  }
+  const text = coerceIntakeString(val) ?? String(val);
+  if (text.length > 60) return `${label}: ${text.slice(0, 57)}...`;
+  return `${label}: ${text}`;
+}
+
+async function applyNarrativeAndExtraction(
+  tenantId: string,
+  form: Cd06IntakeForms,
+  taxonomy: Cd03Taxonomy,
+  slots: ChatbotSlotsState,
+  narrative: string,
+  proposed: Record<string, unknown>,
+  locale: string,
+): Promise<void> {
+  const trimmed = narrative.trim();
+  slots.proposed = { ...slots.proposed, narrative: trimmed, ...proposed };
+
+  const intakeKeys = [
+    'summary',
+    'description',
+    'categories',
+    'name',
+    'phone',
+    'email',
+    'date_occurred',
+    'expected_outcome',
+  ] as const;
+  for (const key of intakeKeys) {
+    const val = proposed[key];
+    if (key === 'description' || fieldIsEmpty(key, val) || !fieldIsEmpty(key, slots.confirmed[key])) continue;
+    slots.confirmed[key] = key === 'categories' ? coerceIntakeStringArray(val) : String(val).trim();
+  }
+
+  if (trimmed) {
+    slots.confirmed.description = trimmed;
+  }
+  if (fieldIsEmpty('summary', slots.confirmed.summary)) {
+    const fromAi = coerceIntakeString(proposed.summary);
+    const desc = coerceIntakeString(slots.confirmed.description) ?? trimmed;
+    slots.confirmed.summary = fromAi ?? summarizeFromText(desc);
+  }
+
+  if (fieldIsEmpty('unit_id', slots.confirmed.unit_id) && proposed.unit_hint) {
+    const resolved = await resolveFieldValue(
+      tenantId,
+      form,
+      taxonomy,
+      'unit_id',
+      String(proposed.unit_hint),
+      locale,
+    );
+    if (resolved.ok) {
+      slots.confirmed.unit_id = resolved.value;
+    } else {
+      slots.proposed.unit_hint = proposed.unit_hint;
+    }
+  }
+
+  if (slots.anonymous === true) {
+    for (const key of ['name', 'phone', 'email'] as const) {
+      delete slots.confirmed[key];
+    }
+  }
+}
+
+function buildIntakeCollectionReply(
+  form: Cd06IntakeForms,
+  taxonomy: Cd03Taxonomy,
+  slots: ChatbotSlotsState,
+  locale: string,
+): string {
+  const missing = pendingFields(slots);
+  const first = missing[0]!;
+  const captured: string[] = [];
+  for (const key of slots.field_queue) {
+    if (fieldIsEmpty(key, slots.confirmed[key])) continue;
+    captured.push(formatCapturedValue(form, taxonomy, key, slots.confirmed[key], locale));
+  }
+
+  const needLabels = missing.map((key) => fieldLabel(form, key, locale));
+  const ack =
+    locale === 'sw'
+      ? 'Asante — nimeelewa malalamiko yako.'
+      : "Thanks — I've read your grievance and filled in what I could.";
+  let message = ack;
+  if (captured.length) {
+    message +=
+      locale === 'sw'
+        ? `\n\nNimeandika: ${captured.join('; ')}.`
+        : `\n\nI noted: ${captured.join('; ')}.`;
+  }
+  message +=
+    locale === 'sw'
+      ? `\n\nBado ninahitaji: ${needLabels.join(', ')}.`
+      : `\n\nI still need: ${needLabels.join(', ')}.`;
+  message += `\n\n${promptForField(form, taxonomy, first, locale)}`;
+  return message;
+}
+
+function beginFieldCollection(
+  form: Cd06IntakeForms,
+  taxonomy: Cd03Taxonomy,
+  slots: ChatbotSlotsState,
+  channelMinimum: string[],
+  locale: string,
+): { phase: string; readback: boolean; reply: string } {
+  const anonymous = slots.anonymous === true;
+  slots.field_queue = buildFieldQueue(form, channelMinimum, anonymous);
+  const missing = pendingFields(slots);
+  if (missing.length === 0) {
+    return {
+      phase: 'file_readback',
+      readback: true,
+      reply: readBackText(form, taxonomy, slots, locale),
+    };
+  }
+  return {
+    phase: 'file_collect',
+    readback: false,
+    reply: buildIntakeCollectionReply(form, taxonomy, slots, locale),
+  };
 }
 
 function promptForField(
@@ -316,18 +473,41 @@ async function extractFromNarrative(
   cd16: Cd16Ai,
   narrative: string,
   taxonomy: Cd03Taxonomy,
+  anonymous: boolean,
 ): Promise<{ proposed: Record<string, unknown>; sensitivity: boolean }> {
   const profileRef = resolveChatbotProfile(cd16);
   if (!profileRef) return { proposed: {}, sensitivity: false };
 
   const redacted = redactIntakeText(narrative, cd16.safety);
-  const categoryCodes = taxonomy.categories.filter((c) => c.active !== false).map((c) => c.code).join(', ');
+  const categoryLines = taxonomy.categories
+    .filter((c) => c.active !== false)
+    .map((c) => `- ${c.code}: ${c.label.en ?? c.code}`)
+    .join('\n');
+  const contactHint = anonymous
+    ? 'Do not extract name, phone, or email for anonymous submissions.'
+    : 'Extract name, phone, or email only when clearly stated in the narrative.';
   const prompt = [
-    'Extract grievance intake fields from the narrative.',
-    'Return ONLY JSON:',
-    '{ "summary": "short title", "description": "details", "categories": ["code"], "unit_hint": "location name if mentioned", "sensitivity_signal": false }',
-    `Allowed category codes: ${categoryCodes}`,
+    'You triage and extract grievance intake fields from a complainant narrative.',
+    'Return ONLY JSON with these keys (omit keys not present in the text):',
+    '{',
+    '  "summary": "short title, max 120 chars",',
+    '  "description": "structured restatement if helpful; otherwise omit",',
+    '  "categories": ["code"],',
+    '  "unit_hint": "settlement, village, or location name if mentioned",',
+    '  "name": "complainant name if stated",',
+    '  "phone": "phone if stated",',
+    '  "email": "email if stated",',
+    '  "date_occurred": "ISO date or natural date if stated",',
+    '  "expected_outcome": "desired resolution if stated",',
+    '  "sensitivity_signal": false',
+    '}',
     '',
+    'Set sensitivity_signal true only for imminent harm, violence, or serious safety threats.',
+    contactHint,
+    '',
+    `Allowed category codes:\n${categoryLines}`,
+    '',
+    'Narrative:',
     redacted,
   ].join('\n');
 
@@ -335,7 +515,7 @@ async function extractFromNarrative(
     const result = await chatCompletion(
       profileRef.profile,
       [
-        { role: 'system', content: 'Extract intake fields. JSON only.' },
+        { role: 'system', content: 'Extract and triage intake fields. JSON only.' },
         { role: 'user', content: prompt },
       ],
       { json_mode: true },
@@ -349,6 +529,11 @@ async function extractFromNarrative(
       proposed.categories = parsed.categories.filter((c) => allowed.has(c));
     }
     if (parsed.unit_hint) proposed.unit_hint = parsed.unit_hint.trim();
+    if (parsed.name) proposed.name = parsed.name.trim();
+    if (parsed.phone) proposed.phone = parsed.phone.trim();
+    if (parsed.email) proposed.email = parsed.email.trim();
+    if (parsed.date_occurred) proposed.date_occurred = parsed.date_occurred.trim();
+    if (parsed.expected_outcome) proposed.expected_outcome = parsed.expected_outcome.trim();
 
     await db.insert(schema.aiInteraction).values({
       tenantId,
@@ -593,7 +778,15 @@ export async function handleChatbotMessage(
       replies.push(loc === 'sw' ? 'Tafadhali jibu ndio au hapana.' : 'Please answer yes or no.');
     }
   } else if (phase === 'file_narrative') {
-    const { proposed, sensitivity } = await extractFromNarrative(tenantId, sessionId, cd16, text, taxonomy);
+    const anonymous = slots.anonymous === true;
+    const { proposed, sensitivity } = await extractFromNarrative(
+      tenantId,
+      sessionId,
+      cd16,
+      text,
+      taxonomy,
+      anonymous,
+    );
     if (sensitivity) {
       sensitivityFlagged = true;
       phase = 'handoff';
@@ -606,46 +799,25 @@ export async function handleChatbotMessage(
       replies.push(await hotlineMessage(tenantId, loc));
       done = true;
     } else {
-      slots.proposed = { ...slots.proposed, ...proposed };
-      if (proposed.summary && !slots.confirmed.summary) slots.confirmed.summary = proposed.summary;
-      if (proposed.description && !slots.confirmed.description) slots.confirmed.description = proposed.description;
-      if (proposed.categories && !slots.confirmed.categories) slots.confirmed.categories = proposed.categories;
-      if (proposed.unit_hint && !slots.confirmed.unit_id) {
-        const resolved = await resolveFieldValue(tenantId, form, taxonomy, 'unit_id', String(proposed.unit_hint), loc);
-        if (resolved.ok) slots.confirmed.unit_id = resolved.value;
-      }
-      const anonymous = slots.anonymous === true;
+      await applyNarrativeAndExtraction(tenantId, form, taxonomy, slots, text, proposed, loc);
       if (!slots.consent && !anonymous && form.consent_text) {
         phase = 'file_consent';
         const consentMsg = form.consent_text[loc] ?? form.consent_text.en ?? Object.values(form.consent_text)[0];
         replies.push(consentMsg ?? (loc === 'sw' ? 'Je, unakubali masharti ya usindikaji? (ndio/hapana)' : 'Do you consent to processing? (yes/no)'));
       } else {
-        slots.field_queue = buildFieldQueue(form, cd16.chatbot.channel_minimum.fields, anonymous);
-        phase = 'file_collect';
-        const next = pendingFields(slots)[0];
-        if (next) {
-          replies.push(promptForField(form, taxonomy, next, loc));
-        } else {
-          phase = 'file_readback';
-          readback = true;
-          replies.push(readBackText(form, taxonomy, slots, loc));
-        }
+        const nextStep = beginFieldCollection(form, taxonomy, slots, cd16.chatbot.channel_minimum.fields, loc);
+        phase = nextStep.phase;
+        readback = nextStep.readback;
+        replies.push(nextStep.reply);
       }
     }
   } else if (phase === 'file_consent') {
     if (isYes(text)) {
       slots.consent = true;
-      const anonymous = slots.anonymous === true;
-      slots.field_queue = buildFieldQueue(form, cd16.chatbot.channel_minimum.fields, anonymous);
-      phase = 'file_collect';
-      const next = pendingFields(slots)[0];
-      if (next) {
-        replies.push(promptForField(form, taxonomy, next, loc));
-      } else {
-        phase = 'file_readback';
-        readback = true;
-        replies.push(readBackText(form, taxonomy, slots, loc));
-      }
+      const nextStep = beginFieldCollection(form, taxonomy, slots, cd16.chatbot.channel_minimum.fields, loc);
+      phase = nextStep.phase;
+      readback = nextStep.readback;
+      replies.push(nextStep.reply);
     } else if (isNo(text)) {
       replies.push(
         loc === 'sw'
