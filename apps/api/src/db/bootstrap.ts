@@ -2,12 +2,27 @@
  * Production deploy bootstrap: apply migrations, then idempotent seed when appropriate.
  * Used by Railway preDeployCommand and `pnpm db:bootstrap`.
  */
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { db, pool, schema } from './client.js';
 import { runMigrations } from './migrate.js';
 import { runSeed } from './seed.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/** Safety net when migration journal says 0014 ran but the table is missing. */
+async function ensureStaffInboxTable(): Promise<void> {
+  const reg = await pool.query<{ reg: string | null }>(
+    `SELECT to_regclass('public.staff_inbox_notification') AS reg`,
+  );
+  if (reg.rows[0]?.reg) return;
+
+  const sqlFile = path.resolve(__dirname, '../../drizzle/0014_staff_inbox.sql');
+  await pool.query(readFileSync(sqlFile, 'utf8'));
+  console.log('[bootstrap] created missing staff_inbox_notification table');
+}
 
 function seedFlag(name: string): boolean | undefined {
   const v = process.env[name]?.trim().toLowerCase();
@@ -28,6 +43,7 @@ async function shouldRunSeed(): Promise<boolean> {
 export async function runBootstrap(): Promise<void> {
   console.log('[bootstrap] running migrations…');
   await runMigrations();
+  await ensureStaffInboxTable();
 
   if (await shouldRunSeed()) {
     console.log('[bootstrap] running seed…');

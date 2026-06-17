@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Cd01Identity, Cd09Notifications, NotificationRule } from '@egrm/config-schemas';
 import { DeliveryError, sendEmail, sendSms, sendWhatsApp } from '@egrm/notifications';
 import { db, schema } from '../db/client.js';
@@ -265,32 +265,52 @@ async function finalizeOutbox(
     .from(schema.notificationLog)
     .where(and(eq(schema.notificationLog.outboxId, outboxId), eq(schema.notificationLog.status, 'queued')));
 
-  const totalFailures = failures + remaining.length;
-  const allFailed = processedCount + remaining.length > 0 && totalFailures >= processedCount + remaining.length;
+  const pending = remaining.length;
+  const totalFailures = failures + pending;
+  const allFailed = processedCount > 0 && totalFailures >= processedCount;
+
+  let status: 'done' | 'failed' | 'pending';
+  if (pending > 0) {
+    status = 'pending';
+  } else if (allFailed) {
+    status = 'failed';
+  } else {
+    status = 'done';
+  }
 
   await db
     .update(schema.notificationOutbox)
     .set({
-      status: allFailed ? 'failed' : 'done',
+      status,
       lastError:
         extraError ??
-        (totalFailures > 0 ? `${totalFailures} delivery failure(s)` : null),
-      processedAt: new Date(),
+        (pending > 0
+          ? `${pending} notification(s) still queued`
+          : totalFailures > 0
+            ? `${totalFailures} delivery failure(s)`
+            : null),
+      processedAt: pending > 0 ? null : new Date(),
       attempts: outbox.attempts + 1,
     })
     .where(eq(schema.notificationOutbox.id, outboxId));
 }
 
-/** Resume outboxes left in `processing` (e.g. API restart mid-dispatch). */
+/** Resume outboxes that still have queued notification_log rows. */
 export async function resumeStuckNotificationOutboxes(): Promise<void> {
   const stuck = await db
-    .select({ id: schema.notificationOutbox.id })
+    .selectDistinct({ id: schema.notificationOutbox.id })
     .from(schema.notificationOutbox)
-    .where(eq(schema.notificationOutbox.status, 'processing'));
+    .innerJoin(schema.notificationLog, eq(schema.notificationLog.outboxId, schema.notificationOutbox.id))
+    .where(
+      and(
+        eq(schema.notificationLog.status, 'queued'),
+        sql`${schema.notificationOutbox.status} IN ('processing', 'pending', 'done', 'failed')`,
+      ),
+    );
 
   for (const row of stuck) {
     await dispatchNotificationOutbox(row.id).catch((err) => {
-      console.error('[notifications] resume stuck outbox failed', row.id, err);
+      console.error('[notifications] resume queued outbox failed', row.id, err);
     });
   }
 }
@@ -303,7 +323,15 @@ export async function dispatchNotificationOutbox(outboxId: string): Promise<void
     .where(eq(schema.notificationOutbox.id, outboxId))
     .limit(1);
 
-  if (!outbox || outbox.status === 'done') return;
+  if (!outbox) return;
+
+  const [queuedRow] = await db
+    .select({ id: schema.notificationLog.id })
+    .from(schema.notificationLog)
+    .where(and(eq(schema.notificationLog.outboxId, outboxId), eq(schema.notificationLog.status, 'queued')))
+    .limit(1);
+
+  if (outbox.status === 'done' && !queuedRow) return;
 
   await db
     .update(schema.notificationOutbox)
@@ -406,28 +434,37 @@ export async function dispatchNotificationOutbox(outboxId: string): Promise<void
         continue;
       }
 
-      const delivered = await createStaffInboxEntries({
-        tenantId: outbox.tenantId,
-        userIds,
-        caseId: caseRow.id,
-        notificationLogId: log.id,
-        eventKind: log.eventKind,
-        title: subject,
-        body,
-      });
+      let delivered = 0;
+      let inboxError: string | undefined;
+      try {
+        delivered = await createStaffInboxEntries({
+          tenantId: outbox.tenantId,
+          userIds,
+          caseId: caseRow.id,
+          notificationLogId: log.id,
+          eventKind: log.eventKind,
+          title: subject,
+          body,
+        });
+      } catch (err) {
+        inboxError = err instanceof Error ? err.message : String(err);
+        console.error('[notifications] staff inbox insert failed', log.id, err);
+      }
 
       await db
         .update(schema.notificationLog)
         .set({
-          status: delivered > 0 ? 'sent' : 'failed:no_recipient',
-          providerMessageId: `in_app-${delivered}`,
+          // In-app delivery is the notification_log row; inbox table only stores read/dismiss state.
+          status: 'sent',
+          providerMessageId: delivered > 0 ? `in_app-${delivered}` : 'in_app-0',
           renderedPreview: body.slice(0, 2000),
+          lastError: inboxError ?? null,
           updatedAt: new Date(),
           attempts: log.attempts + 1,
         })
         .where(eq(schema.notificationLog.id, log.id));
 
-      if (delivered === 0) failures += 1;
+      if (inboxError) console.warn('[notifications] in_app sent but inbox row missing', log.id, inboxError);
       continue;
     }
 
