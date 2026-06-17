@@ -19,7 +19,13 @@ CREATE TABLE IF NOT EXISTS "chatbot_session" (
 CREATE INDEX IF NOT EXISTS "chatbot_session_tenant_created"
   ON "chatbot_session" ("tenant_id", "created_at");
 
-ALTER TABLE "ai_interaction"
-  ADD CONSTRAINT "ai_interaction_chatbot_session_id_chatbot_session_id_fk"
-  FOREIGN KEY ("chatbot_session_id") REFERENCES "chatbot_session"("id")
-  ON DELETE SET NULL ON UPDATE NO ACTION;
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'ai_interaction_chatbot_session_id_chatbot_session_id_fk'
+  ) THEN
+    ALTER TABLE "ai_interaction"
+      ADD CONSTRAINT "ai_interaction_chatbot_session_id_chatbot_session_id_fk"
+      FOREIGN KEY ("chatbot_session_id") REFERENCES "chatbot_session"("id")
+      ON DELETE SET NULL ON UPDATE NO ACTION;
+  END IF;
+END $$;

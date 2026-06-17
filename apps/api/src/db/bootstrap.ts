@@ -24,6 +24,26 @@ async function ensureStaffInboxTable(): Promise<void> {
   console.log('[bootstrap] created missing staff_inbox_notification table');
 }
 
+/** Safety net when 0015 was skipped (journal gap) but later migrations reference ai_interaction. */
+async function ensureAiInteractionTable(): Promise<void> {
+  const reg = await pool.query<{ reg: string | null }>(`SELECT to_regclass('public.ai_interaction') AS reg`);
+  if (reg.rows[0]?.reg) return;
+
+  const sqlFile = path.resolve(__dirname, '../../drizzle/0015_ai_interaction.sql');
+  await pool.query(readFileSync(sqlFile, 'utf8'));
+  console.log('[bootstrap] created missing ai_interaction table');
+}
+
+/** Safety net for chatbot_session + FK after 0015 exists. */
+async function ensureChatbotSessionTable(): Promise<void> {
+  const reg = await pool.query<{ reg: string | null }>(`SELECT to_regclass('public.chatbot_session') AS reg`);
+  if (reg.rows[0]?.reg) return;
+
+  const sqlFile = path.resolve(__dirname, '../../drizzle/0016_chatbot_session.sql');
+  await pool.query(readFileSync(sqlFile, 'utf8'));
+  console.log('[bootstrap] created missing chatbot_session table');
+}
+
 function seedFlag(name: string): boolean | undefined {
   const v = process.env[name]?.trim().toLowerCase();
   if (v === '1' || v === 'true' || v === 'yes') return true;
@@ -44,6 +64,8 @@ export async function runBootstrap(): Promise<void> {
   console.log('[bootstrap] running migrations…');
   await runMigrations();
   await ensureStaffInboxTable();
+  await ensureAiInteractionTable();
+  await ensureChatbotSessionTable();
 
   if (await shouldRunSeed()) {
     console.log('[bootstrap] running seed…');
