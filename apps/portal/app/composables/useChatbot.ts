@@ -19,6 +19,23 @@ export interface ChatbotSession {
   replies: string[];
 }
 
+type ApiErrorBody = {
+  error?: string;
+  message?: string;
+  details?: { fields?: string[] };
+};
+
+function formatChatbotApiError(e: unknown, fallback: string): string {
+  const err = e as { data?: ApiErrorBody; message?: string };
+  const data = err.data;
+  if (data?.message) return data.message;
+  if (data?.error === 'missing_required_fields' && data.details?.fields?.length) {
+    return `Missing: ${data.details.fields.join(', ')}`;
+  }
+  if (data?.error) return data.error.replaceAll('_', ' ');
+  return err.message || fallback;
+}
+
 export function useChatbot() {
   const apiBase = usePublicApiBase();
   const config = useRuntimeConfig();
@@ -34,10 +51,17 @@ export function useChatbot() {
   const error = ref('');
 
   async function loadMeta() {
-    meta.value = await $fetch<ChatbotMeta>('/api/v1/public/chatbot/meta', {
-      baseURL: apiBase.value,
-      headers: headers.value,
-    });
+    try {
+      meta.value = await $fetch<ChatbotMeta>('/api/v1/public/chatbot/meta', {
+        baseURL: apiBase.value,
+        headers: headers.value,
+      });
+    } catch (e: unknown) {
+      meta.value = { enabled: false, reason: 'meta_fetch_failed' };
+      if (import.meta.dev) {
+        console.warn('[chatbot] meta fetch failed', e);
+      }
+    }
   }
 
   async function startSession(locale?: string) {
@@ -82,9 +106,9 @@ export function useChatbot() {
         messages.value.push({ role: 'assistant', text: reply });
       }
       if (res.handoff) handoff.value = true;
-      if (res.readback) readback.value = true;
+      readback.value = res.readback === true;
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : 'Message failed';
+      error.value = formatChatbotApiError(e, 'Message failed');
     } finally {
       loading.value = false;
     }
@@ -113,7 +137,7 @@ export function useChatbot() {
         messages.value.push({ role: 'assistant', text: ack });
       }
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : 'Submit failed';
+      error.value = formatChatbotApiError(e, 'Submit failed');
     } finally {
       loading.value = false;
     }

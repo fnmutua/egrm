@@ -7,7 +7,7 @@ import { getActiveConfig } from './config.js';
 import { chatCompletion } from './ai-completion.js';
 import { hashRedactedPrompt, redactIntakeText } from './ai-redaction.js';
 import { createCase } from './intake.js';
-import { coerceIntakeStringArray } from './intake-values.js';
+import { coerceIntakeStringArray, coerceIntakeString } from './intake-values.js';
 import { searchIntakeUnits } from './intake-units.js';
 import { verifyCaseByReference } from './correspondence.js';
 import { loadChatbotConfig, parseJsonFromModel } from './ai-shared.js';
@@ -801,12 +801,40 @@ export async function confirmChatbotSession(
     return { ok: true };
   }
 
-  if (session.phase !== 'file_readback' && session.intent !== 'file_case') {
-    return { ok: false, code: 422, error: 'not_ready_to_submit' };
+  if (session.intent !== 'file_case') {
+    return {
+      ok: false,
+      code: 422,
+      error: 'not_ready_to_submit',
+      message: 'Start a grievance in the chat before submitting.',
+    };
+  }
+
+  if (session.phase !== 'file_readback') {
+    return {
+      ok: false,
+      code: 422,
+      error: 'not_ready_to_submit',
+      message: 'Complete all questions and review the summary before submitting.',
+    };
   }
 
   const values: Record<string, unknown> = { ...slots.confirmed };
   const anonymous = slots.anonymous === true;
+
+  if (!anonymous && !slots.consent) {
+    const name = coerceIntakeString(values.name);
+    const phone = coerceIntakeString(values.phone);
+    const email = coerceIntakeString(values.email);
+    if (name || phone || email) {
+      return {
+        ok: false,
+        code: 422,
+        error: 'consent_required',
+        message: 'Please confirm consent in the chat before submitting.',
+      };
+    }
+  }
   const result = await createCase({
     tenantId,
     channel: 'chatbot',
@@ -816,11 +844,22 @@ export async function confirmChatbotSession(
   });
 
   if (!result.ok) {
+    const missing = (result.details as { fields?: string[] } | undefined)?.fields;
+    const message =
+      result.error === 'missing_required_fields' && missing?.length
+        ? `Missing required fields: ${missing.join(', ')}`
+        : result.error === 'notification_channels_required'
+          ? 'A contact phone or email is required to receive updates.'
+          : result.error === 'consent_required'
+            ? 'Consent is required before we can process your details.'
+            : result.error === 'unknown_unit'
+              ? 'The selected location is invalid — please pick your settlement again.'
+              : result.message;
     return {
       ok: false,
       code: result.code,
       error: result.error,
-      message: result.message,
+      message,
       details: result.details,
     };
   }

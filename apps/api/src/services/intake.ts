@@ -101,7 +101,7 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
     const hasSelection = Array.isArray(selected) && selected.length > 0;
     const channelInput = hasSelection
       ? selected
-      : input.staffActorId
+      : input.staffActorId || input.channel === 'chatbot'
         ? inferDefaultPartyNotificationChannels(notifications, { phone, email })
         : selected;
     const channelResult = normalizePartyNotificationChannels(
