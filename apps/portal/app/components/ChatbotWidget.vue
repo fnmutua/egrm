@@ -63,6 +63,10 @@ function onClose() {
   open.value = false;
   reset();
 }
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') onClose();
+}
 </script>
 
 <template>
@@ -80,6 +84,8 @@ function onClose() {
         class="w-[min(100vw-2rem,24rem)] h-[min(70vh,32rem)] flex flex-col rounded-2xl border border-default bg-default shadow-xl overflow-hidden"
         role="dialog"
         aria-label="Chat assistant"
+        tabindex="-1"
+        @keydown="onKeydown"
       >
         <div class="flex items-center justify-between gap-2 px-4 py-3 border-b border-default bg-primary/10">
           <div class="flex items-center gap-2 min-w-0">
@@ -88,12 +94,14 @@ function onClose() {
           </div>
           <UButton
             icon="i-lucide-x"
-            variant="ghost"
+            variant="soft"
             color="neutral"
-            size="xs"
+            size="sm"
             aria-label="Close chat"
             @click="onClose"
-          />
+          >
+            Close
+          </UButton>
         </div>
 
         <div ref="messagesEl" class="flex-1 overflow-y-auto p-4 space-y-3" aria-live="polite">
@@ -118,12 +126,23 @@ function onClose() {
           <p v-if="error" class="text-xs text-error">{{ error }}</p>
         </div>
 
-        <div v-if="submitResult" class="px-4 py-2 border-t border-default bg-success/10 text-sm">
-          Reference <strong>{{ submitResult.reference }}</strong>
-          <span v-if="submitResult.tracking_pin"> · PIN <strong>{{ submitResult.tracking_pin }}</strong></span>
+        <div v-if="submitResult" class="px-4 py-3 border-t border-default bg-success/10 space-y-3">
+          <p class="text-sm">
+            Reference <strong>{{ submitResult.reference }}</strong>
+            <span v-if="submitResult.tracking_pin"> · PIN <strong>{{ submitResult.tracking_pin }}</strong></span>
+          </p>
+          <UButton block variant="outline" color="neutral" @click="onClose">
+            Close chat
+          </UButton>
         </div>
 
-        <div v-else-if="readback && !handoff" class="px-4 py-2 border-t border-default">
+        <div v-else-if="handoff" class="px-4 py-3 border-t border-default">
+          <UButton block variant="outline" color="neutral" @click="onClose">
+            Close chat
+          </UButton>
+        </div>
+
+        <div v-else-if="readback" class="px-4 py-2 border-t border-default">
           <UButton block color="primary" :loading="loading" @click="onSubmit">
             Submit grievance
           </UButton>
