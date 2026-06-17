@@ -895,15 +895,23 @@ onUnmounted(clearPageBreadcrumb);
       <details open class="group rounded-lg border border-default bg-default w-full">
         <summary class="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium hover:bg-elevated/40 rounded-lg [&::-webkit-details-marker]:hidden">
           <UIcon name="i-lucide-chevron-right" class="size-4 text-muted transition-transform group-open:rotate-90" />
-          Case details
+          Grievance details
         </summary>
         <div class="px-4 pb-4 pt-0 border-t border-default">
+          <CaseGrievanceTriage
+            :case-id="caseId"
+            :categories="detail.case.categories"
+            :priority="detail.case.priority"
+            :sensitivity="detail.case.sensitivity"
+            @applied="loadCase"
+          />
           <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm pt-3 w-full">
             <div><dt class="text-muted text-xs">Categories</dt><dd>{{ detail.case.categories.join(', ') || '—' }}</dd></div>
             <div><dt class="text-muted text-xs">Channel</dt><dd class="capitalize">{{ detail.case.channel.replace(/_/g, ' ') }}</dd></div>
             <div><dt class="text-muted text-xs">Level</dt><dd class="capitalize">{{ detail.case.level }}</dd></div>
             <div><dt class="text-muted text-xs">Location</dt><dd>{{ detail.case.unit ?? '—' }}</dd></div>
             <div><dt class="text-muted text-xs">Priority</dt><dd class="capitalize">{{ detail.case.priority }}</dd></div>
+            <div><dt class="text-muted text-xs">Sensitivity</dt><dd class="capitalize">{{ detail.case.sensitivity }}</dd></div>
             <div>
               <dt class="text-muted text-xs">Assignee</dt>
               <dd>
@@ -933,7 +941,6 @@ onUnmounted(clearPageBreadcrumb);
                 </button>
               </dd>
             </div>
-            <div><dt class="text-muted text-xs">Sensitivity</dt><dd class="capitalize">{{ detail.case.sensitivity }}</dd></div>
             <div><dt class="text-muted text-xs">Occurred</dt><dd>{{ detail.case.date_occurred ? new Date(detail.case.date_occurred).toLocaleDateString() : '—' }}</dd></div>
             <div><dt class="text-muted text-xs">Received</dt><dd>{{ new Date(detail.case.created_at).toLocaleString() }}</dd></div>
             <div v-if="detail.case.summary" class="sm:col-span-2">

@@ -382,6 +382,13 @@ watch(profileKeys, (keys) => {
 
     <!-- Capabilities -->
     <section v-if="show('sec-capabilities')" class="space-y-4">
+      <UAlert
+        v-if="payload.enabled && !payload.capabilities.auto_categorize.enabled && !payload.capabilities.sensitivity_detect.enabled"
+        color="warning"
+        variant="subtle"
+        title="Intake triage is off"
+        description="Turn on Auto-categorization and/or Sensitivity detection below for AI suggestions when cases are submitted."
+      />
       <p class="text-sm text-muted">Suggestions only — staff must accept before any case change (spec 16 §4).</p>
       <UCard v-for="cap in capabilityItems" :key="cap.value" :ui="{ body: 'space-y-3' }">
         <template #header>

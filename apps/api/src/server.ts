@@ -15,6 +15,7 @@ import unitRoutes from './routes/units.js';
 import roleRoutes from './routes/roles.js';
 import userRoutes from './routes/users.js';
 import dashboardRoutes from './routes/dashboards.js';
+import aiRoutes from './routes/ai.js';
 import { resumeStuckNotificationOutboxes } from './services/notification-dispatch.js';
 
 const app = Fastify({ logger: true });
@@ -35,6 +36,7 @@ await app.register(unitRoutes);
 await app.register(roleRoutes);
 await app.register(userRoutes);
 await app.register(dashboardRoutes);
+await app.register(aiRoutes);
 
 try {
   console.log(`[server] starting on 0.0.0.0:${env.API_PORT}`);

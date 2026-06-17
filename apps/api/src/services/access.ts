@@ -1,5 +1,6 @@
 import { and, eq, inArray, or } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
+import { hasPermission } from '@egrm/core';
 import { db, schema } from '../db/client.js';
 
 export interface RoleAssignment {
@@ -164,4 +165,60 @@ export async function canAccessCase(
   }
 
   return true;
+}
+
+/** Whether a case has AI triage suggestions awaiting officer confirmation. */
+export async function hasPendingAiTriageReview(tenantId: string, caseId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: schema.aiInteraction.id })
+    .from(schema.aiInteraction)
+    .where(
+      and(
+        eq(schema.aiInteraction.tenantId, tenantId),
+        eq(schema.aiInteraction.caseId, caseId),
+        eq(schema.aiInteraction.decision, 'pending'),
+        eq(schema.aiInteraction.status, 'completed'),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+type CaseAccessRow = { unitId: string | null; assigneeId: string | null; sensitivity: string };
+
+async function passesUnitScope(
+  tenantId: string,
+  access: Pick<UserAccess, 'tenantWide' | 'jurisdictionRoots'>,
+  userId: string,
+  caseRow: CaseAccessRow,
+): Promise<boolean> {
+  if (caseRow.assigneeId === userId) return true;
+  if (access.tenantWide) return true;
+  if (!caseRow.unitId) return false;
+  const allowed = await expandUnitSubtrees(tenantId, access.jurisdictionRoots);
+  return allowed.has(caseRow.unitId);
+}
+
+/**
+ * Case detail / triage access. Waives sensitivity clearance when AI triage is pending
+ * and the officer may confirm suggestions (spec 16 restriction-first review window).
+ */
+export async function canAccessCaseForTriageReview(
+  tenantId: string,
+  access: Pick<UserAccess, 'tenantWide' | 'jurisdictionRoots' | 'sensitiveClasses' | 'permissions'>,
+  userId: string,
+  caseId: string,
+  caseRow: CaseAccessRow,
+): Promise<boolean> {
+  if (await canAccessCase(tenantId, access, userId, caseRow)) return true;
+
+  if (!(await hasPendingAiTriageReview(tenantId, caseId))) return false;
+  if (
+    !hasPermission(access.permissions, 'case:edit_fields') &&
+    !hasPermission(access.permissions, 'sensitive:handle')
+  ) {
+    return false;
+  }
+
+  return passesUnitScope(tenantId, access, userId, caseRow);
 }

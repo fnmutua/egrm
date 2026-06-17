@@ -9,6 +9,7 @@ import { getActiveConfig } from './config.js';
 import { allocateReference } from './reference.js';
 import { enqueueNotifications } from './notifications.js';
 import { scheduleOutboxDispatch } from './notification-queue.js';
+import { scheduleIntakeTriage } from './ai-triage.js';
 import { coerceIntakeString, coerceIntakeStringArray } from './intake-values.js';
 import { intakeUnitLevelCodes } from './intake-units.js';
 import { attachIntakeFiles, validateIntakeAttachments, type IntakeAttachmentInput } from './attachments.js';
@@ -300,6 +301,8 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
       console.error('[notifications] dispatch schedule failed:', err);
     });
   }
+
+  scheduleIntakeTriage(input.tenantId, result);
 
   return { ok: true, caseId: result, reference, status: initialStatus, trackingPin, possibleDuplicates };
 }

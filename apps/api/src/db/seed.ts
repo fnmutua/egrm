@@ -756,6 +756,11 @@ export async function runSeed() {
   await upsertActiveConfig(kisip!.id, 'cd16_ai', {
     ...DEFAULT_CD16_AI,
     enabled: true,
+    capabilities: {
+      ...DEFAULT_CD16_AI.capabilities,
+      auto_categorize: { enabled: true, profile: 'openai_primary', min_confidence: 0.6 },
+      sensitivity_detect: { enabled: true, profile: 'openai_primary', min_confidence: 0.5 },
+    },
   }, admin!.id);
 
   await upsertActiveConfig(kisip!.id, 'cd10_org_access', kisipOrgAccess, admin!.id);

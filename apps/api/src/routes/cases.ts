@@ -8,6 +8,7 @@ import { createCase } from '../services/intake.js';
 import { writeAudit } from '../services/audit.js';
 import {
   canAccessCase,
+  canAccessCaseForTriageReview,
   canFilterCasesByUnit,
   caseUnitSubtreeFilter,
   caseVisibilityFilter,
@@ -230,7 +231,7 @@ export default async function caseRoutes(app: FastifyInstance) {
       .limit(1);
     if (!c) return reply.code(404).send({ error: 'not_found' });
 
-    const allowed = await canAccessCase(req.tenant.id, req.user, req.user.sub, {
+    const allowed = await canAccessCaseForTriageReview(req.tenant.id, req.user, req.user.sub, id, {
       unitId: c.unitId,
       assigneeId: c.assigneeId,
       sensitivity: c.sensitivity,
