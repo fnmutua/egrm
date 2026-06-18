@@ -13,7 +13,14 @@ export function useCaseCount() {
       return;
     }
     try {
-      const res = await api<{ total: number }>('/api/v1/cases', { query: { page: 1, page_size: 1 } });
+      const scoped = user.value?.tenant_wide === false;
+      const res = await api<{ total: number }>('/api/v1/cases', {
+        query: {
+          page: 1,
+          page_size: 1,
+          ...(scoped ? { view: 'union' as const } : {}),
+        },
+      });
       count.value = res.total;
     } catch {
       count.value = null;

@@ -247,11 +247,20 @@ export async function clearSeedCases(tenantId: string): Promise<{
   }
 
   await db.transaction(async (tx) => {
+    await tx.delete(schema.aiInteraction).where(
+      and(eq(schema.aiInteraction.tenantId, tenantId), inArray(schema.aiInteraction.caseId, caseIds)),
+    );
+    await tx.delete(schema.staffInboxNotification).where(
+      and(eq(schema.staffInboxNotification.tenantId, tenantId), inArray(schema.staffInboxNotification.caseId, caseIds)),
+    );
     await tx.delete(schema.notificationLog).where(
       and(eq(schema.notificationLog.tenantId, tenantId), inArray(schema.notificationLog.caseId, caseIds)),
     );
     await tx.delete(schema.notificationOutbox).where(
       and(eq(schema.notificationOutbox.tenantId, tenantId), inArray(schema.notificationOutbox.caseId, caseIds)),
+    );
+    await tx.delete(schema.chatbotSession).where(
+      and(eq(schema.chatbotSession.tenantId, tenantId), inArray(schema.chatbotSession.caseId, caseIds)),
     );
     await tx.delete(schema.caseAttachment).where(
       and(eq(schema.caseAttachment.tenantId, tenantId), inArray(schema.caseAttachment.caseId, caseIds)),

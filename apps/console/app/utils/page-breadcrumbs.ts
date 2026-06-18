@@ -76,6 +76,14 @@ export function breadcrumbsForPath(
       { label: 'Users' },
     ];
   }
+  if (path.startsWith('/admin/settings/users/') || path.startsWith('/admin/users/')) {
+    return [
+      { label: 'Admin', to: '/admin', icon: ICONS.admin },
+      { label: 'Settings', to: '/admin/settings', icon: ICONS.settings },
+      { label: 'Users', to: '/admin/settings/users' },
+      { label: 'Workload' },
+    ];
+  }
   if (path === '/admin/settings/units' || path === '/admin/units') {
     return [
       { label: 'Admin', to: '/admin', icon: ICONS.admin },

@@ -127,7 +127,8 @@ export function validateStaffEmail(model: UserModel, email: string): string | nu
 
 export function validateRoleAssignments(
   model: UserModel,
-  roles: { unit_id?: string | null }[],
+  roles: { role_id?: string; unit_id?: string | null }[],
+  opts?: { tenantWideRoleIds?: Set<string> },
 ): string | null {
   if (model.require_role_assignment && roles.length === 0) {
     return 'At least one role assignment is required';
@@ -135,8 +136,13 @@ export function validateRoleAssignments(
   if (!model.allow_multiple_assignments && roles.length > 1) {
     return 'Only one role assignment is allowed per user';
   }
-  if (model.require_jurisdiction_scope && roles.some((r) => !r.unit_id)) {
-    return 'Every role assignment must include a jurisdiction unit';
+  if (model.require_jurisdiction_scope) {
+    for (const r of roles) {
+      const exempt = Boolean(r.role_id && opts?.tenantWideRoleIds?.has(r.role_id));
+      if (!exempt && !r.unit_id) {
+        return 'Every operational role assignment must include a jurisdiction unit';
+      }
+    }
   }
   return null;
 }

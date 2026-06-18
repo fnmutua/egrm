@@ -219,8 +219,10 @@ async function listDashboardUnitOptions(
   levelCode: string,
   parentId?: string | null,
   opts?: { allAtLevel?: boolean },
+  scopeRootIds?: string[],
 ) {
   const access = await loadUserAccess(userId, tenantId);
+
   const conditions = [
     eq(schema.unit.tenantId, tenantId),
     eq(schema.unit.active, true),
@@ -240,11 +242,15 @@ async function listDashboardUnitOptions(
     .where(and(...conditions))
     .orderBy(schema.unit.name);
 
-  if (access.tenantWide) {
+  if (access.tenantWide && !scopeRootIds?.length) {
     return rows.map((r) => ({ id: r.id, name: r.name, levelCode: r.levelCode }));
   }
 
-  const allowed = await expandUnitSubtrees(tenantId, access.jurisdictionRoots);
+  const rootIds =
+    scopeRootIds?.length
+      ? scopeRootIds
+      : access.jurisdictionRoots;
+  const allowed = await expandUnitSubtrees(tenantId, rootIds);
   const tree = await db
     .select({ id: schema.unit.id, parentId: schema.unit.parentId })
     .from(schema.unit)
@@ -253,6 +259,7 @@ async function listDashboardUnitOptions(
 
   return rows
     .filter((u) => {
+      if (allowed.has(u.id)) return true;
       for (const aid of allowed) {
         if (unitIsAncestorOf(u.id, aid, parentById)) return true;
       }
@@ -449,9 +456,10 @@ export default async function dashboardRoutes(app: FastifyInstance) {
         label: l.label || l.code,
       }));
 
-      const { level_code: levelCode, parent_id: parentId } = req.query as {
+      const { level_code: levelCode, parent_id: parentId, scope_root: scopeRoot } = req.query as {
         level_code?: string;
         parent_id?: string;
+        scope_root?: string;
       };
 
       if (!levelCode) {
@@ -462,6 +470,25 @@ export default async function dashboardRoutes(app: FastifyInstance) {
       const levelIndex = hierarchyLevels.findIndex((l) => l.code === levelCode);
       if (levelIndex < 0) return { levels: hierarchyLevels, units: [] };
 
+      const access = await loadUserAccess(req.user.sub, req.tenant.id);
+      let scopeRootIds: string[] | undefined;
+      if (scopeRoot) {
+        const allowed = access.tenantWide
+          ? new Set(
+              (
+                await db
+                  .select({ id: schema.unit.id })
+                  .from(schema.unit)
+                  .where(and(eq(schema.unit.tenantId, req.tenant.id), eq(schema.unit.active, true)))
+              ).map((u) => u.id),
+            )
+          : await expandUnitSubtrees(req.tenant.id, access.jurisdictionRoots);
+        if (!allowed.has(scopeRoot)) {
+          return { levels: hierarchyLevels, units: [] };
+        }
+        scopeRootIds = [scopeRoot];
+      }
+
       let units: Awaited<ReturnType<typeof listDashboardUnitOptions>>;
       if (parentId) {
         units = await listDashboardUnitOptions(
@@ -469,6 +496,8 @@ export default async function dashboardRoutes(app: FastifyInstance) {
           req.user.sub,
           levelCode,
           parentId,
+          undefined,
+          scopeRootIds,
         );
       } else if (levelIndex === 0) {
         units = await listDashboardUnitOptions(
@@ -476,6 +505,8 @@ export default async function dashboardRoutes(app: FastifyInstance) {
           req.user.sub,
           levelCode,
           null,
+          { allAtLevel: true },
+          scopeRootIds,
         );
       } else {
         units = await listDashboardUnitOptions(
@@ -484,6 +515,7 @@ export default async function dashboardRoutes(app: FastifyInstance) {
           levelCode,
           null,
           { allAtLevel: true },
+          scopeRootIds,
         );
       }
 

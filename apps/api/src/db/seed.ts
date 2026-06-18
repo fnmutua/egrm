@@ -72,7 +72,7 @@ export const kisipOrgAccess = {
   user_model: {
     provisioning: 'admin_only' as const,
     allow_multiple_assignments: true,
-    require_jurisdiction_scope: false,
+    require_jurisdiction_scope: true,
     require_role_assignment: true,
     default_assignment_days: 0,
     staff_email_domains: [],
@@ -144,6 +144,108 @@ async function seedDemoUnitsIfEmpty(tenantId: string) {
   await insertUnit('settlement', ward.id, 'Demo Settlement A', 'DEMO-SET-A');
   await insertUnit('settlement', ward.id, 'Demo Settlement B', 'DEMO-SET-B');
   console.log('  Demo jurisdiction units seeded (2 settlements). Replace via Admin → Jurisdiction units.');
+}
+
+async function seedDemoOfficers(
+  tenantId: string,
+  roleIds: Record<string, string | undefined>,
+) {
+  const grmOfficerRoleId = roleIds.grm_officer;
+  if (!grmOfficerRoleId) return;
+
+  const settlements = await db
+    .select({ id: schema.unit.id, code: schema.unit.code })
+    .from(schema.unit)
+    .where(and(eq(schema.unit.tenantId, tenantId), eq(schema.unit.levelCode, 'settlement')));
+
+  const demos = [
+    { email: 'officer-a@kisip.local', name: 'Demo Settlement A Officer', code: 'DEMO-SET-A' },
+    { email: 'officer-b@kisip.local', name: 'Demo Settlement B Officer', code: 'DEMO-SET-B' },
+  ] as const;
+
+  for (const demo of demos) {
+    const unit = settlements.find((s) => s.code === demo.code);
+    if (!unit) continue;
+
+    let [user] = await db
+      .select({ id: schema.appUser.id })
+      .from(schema.appUser)
+      .where(and(eq(schema.appUser.tenantId, tenantId), eq(schema.appUser.email, demo.email)))
+      .limit(1);
+
+    if (!user) {
+      [user] = await db
+        .insert(schema.appUser)
+        .values({
+          tenantId,
+          email: demo.email,
+          passwordHash: await bcrypt.hash('ChangeMe!2026', 10),
+          displayName: demo.name,
+          registrationStatus: 'approved',
+        })
+        .returning({ id: schema.appUser.id });
+    }
+
+    const [assignment] = await db
+      .select({ id: schema.userRole.userId })
+      .from(schema.userRole)
+      .where(and(eq(schema.userRole.userId, user!.id), eq(schema.userRole.roleId, grmOfficerRoleId)))
+      .limit(1);
+
+    if (!assignment) {
+      await db.insert(schema.userRole).values({
+        userId: user!.id,
+        roleId: grmOfficerRoleId,
+        unitId: unit.id,
+      });
+    }
+  }
+
+  console.log(
+    '  Demo officers: officer-a@kisip.local / officer-b@kisip.local (ChangeMe!2026) — each scoped to one settlement',
+  );
+
+  const multiEmail = 'officer-multi@kisip.local';
+  let [multiUser] = await db
+    .select({ id: schema.appUser.id })
+    .from(schema.appUser)
+    .where(and(eq(schema.appUser.tenantId, tenantId), eq(schema.appUser.email, multiEmail)))
+    .limit(1);
+  if (!multiUser) {
+    [multiUser] = await db
+      .insert(schema.appUser)
+      .values({
+        tenantId,
+        email: multiEmail,
+        passwordHash: await bcrypt.hash('ChangeMe!2026', 10),
+        displayName: 'Multi-jurisdiction Officer',
+        registrationStatus: 'approved',
+      })
+      .returning({ id: schema.appUser.id });
+  }
+  for (const demo of demos) {
+    const unit = settlements.find((s) => s.code === demo.code);
+    if (!unit) continue;
+    const [existing] = await db
+      .select({ userId: schema.userRole.userId })
+      .from(schema.userRole)
+      .where(
+        and(
+          eq(schema.userRole.userId, multiUser!.id),
+          eq(schema.userRole.roleId, grmOfficerRoleId),
+          eq(schema.userRole.unitId, unit.id),
+        ),
+      )
+      .limit(1);
+    if (!existing) {
+      await db.insert(schema.userRole).values({
+        userId: multiUser!.id,
+        roleId: grmOfficerRoleId,
+        unitId: unit.id,
+      });
+    }
+  }
+  console.log('  Multi-jurisdiction demo: officer-multi@kisip.local (ChangeMe!2026) — Settlement A + B');
 }
 
 async function upsertActiveConfig(tenantId: string, domain: ConfigDomain, payload: unknown, changedBy: string) {
@@ -745,6 +847,7 @@ export async function runSeed() {
   }, admin!.id);
 
   await seedDemoUnitsIfEmpty(kisip!.id);
+  await seedDemoOfficers(kisip!.id, roleIds);
 
   await upsertActiveConfig(kisip!.id, 'cd14_features', {
     appeals: true,
@@ -776,6 +879,7 @@ export async function runSeed() {
   console.log('Seed complete.');
   console.log(`  Tenant: kisip (${kisip!.id})`);
   console.log(`  Login:  ${adminEmail} / ChangeMe!2026`);
+  console.log('  Scoped officers: officer-a@kisip.local (Settlement A), officer-b@kisip.local (Settlement B), officer-multi@kisip.local (both)');
 }
 
 function isCliEntry(): boolean {

@@ -10,6 +10,7 @@ import {
   canAccessCase,
   canAccessCaseForTriageReview,
   canFilterCasesByUnit,
+  canScopeCasesToRoot,
   caseUnitSubtreeFilter,
   caseVisibilityFilter,
   expandUnitSubtrees,
@@ -47,6 +48,12 @@ const listQuery = z.object({
   status: z.string().optional(),
   q: z.string().optional(),
   unit_id: z.string().uuid().optional(),
+  /** Narrow jurisdiction visibility to one assigned root (not a unit subtree drill-down). */
+  scope_root: z.string().uuid().optional(),
+  /** Filter to cases currently assigned to this officer. */
+  assignee_id: z.string().uuid().optional(),
+  /** jurisdiction = in my area(s); assigned = my assignee queue; union = both (nav counts). */
+  view: z.enum(['jurisdiction', 'assigned', 'union']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   page_size: z.coerce.number().int().min(1).max(100).default(20),
 });
@@ -107,7 +114,7 @@ export default async function caseRoutes(app: FastifyInstance) {
       : [...(await expandUnitSubtrees(req.tenant.id, access.jurisdictionRoots))];
 
     if (allowedIds.length === 0) {
-      return { tenant_wide: access.tenantWide, units: [], default_unit_id: null };
+      return { tenant_wide: access.tenantWide, units: [], jurisdiction_roots: [], default_unit_id: null };
     }
 
     const units = await db
@@ -120,14 +127,35 @@ export default async function caseRoutes(app: FastifyInstance) {
       .where(and(eq(schema.unit.tenantId, req.tenant.id), inArray(schema.unit.id, allowedIds), eq(schema.unit.active, true)))
       .orderBy(asc(schema.unit.name));
 
+    const rootIds = access.tenantWide ? [] : [...new Set(access.jurisdictionRoots)];
+    const jurisdictionRoots =
+      rootIds.length > 0
+        ? (
+            await db
+              .select({
+                id: schema.unit.id,
+                name: schema.unit.name,
+                levelCode: schema.unit.levelCode,
+              })
+              .from(schema.unit)
+              .where(
+                and(
+                  eq(schema.unit.tenantId, req.tenant.id),
+                  inArray(schema.unit.id, rootIds),
+                  eq(schema.unit.active, true),
+                ),
+              )
+              .orderBy(asc(schema.unit.name))
+          ).map((u) => ({ id: u.id, name: u.name, level_code: u.levelCode }))
+        : [];
+
     const defaultUnitId =
-      !access.tenantWide && access.jurisdictionRoots.length > 0
-        ? access.jurisdictionRoots.find((id) => allowedIds.includes(id)) ?? access.jurisdictionRoots[0] ?? null
-        : null;
+      !access.tenantWide && jurisdictionRoots.length > 0 ? jurisdictionRoots[0]!.id : null;
 
     return {
       tenant_wide: access.tenantWide,
       units: units.map((u) => ({ id: u.id, name: u.name, level_code: u.levelCode })),
+      jurisdiction_roots: jurisdictionRoots,
       default_unit_id: defaultUnitId,
     };
   });
@@ -135,22 +163,36 @@ export default async function caseRoutes(app: FastifyInstance) {
   app.get('/api/v1/cases', { onRequest: [app.requirePermission('case:read')] }, async (req, reply) => {
     const parsed = listQuery.safeParse(req.query);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_query' });
-    const { status, q, unit_id, page, page_size } = parsed.data;
+    const { status, q, unit_id, scope_root, assignee_id, view, page, page_size } = parsed.data;
 
     const access = await loadUserAccess(req.user.sub, req.tenant.id);
-    if (unit_id) {
+    const listView = assignee_id ? 'jurisdiction' : (view ?? 'jurisdiction');
+    const geographicView = !assignee_id && listView !== 'assigned';
+
+    if (geographicView && scope_root && !canScopeCasesToRoot(access, scope_root)) {
+      return reply.code(403).send({ error: 'forbidden', message: 'Jurisdiction outside your scope' });
+    }
+    if (geographicView && unit_id) {
       const allowed = await canFilterCasesByUnit(req.tenant.id, access, unit_id);
       if (!allowed) return reply.code(403).send({ error: 'forbidden', message: 'Unit outside your jurisdiction scope' });
     }
 
-    const scopeFilter = await caseVisibilityFilter(req.tenant.id, access, req.user.sub);
+    const scopeFilter = await caseVisibilityFilter(
+      req.tenant.id,
+      access,
+      req.user.sub,
+      geographicView && scope_root ? [scope_root] : undefined,
+      assignee_id ? 'jurisdiction' : listView,
+    );
     const sensitivityFilter = sensitivityListFilter(access, req.user.sub);
-    const unitFilter = unit_id ? await caseUnitSubtreeFilter(req.tenant.id, unit_id) : undefined;
+    const unitFilter =
+      geographicView && unit_id ? await caseUnitSubtreeFilter(req.tenant.id, unit_id) : undefined;
 
     const where = and(
       eq(schema.grmCase.tenantId, req.tenant.id),
       status ? eq(schema.grmCase.status, status) : undefined,
       q ? or(ilike(schema.grmCase.reference, `%${q}%`), ilike(schema.grmCase.summary, `%${q}%`)) : undefined,
+      assignee_id ? eq(schema.grmCase.assigneeId, assignee_id) : undefined,
       scopeFilter,
       sensitivityFilter,
       unitFilter,
@@ -221,16 +263,21 @@ export default async function caseRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/v1/cases/seed/clear', { onRequest: [app.requireAdminConsole] }, async (req, reply) => {
-    const result = await clearSeedCases(req.tenant.id);
-    await writeAudit({
-      tenantId: req.tenant.id,
-      actorId: req.user.sub,
-      action: 'case.seed_clear',
-      entity: 'grm_case',
-      entityId: req.tenant.id,
-      data: result,
-    });
-    return { ok: true, ...result };
+    try {
+      const result = await clearSeedCases(req.tenant.id);
+      await writeAudit({
+        tenantId: req.tenant.id,
+        actorId: req.user.sub,
+        action: 'case.seed_clear',
+        entity: 'grm_case',
+        entityId: req.tenant.id,
+        data: result,
+      });
+      return { ok: true, ...result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'seed_clear_failed';
+      return reply.code(500).send({ error: 'seed_clear_failed', message });
+    }
   });
 
   app.get('/api/v1/cases/:id', { onRequest: [app.requirePermission('case:read')] }, async (req, reply) => {

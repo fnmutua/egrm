@@ -24,6 +24,8 @@ function createUnitFilterStore() {
   const loading = ref(false);
   const initialized = ref(false);
   const enabled = ref(false);
+  const scopedRootId = ref<string | null>(null);
+  const scopedRootLevelCode = ref<string | null>(null);
 
   /** Visible cascade levels — skips the hierarchy top; starts at configured/default 2nd level. */
   const levels = computed(() => {
@@ -31,6 +33,14 @@ function createUnitFilterStore() {
     const topCode = allLevels.value[0]?.code;
     const fallback = allLevels.value[1]?.code ?? allLevels.value[0]?.code;
     let start = startLevelCode.value ?? fallback;
+    if (scopedRootLevelCode.value) {
+      const rootIdx = allLevels.value.findIndex((l) =>
+        levelCodesMatch(l.code, scopedRootLevelCode.value),
+      );
+      if (rootIdx >= 0 && rootIdx + 1 < allLevels.value.length) {
+        start = allLevels.value[rootIdx + 1]!.code;
+      }
+    }
     if (start === topCode) start = fallback;
     const idx = allLevels.value.findIndex((l) => l.code === start);
     if (idx < 0) return allLevels.value.length > 1 ? allLevels.value.slice(1) : allLevels.value;
@@ -45,6 +55,8 @@ function createUnitFilterStore() {
     loading,
     initialized,
     enabled,
+    scopedRootId,
+    scopedRootLevelCode,
     levels,
   };
 }
@@ -66,6 +78,11 @@ function levelCacheKey(levelCode: string, parentId: string | null): string {
   return `${levelCode}:${parentId ?? 'root'}`;
 }
 
+function levelCodesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  return a.toLowerCase() === b.toLowerCase();
+}
+
 export function useDashboardUnitFilter(scope = 'dashboard') {
   const { api } = useApi();
   const store = getUnitFilterStore(scope);
@@ -74,8 +91,8 @@ export function useDashboardUnitFilter(scope = 'dashboard') {
     if (!store.enabled.value) return null;
     for (let i = store.levels.value.length - 1; i >= 0; i--) {
       const code = store.levels.value[i]!.code;
-      const sel = store.selections.value[code];
-      if (sel && sel !== ALL_VALUE) return sel;
+      const sel = normalizeLevelValue(store.selections.value[code]);
+      if (sel !== ALL_VALUE) return sel;
     }
     return null;
   });
@@ -89,8 +106,8 @@ export function useDashboardUnitFilter(scope = 'dashboard') {
     let parentId: string | null = null;
     if (levelIndex > 0) {
       const parentCode = store.levels.value[levelIndex - 1]!.code;
-      const parentSel = store.selections.value[parentCode];
-      if (!parentSel || parentSel === ALL_VALUE) {
+      const parentSel = normalizeLevelValue(store.selections.value[parentCode]);
+      if (parentSel === ALL_VALUE) {
         store.unitsByLevel.value[level.code] = [];
         return;
       }
@@ -99,6 +116,7 @@ export function useDashboardUnitFilter(scope = 'dashboard') {
 
     const params = new URLSearchParams({ level_code: level.code });
     if (parentId) params.set('parent_id', parentId);
+    if (store.scopedRootId.value) params.set('scope_root', store.scopedRootId.value);
 
     const res = await api<UnitFilterResponse>(`/api/v1/dashboards/unit-filter?${params}`);
     store.allLevels.value = res.levels.length ? res.levels : store.allLevels.value;
@@ -106,11 +124,23 @@ export function useDashboardUnitFilter(scope = 'dashboard') {
   }
 
   function initSelections() {
-    store.selections.value = {};
-    store.unitsByLevel.value = {};
+    const nextSelections: Record<string, string> = {};
+    const nextUnits: Record<string, UnitOption[]> = {};
     for (const lvl of store.levels.value) {
-      store.selections.value[lvl.code] = ALL_VALUE;
+      nextSelections[lvl.code] = ALL_VALUE;
+      nextUnits[lvl.code] = [];
     }
+    store.selections.value = nextSelections;
+    store.unitsByLevel.value = nextUnits;
+  }
+
+  function normalizeLevelValue(value: unknown): string {
+    if (typeof value === 'string' && value) return value;
+    if (value && typeof value === 'object' && 'value' in value) {
+      const v = (value as { value: unknown }).value;
+      if (typeof v === 'string' && v) return v;
+    }
+    return ALL_VALUE;
   }
 
   async function initFilter() {
@@ -131,16 +161,23 @@ export function useDashboardUnitFilter(scope = 'dashboard') {
     }
   }
 
-  function resetFilter() {
+  async function resetFilter() {
     initSelections();
-    if (store.levels.value.length) void loadUnitsForLevel(0);
+    if (!store.levels.value.length) return;
+    store.loading.value = true;
+    try {
+      await loadUnitsForLevel(0);
+    } finally {
+      store.loading.value = false;
+    }
   }
 
-  async function onLevelChange(levelCode: string, value: string) {
+  async function onLevelChange(levelCode: string, value: unknown) {
     const idx = store.levels.value.findIndex((l) => l.code === levelCode);
     if (idx < 0) return;
 
-    store.selections.value[levelCode] = value;
+    const next = normalizeLevelValue(value);
+    store.selections.value[levelCode] = next;
 
     for (let i = idx + 1; i < store.levels.value.length; i++) {
       const code = store.levels.value[i]!.code;
@@ -148,7 +185,7 @@ export function useDashboardUnitFilter(scope = 'dashboard') {
       store.unitsByLevel.value[code] = [];
     }
 
-    if (value !== ALL_VALUE && idx + 1 < store.levels.value.length) {
+    if (next !== ALL_VALUE && idx + 1 < store.levels.value.length) {
       await loadUnitsForLevel(idx + 1);
     }
   }
@@ -164,14 +201,23 @@ export function useDashboardUnitFilter(scope = 'dashboard') {
 
   function setEnabled(active: boolean) {
     store.enabled.value = active;
-    if (!active) resetFilter();
+    if (!active) void resetFilter();
   }
 
   function setStartLevel(code: string | null | undefined) {
     const next = code ?? null;
     const changed = store.startLevelCode.value !== next;
     store.startLevelCode.value = next;
-    if (changed && store.initialized.value && store.enabled.value) resetFilter();
+    if (changed && store.initialized.value && store.enabled.value) void resetFilter();
+  }
+
+  function setScopedRoot(unitId: string | null, rootLevelCode?: string | null) {
+    const changed =
+      store.scopedRootId.value !== unitId ||
+      store.scopedRootLevelCode.value !== (rootLevelCode ?? null);
+    store.scopedRootId.value = unitId;
+    store.scopedRootLevelCode.value = rootLevelCode ?? null;
+    if (changed && store.initialized.value && store.enabled.value) void resetFilter();
   }
 
   return {
@@ -189,6 +235,7 @@ export function useDashboardUnitFilter(scope = 'dashboard') {
     resetFilter,
     setEnabled,
     setStartLevel,
+    setScopedRoot,
     onLevelChange,
     selectItems,
     levelCacheKey,

@@ -24,6 +24,7 @@ interface StaffUser {
   profile: Record<string, string>;
   created_at: string;
   roles_editable?: boolean;
+  open_case_count?: number;
   roles: UserRole[];
 }
 
@@ -47,21 +48,21 @@ const approveOpen = ref(false);
 const rejectOpen = ref(false);
 const selected = ref<StaffUser | null>(null);
 
-const createForm = reactive({
-  email: '',
-  display_name: '',
-  password: '',
-  phone: '',
-  active: true,
-  role_id: '' as string,
-  unit_id: null as string | null,
-});
+const createRoles = ref<{ role_id: string; unit_id: string | null }[]>([{ role_id: '', unit_id: null }]);
 
 const editForm = reactive({
   display_name: '',
   active: true,
   password: '',
   phone: '',
+});
+
+const createForm = reactive({
+  email: '',
+  display_name: '',
+  password: '',
+  phone: '',
+  active: true,
 });
 
 const editRoles = ref<{ role_id: string; unit_id: string | null }[]>([{ role_id: '', unit_id: null }]);
@@ -92,6 +93,11 @@ const editRoleItems = computed(() => {
   }
   return items;
 });
+
+function isTenantWideRole(roleId: string): boolean {
+  const role = roles.value.find((r) => r.id === roleId);
+  return role?.name === 'administrator';
+}
 
 const filteredUsers = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -143,14 +149,39 @@ onMounted(async () => {
   await Promise.all([loadMeta(), reload()]);
 });
 
+function normalizeRoleAssignments(rows: { role_id: string; unit_id: string | null }[]) {
+  const seen = new Set<string>();
+  return rows
+    .filter((r) => r.role_id)
+    .filter((r) => {
+      const key = `${r.role_id}:${r.unit_id ?? ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((r) => ({ role_id: r.role_id, unit_id: r.unit_id }));
+}
+
+function addAssignmentRow(rows: { role_id: string; unit_id: string | null }[]) {
+  const template = rows[0];
+  rows.push({
+    role_id: template?.role_id || roles.value[0]?.id || '',
+    unit_id: null,
+  });
+}
+
+function removeAssignmentRow(rows: { role_id: string; unit_id: string | null }[], index: number) {
+  if (rows.length <= 1) return;
+  rows.splice(index, 1);
+}
+
 function resetCreateForm() {
   createForm.email = '';
   createForm.display_name = '';
   createForm.password = '';
   createForm.phone = '';
   createForm.active = true;
-  createForm.role_id = roles.value[0]?.id ?? '';
-  createForm.unit_id = null;
+  createRoles.value = [{ role_id: roles.value[0]?.id ?? '', unit_id: null }];
 }
 
 function openCreate() {
@@ -196,9 +227,7 @@ async function createUser() {
       password: createForm.password,
       active: createForm.active,
       profile: createForm.phone.trim() ? { phone: createForm.phone.trim() } : undefined,
-      roles: createForm.role_id
-        ? [{ role_id: createForm.role_id, unit_id: createForm.unit_id }]
-        : [],
+      roles: normalizeRoleAssignments(createRoles.value),
     };
     await api('/api/v1/users', { method: 'POST', body });
     toast.add({ title: 'User created', color: 'success' });
@@ -224,9 +253,7 @@ async function saveEdit() {
     await api(`/api/v1/users/${selected.value.id}`, { method: 'PATCH', body });
 
     if (editRolesEditable.value) {
-      const rolesBody = editRoles.value
-        .filter((r) => r.role_id)
-        .map((r) => ({ role_id: r.role_id, unit_id: r.unit_id }));
+      const rolesBody = normalizeRoleAssignments(editRoles.value);
       await api(`/api/v1/users/${selected.value.id}/roles`, {
         method: 'PUT',
         body: { roles: rolesBody },
@@ -247,9 +274,7 @@ async function approveUser() {
   if (!selected.value) return;
   saving.value = true;
   try {
-    const rolesBody = approveRoles.value
-      .filter((r) => r.role_id)
-      .map((r) => ({ role_id: r.role_id, unit_id: r.unit_id }));
+    const rolesBody = normalizeRoleAssignments(approveRoles.value);
     await api(`/api/v1/users/${selected.value.id}/approve`, {
       method: 'POST',
       body: { roles: rolesBody },
@@ -304,6 +329,7 @@ function formatRoles(row: StaffUser): string {
 
 function rowActions(row: StaffUser) {
   const items: { label: string; icon: string; onSelect?: () => void }[] = [
+    { label: 'View workload', icon: 'i-lucide-briefcase', onSelect: () => navigateTo(`/admin/settings/users/${row.id}`) },
     { label: 'Edit', icon: 'i-lucide-pencil', onSelect: () => openEdit(row) },
   ];
   if (row.registration_status === 'pending') {
@@ -360,12 +386,13 @@ function rowActions(row: StaffUser) {
       <div v-if="loading" class="p-8 text-center text-muted">Loading…</div>
       <div v-else-if="filteredUsers.length === 0" class="p-8 text-center text-muted">No users found.</div>
       <div v-else class="overflow-x-auto">
-        <table class="w-full min-w-[760px] text-sm">
+        <table class="w-full min-w-[860px] text-sm">
           <thead>
             <tr class="text-left text-muted border-b border-default">
               <th class="py-2 px-4">Name</th>
               <th class="py-2 px-4">Email</th>
               <th class="py-2 px-4">Phone</th>
+              <th class="py-2 px-4">Open cases</th>
               <th class="py-2 px-4">Status</th>
               <th class="py-2 px-4">Roles</th>
               <th class="py-2 px-4">Active</th>
@@ -378,9 +405,29 @@ function rowActions(row: StaffUser) {
               :key="row.id"
               class="border-b border-default hover:bg-elevated/50"
             >
-              <td class="py-2.5 px-4 font-medium">{{ row.display_name }}</td>
+              <td class="py-2.5 px-4 font-medium">
+                <button
+                  type="button"
+                  class="text-left hover:text-primary hover:underline"
+                  @click="navigateTo(`/admin/settings/users/${row.id}`)"
+                >
+                  {{ row.display_name }}
+                </button>
+              </td>
               <td class="py-2.5 px-4 font-mono text-xs">{{ row.email }}</td>
               <td class="py-2.5 px-4">{{ row.profile?.phone ?? '—' }}</td>
+              <td class="py-2.5 px-4">
+                <UButton
+                  v-if="(row.open_case_count ?? 0) > 0"
+                  variant="link"
+                  size="xs"
+                  :padded="false"
+                  :to="`/cases?assignee_id=${row.id}`"
+                >
+                  {{ row.open_case_count }}
+                </UButton>
+                <span v-else class="text-muted">0</span>
+              </td>
               <td class="py-2.5 px-4">
                 <UBadge :color="statusColor[row.registration_status] ?? 'neutral'" variant="subtle" size="sm">
                   {{ row.registration_status }}
@@ -419,20 +466,53 @@ function rowActions(row: StaffUser) {
           <UFormField label="Password" required>
             <PasswordInput v-model="createForm.password" autocomplete="new-password" :required="true" />
           </UFormField>
-          <UFormField label="Role">
-            <USelectMenu
-              v-model="createForm.role_id"
-              :items="roleItems"
-              value-key="value"
-              label-key="label"
-              class="w-full"
-              :loading="metaLoading"
-              placeholder="Select role…"
-            />
-          </UFormField>
-          <UFormField label="Jurisdiction unit">
-            <JurisdictionUnitSelect v-model="createForm.unit_id" />
-          </UFormField>
+          <div class="space-y-3 pt-1">
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-sm font-medium">Role &amp; jurisdiction assignments</p>
+              <UButton
+                type="button"
+                size="xs"
+                variant="outline"
+                icon="i-lucide-plus"
+                @click="addAssignmentRow(createRoles)"
+              >
+                Add jurisdiction
+              </UButton>
+            </div>
+            <p class="text-xs text-muted">
+              Add one row per jurisdiction. The same role can cover multiple settlements or counties.
+            </p>
+            <div
+              v-for="(row, i) in createRoles"
+              :key="i"
+              class="grid sm:grid-cols-[1fr_1fr_auto] gap-3 items-end"
+            >
+              <UFormField label="Role">
+                <USelectMenu
+                  v-model="row.role_id"
+                  :items="roleItems"
+                  value-key="value"
+                  label-key="label"
+                  class="w-full"
+                  :loading="metaLoading"
+                  placeholder="Select role…"
+                />
+              </UFormField>
+              <UFormField label="Jurisdiction">
+                <JurisdictionUnitSelect v-model="row.unit_id" :allow-none="isTenantWideRole(row.role_id)" />
+              </UFormField>
+              <UButton
+                v-if="createRoles.length > 1"
+                type="button"
+                size="sm"
+                variant="ghost"
+                color="neutral"
+                icon="i-lucide-trash-2"
+                aria-label="Remove assignment"
+                @click="removeAssignmentRow(createRoles, i)"
+              />
+            </div>
+          </div>
           <label class="flex items-center gap-2 text-sm">
             <UCheckbox v-model="createForm.active" />
             Active immediately
@@ -462,11 +542,25 @@ function rowActions(row: StaffUser) {
             <PasswordInput v-model="editForm.password" autocomplete="new-password" />
           </UFormField>
           <div v-if="editRolesEditable" class="space-y-3 pt-1">
-            <p class="text-sm font-medium">Role assignments</p>
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-sm font-medium">Role &amp; jurisdiction assignments</p>
+              <UButton
+                type="button"
+                size="xs"
+                variant="outline"
+                icon="i-lucide-plus"
+                @click="addAssignmentRow(editRoles)"
+              >
+                Add jurisdiction
+              </UButton>
+            </div>
+            <p class="text-xs text-muted">
+              Add one row per jurisdiction. The same role can cover multiple areas.
+            </p>
             <div
               v-for="(row, i) in editRoles"
               :key="i"
-              class="grid sm:grid-cols-2 gap-3"
+              class="grid sm:grid-cols-[1fr_1fr_auto] gap-3 items-end"
             >
               <UFormField label="Role">
                 <USelectMenu
@@ -480,8 +574,18 @@ function rowActions(row: StaffUser) {
                 />
               </UFormField>
               <UFormField label="Jurisdiction">
-                <JurisdictionUnitSelect v-model="row.unit_id" />
+                <JurisdictionUnitSelect v-model="row.unit_id" :allow-none="isTenantWideRole(row.role_id)" />
               </UFormField>
+              <UButton
+                v-if="editRoles.length > 1"
+                type="button"
+                size="sm"
+                variant="ghost"
+                color="neutral"
+                icon="i-lucide-trash-2"
+                aria-label="Remove assignment"
+                @click="removeAssignmentRow(editRoles, i)"
+              />
             </div>
           </div>
           <div v-else-if="selected?.roles.length" class="space-y-1 pt-1">
@@ -509,10 +613,22 @@ function rowActions(row: StaffUser) {
           ({{ selected?.email }}). Assign at least one role unless a default is configured in CD-10.
         </p>
         <div class="space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-sm font-medium">Role &amp; jurisdiction assignments</p>
+            <UButton
+              type="button"
+              size="xs"
+              variant="outline"
+              icon="i-lucide-plus"
+              @click="addAssignmentRow(approveRoles)"
+            >
+              Add jurisdiction
+            </UButton>
+          </div>
           <div
             v-for="(row, i) in approveRoles"
             :key="i"
-            class="grid sm:grid-cols-2 gap-3"
+            class="grid sm:grid-cols-[1fr_1fr_auto] gap-3 items-end"
           >
             <UFormField label="Role">
               <USelectMenu
@@ -526,8 +642,18 @@ function rowActions(row: StaffUser) {
               />
             </UFormField>
             <UFormField label="Jurisdiction">
-              <JurisdictionUnitSelect v-model="row.unit_id" />
+              <JurisdictionUnitSelect v-model="row.unit_id" :allow-none="isTenantWideRole(row.role_id)" />
             </UFormField>
+            <UButton
+              v-if="approveRoles.length > 1"
+              type="button"
+              size="sm"
+              variant="ghost"
+              color="neutral"
+              icon="i-lucide-trash-2"
+              aria-label="Remove assignment"
+              @click="removeAssignmentRow(approveRoles, i)"
+            />
           </div>
         </div>
       </template>

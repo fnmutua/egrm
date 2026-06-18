@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { hasPermission } from '@egrm/core';
 import { db, schema } from '../db/client.js';
@@ -127,6 +127,15 @@ export async function canFilterCasesByUnit(
   return allowed.has(unitId);
 }
 
+/** Whether a jurisdiction root id may be used to narrow list visibility. */
+export function canScopeCasesToRoot(
+  access: Pick<UserAccess, 'tenantWide' | 'jurisdictionRoots'>,
+  rootId: string,
+): boolean {
+  if (access.tenantWide) return true;
+  return access.jurisdictionRoots.includes(rootId);
+}
+
 /** SQL fragment: cases located in a unit subtree (inclusive). */
 export async function caseUnitSubtreeFilter(tenantId: string, unitId: string): Promise<SQL> {
   const allowed = await expandUnitSubtrees(tenantId, [unitId]);
@@ -135,19 +144,36 @@ export async function caseUnitSubtreeFilter(tenantId: string, unitId: string): P
   return inArray(schema.grmCase.unitId, allowedIds);
 }
 
+/** How the case list applies jurisdiction vs assignee visibility. */
+export type CaseListView = 'jurisdiction' | 'assigned' | 'union';
+
 /** SQL fragment: cases visible under jurisdiction scope (or assigned to user). */
 export async function caseVisibilityFilter(
   tenantId: string,
   access: Pick<UserAccess, 'tenantWide' | 'jurisdictionRoots'>,
   userId: string,
+  scopeRootIds?: string[],
+  view: CaseListView = 'union',
 ): Promise<SQL | undefined> {
   if (access.tenantWide) return undefined;
 
-  const allowed = await expandUnitSubtrees(tenantId, access.jurisdictionRoots);
+  if (view === 'assigned') {
+    return eq(schema.grmCase.assigneeId, userId);
+  }
+
+  const roots =
+    scopeRootIds?.length
+      ? scopeRootIds
+      : access.jurisdictionRoots;
+  const allowed = await expandUnitSubtrees(tenantId, roots);
   const allowedIds = [...allowed];
 
   if (allowedIds.length === 0) {
-    return eq(schema.grmCase.assigneeId, userId);
+    return view === 'jurisdiction' ? sql`false` : eq(schema.grmCase.assigneeId, userId);
+  }
+
+  if (view === 'jurisdiction') {
+    return inArray(schema.grmCase.unitId, allowedIds);
   }
 
   return or(

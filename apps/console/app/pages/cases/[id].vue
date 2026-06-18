@@ -138,6 +138,7 @@ const selectedAssigneeId = ref<string | null>(null);
 const notifications = ref<CaseNotification[]>([]);
 const notificationsLoading = ref(false);
 const notificationsLoaded = ref(false);
+const timelineRefreshing = ref(false);
 const activeTab = ref('overview');
 const attachments = ref<CaseAttachment[]>([]);
 const attachmentsLoading = ref(false);
@@ -996,8 +997,8 @@ async function sendThreadMessage() {
   }
 }
 
-async function loadNotifications() {
-  if (!detail.value || notificationsLoaded.value) return;
+async function loadNotifications(force = false) {
+  if (!detail.value || (notificationsLoaded.value && !force)) return;
   notificationsLoading.value = true;
   try {
     const res = await api<{ notifications: CaseNotification[] }>(
@@ -1007,6 +1008,19 @@ async function loadNotifications() {
     notificationsLoaded.value = true;
   } finally {
     notificationsLoading.value = false;
+  }
+}
+
+function refreshNotifications() {
+  void loadNotifications(true);
+}
+
+async function refreshTimeline() {
+  timelineRefreshing.value = true;
+  try {
+    await loadCase();
+  } finally {
+    timelineRefreshing.value = false;
   }
 }
 
@@ -1758,14 +1772,14 @@ onUnmounted(clearPageBreadcrumb);
               </p>
             </div>
             <UButton
-              size="xs"
-              variant="ghost"
+              variant="outline"
               icon="i-lucide-refresh-cw"
+              size="sm"
+              aria-label="Refresh notifications"
               :loading="notificationsLoading"
-              @click="notificationsLoaded = false; loadNotifications()"
-            >
-              Refresh
-            </UButton>
+              class="shrink-0"
+              @click="refreshNotifications"
+            />
           </div>
         </template>
 
@@ -1842,8 +1856,24 @@ onUnmounted(clearPageBreadcrumb);
 
     <div v-else-if="activeTab === 'timeline'">
       <UCard>
-        <template #header><span class="font-medium">Timeline</span></template>
-        <div v-if="detail.events.length === 0" class="text-sm text-muted py-4 text-center">
+        <template #header>
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-medium">Timeline</span>
+            <UButton
+              variant="outline"
+              icon="i-lucide-refresh-cw"
+              size="sm"
+              aria-label="Refresh timeline"
+              :loading="timelineRefreshing"
+              class="shrink-0"
+              @click="refreshTimeline"
+            />
+          </div>
+        </template>
+        <div v-if="timelineRefreshing && !detail.events.length" class="text-sm text-muted py-4 text-center">
+          Loading…
+        </div>
+        <div v-else-if="detail.events.length === 0" class="text-sm text-muted py-4 text-center">
           No events recorded yet.
         </div>
         <UTimeline

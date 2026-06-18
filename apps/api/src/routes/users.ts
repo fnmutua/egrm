@@ -16,6 +16,13 @@ import {
   validateStaffEmail,
   canReviewRegistrations,
 } from '../services/user-model.js';
+import { searchAssignableUnits } from '../services/assignable-units.js';
+import {
+  countOpenCasesByAssignee,
+  getUserAssignmentSummary,
+  listUserAssignmentActivity,
+  listUserCurrentAssignments,
+} from '../services/user-assignments.js';
 import { loadUserAccess } from '../services/access.js';
 import {
   buildStaffUserManagerContext,
@@ -26,7 +33,6 @@ import {
   validateAssignableRoles,
   type StaffUserManagerContext,
 } from '../services/role-hierarchy.js';
-import { searchAssignableUnits } from '../services/assignable-units.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -123,7 +129,7 @@ async function loadUserRoles(userId: string, tenantId: string) {
 function publicUser(
   row: typeof schema.appUser.$inferSelect,
   roles: Awaited<ReturnType<typeof loadUserRoles>>,
-  opts?: { roles_editable?: boolean },
+  opts?: { roles_editable?: boolean; open_case_count?: number },
 ) {
   return {
     id: row.id,
@@ -134,6 +140,7 @@ function publicUser(
     profile: row.profile ?? {},
     created_at: row.createdAt,
     roles_editable: opts?.roles_editable,
+    open_case_count: opts?.open_case_count ?? 0,
     roles: roles.map((r) => ({
       id: r.id,
       role_id: r.roleId,
@@ -144,6 +151,23 @@ function publicUser(
       valid_to: r.validTo,
     })),
   };
+}
+
+async function loadTenantWideRoleIds(tenantId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ id: schema.role.id, permissions: schema.role.permissions })
+    .from(schema.role)
+    .where(eq(schema.role.tenantId, tenantId));
+  return new Set(rows.filter((r) => r.permissions.includes('admin:*')).map((r) => r.id));
+}
+
+async function validateAssignments(
+  tenantId: string,
+  model: Awaited<ReturnType<typeof getUserModel>>,
+  roles: { role_id: string; unit_id?: string | null }[],
+): Promise<string | null> {
+  const tenantWideRoleIds = await loadTenantWideRoleIds(tenantId);
+  return validateRoleAssignments(model, roles, { tenantWideRoleIds });
 }
 
 async function replaceUserRoles(
@@ -180,6 +204,31 @@ async function replaceUserRoles(
       validTo: parseDate(r.valid_to),
     })),
   );
+}
+
+const assignmentListQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  page_size: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+async function assertTargetUserVisible(
+  ctx: StaffUserManagerContext,
+  tenantId: string,
+  userId: string,
+): Promise<{ error?: string; status?: number; message?: string }> {
+  const [user] = await db
+    .select({ id: schema.appUser.id, registrationStatus: schema.appUser.registrationStatus })
+    .from(schema.appUser)
+    .where(and(eq(schema.appUser.tenantId, tenantId), eq(schema.appUser.id, userId)))
+    .limit(1);
+  if (!user) return { error: 'not_found', status: 404 };
+  const userModel = await getUserModel(tenantId);
+  const canReview = canReviewRegistrations(userModel, ctx.permissions, ctx.holderRoleNames);
+  const manageError = await assertTargetUserManageable(ctx, tenantId, userId, {
+    pendingNoRoles: user.registrationStatus === 'pending' && (canReview || ctx.manageableRoleNames.size > 0),
+  });
+  if (manageError) return { error: 'user_not_manageable', status: 403, message: manageError };
+  return {};
 }
 
 async function assertTargetUserManageable(
@@ -277,7 +326,72 @@ export default async function userRoutes(app: FastifyInstance) {
       )
     ).filter((u): u is NonNullable<typeof u> => u != null);
 
-    return { users: result };
+    const openCounts = await countOpenCasesByAssignee(
+      req.tenant.id,
+      result.map((u) => u.id),
+    );
+    const usersWithCounts = result.map((u) => ({
+      ...u,
+      open_case_count: openCounts.get(u.id) ?? 0,
+    }));
+
+    return { users: usersWithCounts };
+  });
+
+  app.get('/api/v1/users/:id/assignments/summary', { onRequest: [requireStaffUserManager] }, async (req, reply) => {
+    const ctx = req.staffUserManager!;
+    const { id } = req.params as { id: string };
+    const visible = await assertTargetUserVisible(ctx, req.tenant.id, id);
+    if (visible.error) {
+      return reply.code(visible.status ?? 403).send({ error: visible.error, message: visible.message });
+    }
+
+    const summary = await getUserAssignmentSummary(req.tenant.id, id);
+    return summary;
+  });
+
+  app.get('/api/v1/users/:id/assignments/current', { onRequest: [requireStaffUserManager] }, async (req, reply) => {
+    const ctx = req.staffUserManager!;
+    const { id } = req.params as { id: string };
+    const parsed = assignmentListQuery.safeParse(req.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_query' });
+
+    const visible = await assertTargetUserVisible(ctx, req.tenant.id, id);
+    if (visible.error) {
+      return reply.code(visible.status ?? 403).send({ error: visible.error, message: visible.message });
+    }
+
+    const viewerAccess = await loadUserAccess(req.user.sub, req.tenant.id);
+    return listUserCurrentAssignments(
+      req.tenant.id,
+      viewerAccess,
+      req.user.sub,
+      id,
+      parsed.data.page,
+      parsed.data.page_size,
+    );
+  });
+
+  app.get('/api/v1/users/:id/assignments/activity', { onRequest: [requireStaffUserManager] }, async (req, reply) => {
+    const ctx = req.staffUserManager!;
+    const { id } = req.params as { id: string };
+    const parsed = assignmentListQuery.safeParse(req.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_query' });
+
+    const visible = await assertTargetUserVisible(ctx, req.tenant.id, id);
+    if (visible.error) {
+      return reply.code(visible.status ?? 403).send({ error: visible.error, message: visible.message });
+    }
+
+    const viewerAccess = await loadUserAccess(req.user.sub, req.tenant.id);
+    return listUserAssignmentActivity(
+      req.tenant.id,
+      viewerAccess,
+      req.user.sub,
+      id,
+      parsed.data.page,
+      parsed.data.page_size,
+    );
   });
 
   app.get('/api/v1/users/:id', { onRequest: [requireStaffUserManager] }, async (req, reply) => {
@@ -302,7 +416,14 @@ export default async function userRoutes(app: FastifyInstance) {
       selfEdit: user.id === req.user.sub,
     });
 
-    return { user: publicUser(user, await loadUserRoles(user.id, req.tenant.id), { roles_editable: rolesEditable }) };
+    const summary = await getUserAssignmentSummary(req.tenant.id, id);
+    return {
+      user: publicUser(user, await loadUserRoles(user.id, req.tenant.id), {
+        roles_editable: rolesEditable,
+        open_case_count: summary.open_cases,
+      }),
+      assignments: summary,
+    };
   });
 
   app.post('/api/v1/users', { onRequest: [requireStaffUserManager] }, async (req, reply) => {
@@ -318,7 +439,7 @@ export default async function userRoutes(app: FastifyInstance) {
     const domainError = validateStaffEmail(userModel, email);
     if (domainError) return reply.code(400).send({ error: 'email_domain_not_allowed', message: domainError });
 
-    const assignError = validateRoleAssignments(userModel, parsed.data.roles);
+    const assignError = await validateAssignments(req.tenant.id, userModel, parsed.data.roles);
     if (assignError) return reply.code(400).send({ error: 'invalid_assignments', message: assignError });
 
     const hierarchyError = await assertCanAssignRoles(req, parsed.data.roles);
@@ -442,7 +563,7 @@ export default async function userRoutes(app: FastifyInstance) {
     if (roleEditError) return reply.code(403).send({ error: 'roles_not_editable', message: roleEditError });
 
     const userModel = await getUserModel(req.tenant.id);
-    const assignError = validateRoleAssignments(userModel, parsed.data.roles);
+    const assignError = await validateAssignments(req.tenant.id, userModel, parsed.data.roles);
     if (assignError) return reply.code(400).send({ error: 'invalid_assignments', message: assignError });
 
     const hierarchyError = await assertCanAssignRoles(req, parsed.data.roles);
@@ -513,7 +634,7 @@ export default async function userRoutes(app: FastifyInstance) {
       if (role) roles = [{ role_id: role.id, unit_id: null }];
     }
 
-    const assignError = validateRoleAssignments(userModel, roles);
+    const assignError = await validateAssignments(req.tenant.id, userModel, roles);
     if (assignError) return reply.code(400).send({ error: 'invalid_assignments', message: assignError });
 
     const hierarchyError = await assertCanAssignRoles(req, roles);

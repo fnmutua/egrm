@@ -54,8 +54,11 @@ export async function resetCases(tenantCode?: string): Promise<void> {
     const forTenant = (tenantIdCol: AnyColumn) => inArray(tenantIdCol, tenantIds);
 
     const counts = {
+      ai_interaction: Number((await tx.delete(schema.aiInteraction).where(forTenant(schema.aiInteraction.tenantId))).rowCount ?? 0),
+      staff_inbox_notification: Number((await tx.delete(schema.staffInboxNotification).where(forTenant(schema.staffInboxNotification.tenantId))).rowCount ?? 0),
       notification_log: Number((await tx.delete(schema.notificationLog).where(forTenant(schema.notificationLog.tenantId))).rowCount ?? 0),
       notification_outbox: Number((await tx.delete(schema.notificationOutbox).where(forTenant(schema.notificationOutbox.tenantId))).rowCount ?? 0),
+      chatbot_session: Number((await tx.delete(schema.chatbotSession).where(forTenant(schema.chatbotSession.tenantId))).rowCount ?? 0),
       case_attachment: Number((await tx.delete(schema.caseAttachment).where(forTenant(schema.caseAttachment.tenantId))).rowCount ?? 0),
       thread_entry: Number((await tx.delete(schema.threadEntry).where(forTenant(schema.threadEntry.tenantId))).rowCount ?? 0),
       case_event: Number((await tx.delete(schema.caseEvent).where(forTenant(schema.caseEvent.tenantId))).rowCount ?? 0),
@@ -70,7 +73,8 @@ export async function resetCases(tenantCode?: string): Promise<void> {
   console.log('[reset-cases] complete');
   console.log(`  tenants:     ${tenantIds.length}`);
   console.log(`  blob files:  ${blobsRemoved} removed from disk`);
-  console.log('  tables:      notification_log, notification_outbox, case_attachment,');
+  console.log('  tables:      ai_interaction, staff_inbox_notification, notification_log,');
+  console.log('               notification_outbox, chatbot_session, case_attachment,');
   console.log('               thread_entry, case_event, grm_case, party, case_sequence');
 }
 

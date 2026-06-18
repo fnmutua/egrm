@@ -79,7 +79,7 @@ defineExpose({ resetFilter });
         :placeholder="level.label"
         size="sm"
         class="w-full sm:w-44"
-        @update:model-value="onLevelChange(level.code, $event as string)"
+        @update:model-value="onLevelChange(level.code, $event)"
       />
     </template>
     <UButton
