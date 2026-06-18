@@ -405,24 +405,40 @@ function escapeCell(v: unknown): string {
   return `"${s.replace(/"/g, '""')}"`;
 }
 
+function caseListQuery(pageNum: number, pageSize: number) {
+  const geographic = !isAssigneeFilterActive.value && (!isJurisdictionScoped.value || listView.value === 'jurisdiction');
+  return {
+    q: prefs.value.search && q.value ? q.value : undefined,
+    status: prefs.value.status && status.value !== STATUS_ALL ? status.value : undefined,
+    assignee_id: isAssigneeFilterActive.value ? assigneeId.value : undefined,
+    view: !isAssigneeFilterActive.value && isJurisdictionScoped.value ? listView.value : undefined,
+    scope_root: geographic ? selectedScopeRoot.value ?? undefined : undefined,
+    unit_id: geographic && prefs.value.unit ? effectiveCaseUnitId.value ?? undefined : undefined,
+    page: pageNum,
+    page_size: pageSize,
+  };
+}
+
 async function downloadExcel() {
   downloading.value = true;
   try {
-    const geographic = !isAssigneeFilterActive.value && (!isJurisdictionScoped.value || listView.value === 'jurisdiction');
-    const res = await api<{ cases: CaseRow[] }>('/api/v1/cases', {
-      query: {
-        q: prefs.value.search && q.value ? q.value : undefined,
-        status: prefs.value.status && status.value !== STATUS_ALL ? status.value : undefined,
-        assignee_id: isAssigneeFilterActive.value ? assigneeId.value : undefined,
-        view: !isAssigneeFilterActive.value && isJurisdictionScoped.value ? listView.value : undefined,
-        scope_root: geographic ? selectedScopeRoot.value ?? undefined : undefined,
-        unit_id: geographic && prefs.value.unit ? effectiveCaseUnitId.value ?? undefined : undefined,
-        page: 1,
-        page_size: 5000,
-      },
-    });
+    const pageSize = 100;
+    const allCases: CaseRow[] = [];
+    let pageNum = 1;
+    let totalRows = 0;
+
+    while (true) {
+      const res = await api<{ cases: CaseRow[]; total: number }>('/api/v1/cases', {
+        query: caseListQuery(pageNum, pageSize),
+      });
+      if (pageNum === 1) totalRows = res.total;
+      allCases.push(...res.cases);
+      if (res.cases.length === 0 || allCases.length >= totalRows) break;
+      pageNum += 1;
+    }
+
     const headers = ['Reference', 'Summary', 'Status', 'Location', 'Level', 'Channel', 'Priority', 'Anonymous', 'Received'];
-    const csvRows = res.cases.map((c) => [
+    const csvRows = allCases.map((c) => [
       c.reference,
       c.summary,
       c.status,
@@ -435,13 +451,18 @@ async function downloadExcel() {
     ].map(escapeCell).join(','));
 
     const csv = [headers.join(','), ...csvRows].join('\r\n');
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `cases-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  } catch {
+    toast.add({ title: 'Export failed', color: 'error' });
   } finally {
     downloading.value = false;
   }
