@@ -657,13 +657,36 @@ function eventSummary(ev: CaseDetail['events'][number]): string | null {
   if ((ev.kind === 'message_external' || ev.kind === 'message_inbound') && typeof d.preview === 'string') {
     return d.preview as string;
   }
+  if (ev.kind === 'field_edited' && typeof d.field === 'string') {
+    const field = d.field as string;
+    return `${eventFieldLabel(field)}: ${formatEventFieldValue(field, d.from)} → ${formatEventFieldValue(field, d.to)}`;
+  }
   return null;
+}
+
+interface FieldEditSummary {
+  label: string;
+  from: string;
+  to: string;
+}
+
+function fieldEditSummary(ev: CaseDetail['events'][number]): FieldEditSummary | null {
+  if (ev.kind !== 'field_edited') return null;
+  const d = ev.data;
+  if (typeof d.field !== 'string') return null;
+  const field = d.field as string;
+  return {
+    label: eventFieldLabel(field),
+    from: formatEventFieldValue(field, d.from),
+    to: formatEventFieldValue(field, d.to),
+  };
 }
 
 interface CaseTimelineItem extends TimelineItem {
   kind: string;
   actorType: string;
   visibility: string;
+  fieldEdit?: FieldEditSummary;
 }
 
 const EVENT_ICONS: Record<string, string> = {
@@ -674,6 +697,7 @@ const EVENT_ICONS: Record<string, string> = {
   message_inbound: 'i-lucide-message-circle-reply',
   note_internal: 'i-lucide-sticky-note',
   attachment_added: 'i-lucide-paperclip',
+  field_edited: 'i-lucide-pencil-line',
   level_moved: 'i-lucide-layers',
   referred_out: 'i-lucide-external-link',
   reopened: 'i-lucide-rotate-ccw',
@@ -685,29 +709,68 @@ function eventKindLabel(kind: string): string {
   return kind.replaceAll('_', ' ');
 }
 
+function eventFieldLabel(field: string): string {
+  const labels: Record<string, string> = {
+    summary: 'Summary',
+    description: 'Description',
+    expected_outcome: 'Expected outcome',
+    date_occurred: 'Date occurred',
+    categories: 'Categories',
+    priority: 'Priority',
+    sensitivity: 'Sensitivity',
+    unit_id: 'Location',
+    'complainant.name': 'Name',
+    'complainant.phone': 'Phone',
+    'complainant.email': 'Email',
+    'complainant.gender': 'Gender',
+    'complainant.age_band': 'Age band',
+    'complainant.preferred_language': 'Preferred language',
+    'complainant.notification_channels': 'Notification channels',
+  };
+  return labels[field] ?? field.replace(/^complainant\./, '').replaceAll('_', ' ');
+}
+
+function formatEventFieldValue(field: string, val: unknown): string {
+  if (val === null || val === undefined || val === '') return '—';
+  if (field === 'date_occurred' || field.endsWith('date_occurred')) {
+    const formatted = formatLocalDate(val);
+    if (formatted) return formatted;
+  }
+  if (Array.isArray(val)) {
+    return val.length ? val.map(String).join(', ') : '—';
+  }
+  const s = String(val);
+  if (s.length > 200) return `${s.slice(0, 197)}…`;
+  return s;
+}
+
 function eventIcon(kind: string): string {
   return EVENT_ICONS[kind] ?? 'i-lucide-circle-dot';
 }
 
 const timelineItems = computed((): CaseTimelineItem[] =>
-  (detail.value?.events ?? []).map((ev) => {
-    const summary = eventSummary(ev);
-    return {
-      value: ev.id,
-      date: new Date(ev.createdAt).toLocaleString(),
-      title: eventKindLabel(ev.kind),
-      description: summary ?? undefined,
-      icon: eventIcon(ev.kind),
-      kind: ev.kind,
-      actorType: ev.actorType,
-      visibility: ev.visibility,
-    };
-  }),
+  [...(detail.value?.events ?? [])]
+    .reverse()
+    .map((ev) => {
+      const fieldEdit = fieldEditSummary(ev);
+      const summary = fieldEdit ? undefined : eventSummary(ev);
+      return {
+        value: ev.id,
+        date: new Date(ev.createdAt).toLocaleString(),
+        title: eventKindLabel(ev.kind),
+        description: summary ?? undefined,
+        icon: eventIcon(ev.kind),
+        kind: ev.kind,
+        actorType: ev.actorType,
+        visibility: ev.visibility,
+        fieldEdit,
+      };
+    }),
 );
 
 const timelineActive = computed(() => {
   const items = timelineItems.value;
-  return items.length ? items[items.length - 1]!.value : undefined;
+  return items.length ? items[0]!.value : undefined;
 });
 
 async function loadAssignees() {
@@ -1800,6 +1863,16 @@ onUnmounted(clearPageBreadcrumb);
               <UBadge size="sm" variant="subtle" color="neutral">{{ item.actorType }}</UBadge>
               <UBadge v-if="item.visibility === 'internal'" size="sm" variant="subtle" color="warning">internal</UBadge>
             </div>
+          </template>
+          <template #description="{ item }">
+            <div v-if="item.fieldEdit" class="space-y-1.5">
+              <p class="text-xs font-medium text-muted">{{ item.fieldEdit.label }}</p>
+              <div class="grid grid-cols-1 gap-1 text-sm">
+                <p><span class="text-muted">Before:</span> {{ item.fieldEdit.from }}</p>
+                <p><span class="text-muted">After:</span> {{ item.fieldEdit.to }}</p>
+              </div>
+            </div>
+            <span v-else-if="item.description">{{ item.description }}</span>
           </template>
         </UTimeline>
       </UCard>
