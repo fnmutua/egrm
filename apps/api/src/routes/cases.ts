@@ -29,6 +29,8 @@ import {
 } from '../services/attachments.js';
 import { createStaffThreadMessage, listCaseThread } from '../services/correspondence.js';
 import { clearSeedCases, countSeedCases, seedCases } from '../services/seed-cases.js';
+import { getCaseFieldOptions, updateCaseFields } from '../services/case-fields.js';
+import { getComplainantFieldOptions, updateCaseComplainant } from '../services/case-complainant.js';
 import multipart from '@fastify/multipart';
 import { coerceIntakeString } from '../services/intake-values.js';
 
@@ -183,6 +185,15 @@ export default async function caseRoutes(app: FastifyInstance) {
     return { cases: rows, total: count?.n ?? 0, page, page_size };
   });
 
+  app.get('/api/v1/cases/field-options', { onRequest: [app.requirePermission('case:edit_fields')] }, async (req, reply) => {
+    const [options, complainant] = await Promise.all([
+      getCaseFieldOptions(req.tenant.id),
+      getComplainantFieldOptions(req.tenant.id),
+    ]);
+    if (!options) return reply.code(503).send({ error: 'tenant_not_configured' });
+    return { options: { ...options, complainant: complainant ?? { gender: [], age_band: [], preferred_language: [], notification_channels: [] } } };
+  });
+
   app.get('/api/v1/cases/seed/count', { onRequest: [app.requireAdminConsole] }, async (req) => {
     const count = await countSeedCases(req.tenant.id);
     return { count };
@@ -291,6 +302,7 @@ export default async function caseRoutes(app: FastifyInstance) {
         status: c.status,
         status_tag: c.statusTag,
         level: c.levelCode,
+        unit_id: c.unitId,
         unit: unitName,
         assignee,
         anonymous: c.anonymous,
@@ -315,6 +327,26 @@ export default async function caseRoutes(app: FastifyInstance) {
         createdAt: e.createdAt,
       })),
     };
+  });
+
+  app.patch('/api/v1/cases/:id/fields', { onRequest: [app.requirePermission('case:edit_fields')] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const result = await updateCaseFields(req.tenant.id, id, req.user.sub, access, req.body);
+    if (!result.ok) {
+      return reply.code(result.code).send({ error: result.error, message: result.message });
+    }
+    return { case: result.case };
+  });
+
+  app.patch('/api/v1/cases/:id/complainant', { onRequest: [app.requirePermission('case:edit_fields')] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const result = await updateCaseComplainant(req.tenant.id, id, req.user.sub, access, req.body);
+    if (!result.ok) {
+      return reply.code(result.code).send({ error: result.error, message: result.message });
+    }
+    return { complainant: result.complainant };
   });
 
   app.get('/api/v1/cases/:id/notifications', { onRequest: [app.requirePermission('case:read')] }, async (req, reply) => {

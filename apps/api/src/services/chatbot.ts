@@ -7,22 +7,24 @@ import { getActiveConfig } from './config.js';
 import { chatCompletion } from './ai-completion.js';
 import { hashRedactedPrompt } from './ai-redaction.js';
 import { createCase } from './intake.js';
-import { coerceIntakeStringArray, coerceIntakeString } from './intake-values.js';
-import { searchIntakeUnits } from './intake-units.js';
+import { coerceIntakeStringArray, coerceIntakeString, formatIntakeDate, parseIntakeDate } from './intake-values.js';
 import { verifyCaseByReference } from './correspondence.js';
 import { loadChatbotConfig, parseJsonFromModel } from './ai-shared.js';
 import {
   applyNarrativeAndExtraction,
   buildFieldQueue,
+  extractLocalFieldsFromText,
   extractFromNarrative,
   fieldIsEmpty,
   fieldLabel,
   parseSlots,
   pendingFields,
+  promptForMissingField,
   readBackText,
   resolveChatbotProfile,
   resolveFieldValue,
   slotsToJson,
+  tryPickUnitByNumber,
   type ChatbotSlotsState,
   type TranscriptEntry,
 } from './chatbot-intake.js';
@@ -139,7 +141,7 @@ function buildIntakeCollectionReply(
     locale === 'sw'
       ? `\n\nBado ninahitaji: ${needLabels.join(', ')}.`
       : `\n\nI still need: ${needLabels.join(', ')}.`;
-  message += `\n\n${promptForField(form, taxonomy, first, locale)}`;
+  message += `\n\n${promptForMissingField(form, taxonomy, slots, first, locale)}`;
   return message;
 }
 
@@ -165,30 +167,6 @@ function beginFieldCollection(
     readback: false,
     reply: buildIntakeCollectionReply(form, taxonomy, slots, locale),
   };
-}
-
-function promptForField(
-  form: Cd06IntakeForms,
-  taxonomy: Cd03Taxonomy,
-  key: string,
-  locale: string,
-): string {
-  const label = fieldLabel(form, key, locale);
-  if (key === 'unit_id') {
-    return `Which settlement or location does this relate to? Type the name to search.\n(${label})`;
-  }
-  if (key === 'categories') {
-    const cats = taxonomy.categories
-      .filter((c) => c.active !== false)
-      .slice(0, 12)
-      .map((c, i) => `${i + 1}. ${c.label[locale] ?? c.label.en ?? c.code} (${c.code})`)
-      .join('\n');
-    return `Please choose a category (reply with number or code):\n${cats}`;
-  }
-  if (key === 'description' || key === 'summary' || key === 'expected_outcome') {
-    return `Please provide ${label.toLowerCase()}:`;
-  }
-  return `Please provide your ${label.toLowerCase()}:`;
 }
 
 async function hotlineMessage(tenantId: string, locale: string): Promise<string> {
@@ -609,24 +587,36 @@ export async function handleChatbotMessage(
       readback = true;
       replies.push(readBackText(form, taxonomy, slots, loc));
     } else {
-      const numPick = Number.parseInt(text.trim(), 10);
-      if (current === 'unit_id' && !Number.isNaN(numPick) && numPick >= 1) {
-        const units = await searchIntakeUnits(tenantId, { limit: 5 });
-        const unit = units[numPick - 1];
-        if (unit) {
-          slots.confirmed.unit_id = unit.id;
-        } else {
-          const resolved = await resolveFieldValue(tenantId, form, taxonomy, current, text, loc);
-          if (!resolved.ok) {
-            replies.push(resolved.message);
-          } else {
-            slots.confirmed[current] = resolved.value;
-          }
+      const local = extractLocalFieldsFromText(text);
+      for (const key of pendingFields(slots)) {
+        const val = local[key];
+        if (val !== undefined && val !== null && val !== '' && fieldIsEmpty(key, slots.confirmed[key])) {
+          if (key === 'unit_id') continue;
+          slots.confirmed[key] = key === 'categories' ? coerceIntakeStringArray(val) : String(val).trim();
         }
+      }
+
+      const pickedUnitId = tryPickUnitByNumber(slots, text);
+      if (pickedUnitId) {
+        slots.confirmed.unit_id = pickedUnitId;
+        delete slots.proposed.unit_pick_options;
+        delete slots.proposed.unit_pick_labels;
+        delete slots.proposed.unit_hint;
+      } else if (!fieldIsEmpty(current, slots.confirmed[current])) {
+        // filled from local extraction above
       } else {
         const resolved = await resolveFieldValue(tenantId, form, taxonomy, current, text, loc);
         if (!resolved.ok) {
           replies.push(resolved.message);
+          if (current === 'unit_id' && resolved.message.includes('Did you mean')) {
+            const match = resolved.message.match(/\n(\d+\..+\n?)+/);
+            if (match) {
+              slots.proposed.unit_pick_labels = match[0]
+                .trim()
+                .split('\n')
+                .map((line) => line.replace(/^\d+\.\s*/, ''));
+            }
+          }
         } else {
           slots.confirmed[current] = resolved.value;
         }
@@ -638,7 +628,7 @@ export async function handleChatbotMessage(
       } else if (replies.length === 0 || !replies[replies.length - 1]!.startsWith('I found')) {
         const next = pendingFields(slots)[0];
         if (next && phase === 'file_collect') {
-          replies.push(promptForField(form, taxonomy, next, loc));
+          replies.push(promptForMissingField(form, taxonomy, slots, next, loc));
         }
       }
     }
@@ -765,6 +755,12 @@ export async function confirmChatbotSession(
 
   const values: Record<string, unknown> = { ...slots.confirmed };
   const anonymous = slots.anonymous === true;
+
+  if (values.date_occurred !== undefined && !parseIntakeDate(values.date_occurred)) {
+    delete values.date_occurred;
+  } else if (values.date_occurred) {
+    values.date_occurred = formatIntakeDate(values.date_occurred);
+  }
 
   if (!anonymous && !slots.consent) {
     const name = coerceIntakeString(values.name);

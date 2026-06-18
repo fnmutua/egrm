@@ -3,6 +3,7 @@ import type { TimelineItem } from '@nuxt/ui';
 import { kindsForChannel, threadChannelLabel } from '@egrm/config-schemas';
 import { buildThreadTree, hasPermission } from '@egrm/core';
 import { apiErrorMessage } from '~/utils/api-errors';
+import { formatLocalDate } from '~/utils/intake-values';
 
 definePageMeta({ layout: 'shell' });
 
@@ -13,6 +14,18 @@ const { setPageBreadcrumb, clearPageBreadcrumb } = usePageBreadcrumbs();
 const toast = useToast();
 const caseId = computed(() => String(route.params.id));
 const { stageFile, removeStaged, downloadFile } = useCaseAttachmentUpload(caseId.value);
+const {
+  options: fieldOptions,
+  savingField,
+  canEditFields,
+  canEditSensitivityValue,
+  loadOptions: loadFieldOptions,
+  saveField,
+  saveComplainantField,
+  formatCategoryList,
+  formatNotificationChannels,
+  labelFor,
+} = useCaseFieldEdit(caseId);
 
 interface AttachmentKindOption {
   code: string;
@@ -60,7 +73,7 @@ interface ThreadEntry {
 interface CaseDetail {
   case: {
     id: string; reference: string; case_type: string; status: string; status_tag: string;
-    level: string; unit: string | null; assignee: CaseAssignee | null; anonymous: boolean; channel: string;
+    level: string; unit_id: string | null; unit: string | null; assignee: CaseAssignee | null; anonymous: boolean; channel: string;
     categories: string[]; sensitivity: string; priority: string; summary: string;
     description: string | null; expected_outcome: string | null;
     date_occurred: string | null; consent: boolean; created_at: string;
@@ -168,6 +181,46 @@ const canReadThread = computed(() => hasPermission(user.value?.permissions ?? []
 const canReplyExternal = computed(() => hasPermission(user.value?.permissions ?? [], 'thread:reply_external'));
 const canNoteInternal = computed(() => hasPermission(user.value?.permissions ?? [], 'thread:note_internal'));
 const canComposeThread = computed(() => canReplyExternal.value || canNoteInternal.value);
+
+const canHandleSensitive = computed(() => hasPermission(user.value?.permissions ?? [], 'sensitive:handle'));
+
+const sensitivityEditOptions = computed(() => {
+  const items = fieldOptions.value?.sensitivity ?? [];
+  return items
+    .filter((s) => !s.restricted || canHandleSensitive.value)
+    .map((s) => ({ value: s.value, label: s.label }));
+});
+
+async function saveCaseField(field: string, value: unknown) {
+  if (!detail.value) return;
+  const updated = await saveField(field, value);
+  if (!updated) return;
+  detail.value.case = {
+    ...detail.value.case,
+    summary: updated.summary,
+    description: updated.description,
+    expected_outcome: updated.expected_outcome,
+    date_occurred: updated.date_occurred,
+    categories: updated.categories,
+    priority: updated.priority,
+    sensitivity: updated.sensitivity,
+    unit_id: updated.unit_id,
+    unit: updated.unit,
+    level: updated.level,
+  };
+  await loadCase();
+}
+
+async function saveComplainant(field: string, value: unknown) {
+  if (!detail.value?.complainant) return;
+  const updated = await saveComplainantField(field, value);
+  if (!updated) return;
+  detail.value.complainant = updated;
+}
+
+const canEditComplainant = computed(
+  () => canEditFields.value && Boolean(detail.value?.complainant) && !detail.value?.case.anonymous,
+);
 
 const composeModeItems = computed(() => {
   const items: { value: typeof composeMode.value; label: string }[] = [];
@@ -910,6 +963,7 @@ watch(composeModeItems, (items) => {
 onMounted(async () => {
   if (!(await fetchMe())) return navigateTo('/login');
   await Promise.all([loadCase(), loadAttachmentKinds()]);
+  if (canEditFields.value) await loadFieldOptions();
 });
 
 watch(
@@ -960,12 +1014,47 @@ onUnmounted(clearPageBreadcrumb);
             @applied="loadCase"
           />
           <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm pt-3 w-full">
-            <div><dt class="text-muted text-xs">Categories</dt><dd>{{ detail.case.categories.join(', ') || '—' }}</dd></div>
+            <CaseInlineField
+              label="Categories"
+              :display="formatCategoryList(detail.case.categories)"
+              :value="detail.case.categories"
+              type="multiselect"
+              :options="fieldOptions?.categories ?? []"
+              :can-edit="canEditFields"
+              :saving="savingField === 'categories'"
+              @save="saveCaseField('categories', $event)"
+            />
             <div><dt class="text-muted text-xs">Channel</dt><dd class="capitalize">{{ detail.case.channel.replace(/_/g, ' ') }}</dd></div>
             <div><dt class="text-muted text-xs">Level</dt><dd class="capitalize">{{ detail.case.level }}</dd></div>
-            <div><dt class="text-muted text-xs">Location</dt><dd>{{ detail.case.unit ?? '—' }}</dd></div>
-            <div><dt class="text-muted text-xs">Priority</dt><dd class="capitalize">{{ detail.case.priority }}</dd></div>
-            <div><dt class="text-muted text-xs">Sensitivity</dt><dd class="capitalize">{{ detail.case.sensitivity }}</dd></div>
+            <CaseInlineField
+              label="Location"
+              :display="detail.case.unit ?? '—'"
+              :value="detail.case.unit_id"
+              type="unit"
+              :can-edit="canEditFields"
+              :saving="savingField === 'unit_id'"
+              @save="saveCaseField('unit_id', $event)"
+            />
+            <CaseInlineField
+              label="Priority"
+              :display="labelFor(fieldOptions?.priorities ?? [], detail.case.priority)"
+              :value="detail.case.priority"
+              type="select"
+              :options="fieldOptions?.priorities ?? []"
+              :can-edit="canEditFields"
+              :saving="savingField === 'priority'"
+              @save="saveCaseField('priority', $event)"
+            />
+            <CaseInlineField
+              label="Sensitivity"
+              :display="labelFor(fieldOptions?.sensitivity ?? [], detail.case.sensitivity)"
+              :value="detail.case.sensitivity"
+              type="select"
+              :options="sensitivityEditOptions"
+              :can-edit="canEditFields && canEditSensitivityValue(detail.case.sensitivity)"
+              :saving="savingField === 'sensitivity'"
+              @save="saveCaseField('sensitivity', $event)"
+            />
             <div>
               <dt class="text-muted text-xs">Assignee</dt>
               <dd>
@@ -995,20 +1084,46 @@ onUnmounted(clearPageBreadcrumb);
                 </button>
               </dd>
             </div>
-            <div><dt class="text-muted text-xs">Occurred</dt><dd>{{ detail.case.date_occurred ? new Date(detail.case.date_occurred).toLocaleDateString() : '—' }}</dd></div>
+            <CaseInlineField
+              label="Occurred"
+              :display="formatLocalDate(detail.case.date_occurred)"
+              :value="detail.case.date_occurred"
+              type="date"
+              :can-edit="canEditFields"
+              :saving="savingField === 'date_occurred'"
+              @save="saveCaseField('date_occurred', $event)"
+            />
             <div><dt class="text-muted text-xs">Received</dt><dd>{{ new Date(detail.case.created_at).toLocaleString() }}</dd></div>
-            <div v-if="detail.case.summary" class="sm:col-span-2">
-              <dt class="text-muted text-xs">Summary</dt>
-              <dd class="font-medium">{{ detail.case.summary }}</dd>
-            </div>
-            <div v-if="detail.case.description" class="sm:col-span-2">
-              <dt class="text-muted text-xs">Describe your grievance</dt>
-              <dd class="whitespace-pre-wrap">{{ detail.case.description }}</dd>
-            </div>
-            <div v-if="detail.case.expected_outcome" class="sm:col-span-2">
-              <dt class="text-muted text-xs">Expected outcome</dt>
-              <dd class="whitespace-pre-wrap">{{ detail.case.expected_outcome }}</dd>
-            </div>
+            <CaseInlineField
+              label="Summary"
+              :display="detail.case.summary"
+              :value="detail.case.summary"
+              type="text"
+              full-width
+              :can-edit="canEditFields"
+              :saving="savingField === 'summary'"
+              @save="saveCaseField('summary', $event)"
+            />
+            <CaseInlineField
+              label="Describe your grievance"
+              :display="detail.case.description ?? '—'"
+              :value="detail.case.description"
+              type="textarea"
+              full-width
+              :can-edit="canEditFields"
+              :saving="savingField === 'description'"
+              @save="saveCaseField('description', $event)"
+            />
+            <CaseInlineField
+              label="Expected outcome"
+              :display="detail.case.expected_outcome ?? '—'"
+              :value="detail.case.expected_outcome"
+              type="textarea"
+              full-width
+              :can-edit="canEditFields"
+              :saving="savingField === 'expected_outcome'"
+              @save="saveCaseField('expected_outcome', $event)"
+            />
           </dl>
         </div>
       </details>
@@ -1022,14 +1137,78 @@ onUnmounted(clearPageBreadcrumb);
         <div class="px-4 pb-4 pt-0 border-t border-default">
           <div v-if="detail.case.anonymous" class="text-sm text-muted pt-3">Anonymous submission — no personal data collected.</div>
           <dl v-else-if="detail.complainant" class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm pt-3 w-full">
-            <div><dt class="text-muted text-xs">Name</dt><dd class="font-medium">{{ detail.complainant.name ?? '—' }}</dd></div>
-            <div><dt class="text-muted text-xs">Phone</dt><dd>{{ detail.complainant.phone ?? '—' }}</dd></div>
-            <div><dt class="text-muted text-xs">Email</dt><dd>{{ detail.complainant.email ?? '—' }}</dd></div>
-            <div><dt class="text-muted text-xs">Gender</dt><dd class="capitalize">{{ detail.complainant.gender ?? '—' }}</dd></div>
-            <div v-if="complainantChannelSummary" class="sm:col-span-2">
-              <dt class="text-muted text-xs">Notification channels (intake)</dt>
-              <dd>{{ complainantChannelSummary }}</dd>
-            </div>
+            <CaseInlineField
+              label="Name"
+              :display="detail.complainant.name ?? '—'"
+              :value="detail.complainant.name"
+              type="text"
+              :can-edit="canEditComplainant"
+              :saving="savingField === 'complainant.name'"
+              @save="saveComplainant('name', $event)"
+            />
+            <CaseInlineField
+              label="Phone"
+              :display="detail.complainant.phone ?? '—'"
+              :value="detail.complainant.phone"
+              type="text"
+              :can-edit="canEditComplainant"
+              :saving="savingField === 'complainant.phone'"
+              @save="saveComplainant('phone', $event)"
+            />
+            <CaseInlineField
+              label="Email"
+              :display="detail.complainant.email ?? '—'"
+              :value="detail.complainant.email"
+              type="text"
+              :can-edit="canEditComplainant"
+              :saving="savingField === 'complainant.email'"
+              @save="saveComplainant('email', $event)"
+            />
+            <CaseInlineField
+              v-if="(fieldOptions?.complainant?.gender?.length ?? 0) > 0 || detail.complainant.gender"
+              label="Gender"
+              :display="labelFor(fieldOptions?.complainant?.gender ?? [], detail.complainant.gender ?? '') || detail.complainant.gender || '—'"
+              :value="detail.complainant.gender"
+              :type="(fieldOptions?.complainant?.gender?.length ?? 0) > 0 ? 'select' : 'text'"
+              :options="fieldOptions?.complainant?.gender ?? []"
+              :can-edit="canEditComplainant"
+              :saving="savingField === 'complainant.gender'"
+              @save="saveComplainant('gender', $event)"
+            />
+            <CaseInlineField
+              v-if="(fieldOptions?.complainant?.age_band?.length ?? 0) > 0 || detail.complainant.age_band"
+              label="Age band"
+              :display="labelFor(fieldOptions?.complainant?.age_band ?? [], detail.complainant.age_band ?? '') || detail.complainant.age_band || '—'"
+              :value="detail.complainant.age_band"
+              :type="(fieldOptions?.complainant?.age_band?.length ?? 0) > 0 ? 'select' : 'text'"
+              :options="fieldOptions?.complainant?.age_band ?? []"
+              :can-edit="canEditComplainant"
+              :saving="savingField === 'complainant.age_band'"
+              @save="saveComplainant('age_band', $event)"
+            />
+            <CaseInlineField
+              v-if="(fieldOptions?.complainant?.preferred_language?.length ?? 0) > 0 || detail.complainant.preferred_language"
+              label="Preferred language"
+              :display="labelFor(fieldOptions?.complainant?.preferred_language ?? [], detail.complainant.preferred_language ?? '') || detail.complainant.preferred_language || '—'"
+              :value="detail.complainant.preferred_language"
+              :type="(fieldOptions?.complainant?.preferred_language?.length ?? 0) > 0 ? 'select' : 'text'"
+              :options="fieldOptions?.complainant?.preferred_language ?? []"
+              :can-edit="canEditComplainant"
+              :saving="savingField === 'complainant.preferred_language'"
+              @save="saveComplainant('preferred_language', $event)"
+            />
+            <CaseInlineField
+              v-if="(fieldOptions?.complainant?.notification_channels?.length ?? 0) > 0 || (detail.complainant.notification_channels?.length ?? 0) > 0"
+              label="Notification channels"
+              :display="formatNotificationChannels(detail.complainant.notification_channels ?? [])"
+              :value="detail.complainant.notification_channels ?? []"
+              type="multiselect"
+              :options="fieldOptions?.complainant?.notification_channels ?? []"
+              :can-edit="canEditComplainant"
+              :saving="savingField === 'complainant.notification_channels'"
+              full-width
+              @save="saveComplainant('notification_channels', $event)"
+            />
           </dl>
           <div v-else class="text-sm text-muted pt-3">No party record.</div>
           <p v-if="!detail.case.anonymous" class="text-xs text-muted mt-3 pt-3 border-t border-default">PII access is logged in the audit trail.</p>

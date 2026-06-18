@@ -10,7 +10,7 @@ import { allocateReference } from './reference.js';
 import { enqueueNotifications } from './notifications.js';
 import { scheduleOutboxDispatch } from './notification-queue.js';
 import { scheduleIntakeTriage } from './ai-triage.js';
-import { coerceIntakeString, coerceIntakeStringArray } from './intake-values.js';
+import { coerceIntakeString, coerceIntakeStringArray, parseIntakeDate } from './intake-values.js';
 import { intakeUnitLevelCodes } from './intake-units.js';
 import { attachIntakeFiles, validateIntakeAttachments, type IntakeAttachmentInput } from './attachments.js';
 
@@ -211,7 +211,7 @@ export async function createCase(input: IntakeInput): Promise<IntakeResult | Int
         summary: str(input.values.summary) ?? '(no summary)',
         description: str(input.values.description),
         expectedOutcome: str(input.values.expected_outcome),
-        dateOccurred: str(input.values.date_occurred) ? new Date(String(input.values.date_occurred)) : null,
+        dateOccurred: parseIntakeDate(input.values.date_occurred),
         consent: input.consent,
         verifierHash,
       })

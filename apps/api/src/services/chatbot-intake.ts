@@ -2,9 +2,9 @@ import { z } from 'zod';
 import type { Cd06IntakeForms, Cd03Taxonomy, Cd16Ai } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
 import { chatCompletion } from './ai-completion.js';
-import { hashRedactedPrompt, redactIntakeText } from './ai-redaction.js';
+import { hashRedactedPrompt, isRedactionPlaceholder, redactIntakeText, containsRedactionPlaceholders } from './ai-redaction.js';
 import { parseJsonFromModel } from './ai-shared.js';
-import { coerceIntakeStringArray, coerceIntakeString } from './intake-values.js';
+import { coerceIntakeStringArray, coerceIntakeString, formatIntakeDate, parseIntakeDate } from './intake-values.js';
 import { resolveIntakeUnitQuery, resolveIntakeUnitFromContent, type IntakeUnitSearchResult, type IntakeUnitResolveResult } from './intake-units.js';
 
 export type TranscriptEntry = { role: 'user' | 'assistant'; text: string; at: string };
@@ -101,6 +101,7 @@ export function buildFieldQueue(
 
 export function fieldIsEmpty(key: string, val: unknown): boolean {
   if (val === undefined || val === null || val === '') return true;
+  if (typeof val === 'string' && isRedactionPlaceholder(val)) return true;
   if (key === 'categories') return coerceIntakeStringArray(val).length === 0;
   return false;
 }
@@ -116,7 +117,7 @@ function normalizePhone(raw: string): string | null {
 
 /** Extract phone from raw text before PII redaction (redaction strips phones from LLM prompts). */
 export function extractPhoneFromText(text: string): string | null {
-  const labeled = text.match(/(?:phone|simu|mobile|tel)\s*[:：\-–—]\s*([+\d\s().-]{9,18})/i);
+  const labeled = text.match(/(?:phone|simu|mobile|tel)\s*[:：\-–—]?\s*([+\d\s().-]{9,18})/i);
   if (labeled?.[1]) {
     const normalized = normalizePhone(labeled[1]);
     if (normalized) return normalized;
@@ -135,6 +136,46 @@ export function extractPhoneFromText(text: string): string | null {
   return null;
 }
 
+/** Extract complainant name from natural phrasing (runs on raw text, not redacted). */
+export function extractNameFromText(text: string): string | null {
+  const patterns = [
+    /(?:my name is|i am|i'm|call me|jina langu ni|jina ni)\s+([A-Za-z][A-Za-z\s'.-]{1,50}?)(?=\s*,|\s+phone|\s+simu|\s+from|\s+in|\s+at|\s+near|\.|$)/i,
+    /(?:full\s+name|name|jina)\s*[:：\-–—]\s*([^,\n]+)/i,
+  ];
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (!m?.[1]?.trim()) continue;
+    const name = m[1]
+      .trim()
+      .replace(/\s+(phone|simu|from|in|at|near)$/i, '')
+      .trim();
+    const words = name.split(/\s+/).filter(Boolean);
+    if (words.length >= 2 && words.length <= 5 && name.length >= 4) return name;
+  }
+  return null;
+}
+
+/** Best settlement / location hint from free text. */
+export function extractLocationHintFromText(text: string): string | null {
+  const labeled = text.match(
+    /(?:settle+e?m+e?nt|location|makazi|eneo|ward|county)\s*[:：\-–—]\s*([^,\n]+)/i,
+  );
+  if (labeled?.[1]?.trim()) return labeled[1].trim();
+
+  const fromPlace = text.match(
+    /\b(?:from|in|at|near|around|within)\s+([^,\n.]{3,80}?(?:settlement|county|ward|estate|village|slum|makazi)[^,\n.]*)/i,
+  );
+  if (fromPlace?.[1]?.trim()) return fromPlace[1].trim();
+
+  const phrases = extractPlacePhrases(text);
+  const settlementLike = phrases.find((p) =>
+    /settlement|county|ward|estate|village|slum|makazi/i.test(p),
+  );
+  if (settlementLike) return settlementLike;
+
+  return phrases.sort((a, b) => b.length - a.length)[0] ?? null;
+}
+
 export function detectConsent(text: string): boolean {
   const t = text.toLowerCase().trim();
   if (/^(yes|y|ok|okay|sure|ndio|nakubali|ninakubali)$/.test(t)) return true;
@@ -148,6 +189,17 @@ export function detectConsent(text: string): boolean {
 export function isIntakeMetadataReply(text: string): boolean {
   const t = text.trim();
   if (!t) return true;
+
+  const hasContact =
+    Boolean(extractNameFromText(t)) ||
+    Boolean(extractPhoneFromText(t)) ||
+    Boolean(extractLocationHintFromText(t));
+  const hasGrievance =
+    t.length >= 80 ||
+    /\b(?:trench|contractor|footpath|barrier|injur|children|elderly|weeks|reported|sewage|overflow|water|road|corrupt|harass|compensat|griev|malalam|problem|issue|damage|project|kisip)\b/i.test(
+      t,
+    );
+  if (hasContact && hasGrievance) return false;
 
   if (
     t.length >= 50 &&
@@ -184,7 +236,12 @@ export function buildGrievanceDescription(
   existing?: string,
 ): string {
   const fromAi = coerceIntakeString(proposed.description);
-  if (fromAi && fromAi.length >= 15 && !isIntakeMetadataReply(fromAi)) {
+  if (
+    fromAi &&
+    fromAi.length >= 15 &&
+    !containsRedactionPlaceholders(fromAi) &&
+    !isIntakeMetadataReply(fromAi)
+  ) {
     return fromAi;
   }
 
@@ -210,29 +267,19 @@ export function extractLocalFieldsFromText(text: string): Record<string, unknown
   const out: Record<string, unknown> = {};
   if (!text.trim()) return out;
 
-  const settlementMatch = text.match(
-    /(?:settle+e?m+e?nt|location|makazi|eneo)\s*[:：\-–—]\s*([^,\n]+)/i,
-  );
-  if (settlementMatch?.[1]?.trim()) out.unit_hint = settlementMatch[1].trim();
+  const locationHint = extractLocationHintFromText(text);
+  if (locationHint) out.unit_hint = locationHint;
 
-  const phoneMatch = text.match(/(?:phone|simu|mobile|tel)\s*[:：\-–—]\s*([+\d\s().-]{9,18})/i);
-  if (phoneMatch?.[1]) {
-    const p = normalizePhone(phoneMatch[1]);
-    if (p) out.phone = p;
-  }
+  const phone = extractPhoneFromText(text);
+  if (phone) out.phone = phone;
 
-  const nameMatch = text.match(/(?:full\s+name|name|jina)\s*[:：\-–—]\s*([^,\n]+)/i);
-  if (nameMatch?.[1]?.trim()) out.name = nameMatch[1].trim();
+  const name = extractNameFromText(text);
+  if (name) out.name = name;
 
   const emailMatch = text.match(
-    /(?:email|barua pepe)\s*[:：\-–—]\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i,
+    /(?:email|barua pepe)\s*[:：\-–—]?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i,
   );
   if (emailMatch?.[1]) out.email = emailMatch[1].trim();
-
-  if (!out.phone) {
-    const phone = extractPhoneFromText(text);
-    if (phone) out.phone = phone;
-  }
 
   return out;
 }
@@ -257,10 +304,42 @@ export function mergeProposedWithLocal(
   local: Record<string, unknown>,
 ): Record<string, unknown> {
   const merged = { ...proposed };
-  for (const [k, v] of Object.entries(local)) {
-    if (v !== undefined && v !== null && v !== '' && !merged[k]) merged[k] = v;
+  const piiKeys = ['name', 'phone', 'email'] as const;
+
+  for (const key of piiKeys) {
+    if (isRedactionPlaceholder(merged[key])) delete merged[key];
   }
+
+  for (const [k, v] of Object.entries(local)) {
+    if (v !== undefined && v !== null && v !== '' && !isRedactionPlaceholder(v) && !merged[k]) {
+      merged[k] = v;
+    }
+  }
+
+  for (const key of piiKeys) {
+    const localVal = local[key];
+    if (localVal !== undefined && localVal !== null && localVal !== '' && !isRedactionPlaceholder(localVal)) {
+      merged[key] = localVal;
+    }
+  }
+
   return merged;
+}
+
+function applyLocalContactFields(
+  slots: ChatbotSlotsState,
+  narrative: string,
+  latestText?: string,
+): void {
+  const local = extractLocalFieldsFromNarrative(narrative, latestText);
+  for (const key of ['name', 'phone', 'email'] as const) {
+    const localVal = local[key];
+    if (localVal && !isRedactionPlaceholder(localVal)) {
+      slots.confirmed[key] = String(localVal).trim();
+    } else if (isRedactionPlaceholder(slots.confirmed[key])) {
+      delete slots.confirmed[key];
+    }
+  }
 }
 
 export function pendingFields(slots: ChatbotSlotsState): string[] {
@@ -331,6 +410,43 @@ export function gatherLocationHints(
   return [...new Set(hints.filter((h) => h.length >= 2))];
 }
 
+export function promptForMissingField(
+  form: Cd06IntakeForms,
+  taxonomy: Cd03Taxonomy,
+  slots: ChatbotSlotsState,
+  key: string,
+  locale: string,
+): string {
+  if (key === 'unit_id') {
+    const labels = slots.proposed.unit_pick_labels;
+    if (Array.isArray(labels) && labels.length) {
+      const list = labels.map((label, i) => `${i + 1}. ${label}`).join('\n');
+      const query = slots.proposed.unit_hint ?? 'that name';
+      return locale === 'sw'
+        ? `Sikuweza kupata "${query}" kwa uhakika. Je, unamaanisha mojawapo ya hizi?\n${list}\nJibu kwa nambari au jaribu jina lingine.`
+        : `I couldn't match "${query}" exactly. Did you mean one of these?\n${list}\nReply with the number, or try the settlement name again.`;
+    }
+    return locale === 'sw'
+      ? `Ni eneo/settlement gani? Andika jina kutafuta.\n(${fieldLabel(form, key, locale)})`
+      : `Which settlement or location does this relate to? Type the name to search.\n(${fieldLabel(form, key, locale)})`;
+  }
+  if (key === 'categories') {
+    const cats = taxonomy.categories
+      .filter((c) => c.active !== false)
+      .slice(0, 12)
+      .map((c, i) => `${i + 1}. ${c.label[locale] ?? c.label.en ?? c.code} (${c.code})`)
+      .join('\n');
+    return locale === 'sw'
+      ? `Tafadhali chagua aina (jibu kwa nambari au msimbo):\n${cats}`
+      : `Please choose a category (reply with number or code):\n${cats}`;
+  }
+  const label = fieldLabel(form, key, locale);
+  if (key === 'description' || key === 'summary' || key === 'expected_outcome') {
+    return locale === 'sw' ? `Tafadhali toa ${label.toLowerCase()}:` : `Please provide ${label.toLowerCase()}:`;
+  }
+  return locale === 'sw' ? `Tafadhali toa ${label.toLowerCase()} yako:` : `Please provide your ${label.toLowerCase()}:`;
+}
+
 export function conversationalMissingReply(
   form: Cd06IntakeForms,
   slots: ChatbotSlotsState,
@@ -392,10 +508,12 @@ export function applyUnitResolution(
   }
   if (result.status === 'ambiguous') {
     slots.proposed.unit_pick_options = result.options.map((u) => u.id);
+    slots.proposed.unit_pick_labels = result.options.map((u) => u.breadcrumb);
     slots.proposed.unit_hint = result.query;
     return result;
   }
   slots.proposed.unit_pick_options = result.suggestions.map((u) => u.id);
+  slots.proposed.unit_pick_labels = result.suggestions.map((u) => u.breadcrumb);
   slots.proposed.unit_hint = result.query;
   return result;
 }
@@ -505,8 +623,16 @@ export async function applyNarrativeAndExtraction(
   for (const key of intakeKeys) {
     const val = mergedProposed[key];
     if (key === 'description' || fieldIsEmpty(key, val) || !fieldIsEmpty(key, slots.confirmed[key])) continue;
+    if ((key === 'name' || key === 'phone' || key === 'email') && isRedactionPlaceholder(val)) continue;
+    if (key === 'date_occurred') {
+      const formatted = formatIntakeDate(val);
+      if (formatted) slots.confirmed[key] = formatted;
+      continue;
+    }
     slots.confirmed[key] = key === 'categories' ? coerceIntakeStringArray(val) : String(val).trim();
   }
+
+  applyLocalContactFields(slots, trimmed, latestText);
 
   if (latestText && fieldIsEmpty('phone', slots.confirmed.phone)) {
     const directPhone = extractPhoneFromText(latestText);
@@ -525,7 +651,9 @@ export async function applyNarrativeAndExtraction(
   if (fieldIsEmpty('summary', slots.confirmed.summary)) {
     const fromAi = coerceIntakeString(mergedProposed.summary);
     const desc = coerceIntakeString(slots.confirmed.description) ?? grievanceDesc;
-    slots.confirmed.summary = fromAi ?? summarizeFromText(desc);
+    const summarySource =
+      fromAi && !containsRedactionPlaceholders(fromAi) ? fromAi : summarizeFromText(desc);
+    slots.confirmed.summary = summarySource;
   }
 
   if (fieldIsEmpty('unit_id', slots.confirmed.unit_id) && mergedProposed.unit_hint) {
@@ -542,6 +670,10 @@ export async function applyNarrativeAndExtraction(
     } else {
       slots.proposed.unit_hint = mergedProposed.unit_hint;
     }
+  }
+
+  if (fieldIsEmpty('unit_id', slots.confirmed.unit_id)) {
+    await resolveUnitForTurn(tenantId, slots, latestText ?? trimmed, mergedProposed, trimmed);
   }
 
   if (slots.anonymous === true) {
@@ -600,7 +732,7 @@ export async function extractFromNarrative(
     .join('\n');
   const contactHint = anonymous
     ? 'Do not extract name, phone, or email for anonymous submissions.'
-    : 'Extract name, phone, or email only when clearly stated in the narrative.';
+    : 'Do NOT include name, phone, or email in JSON — contact details are redacted in the Text and captured separately.';
   const prompt = [
     'You triage and extract grievance intake fields from a complainant narrative or conversation.',
     'Use the full text — the user may spread details across several messages.',
@@ -610,10 +742,7 @@ export async function extractFromNarrative(
     '  "description": "complainant grievance only — not contact details, consent, or field prompts",',
     '  "categories": ["code"],',
     '  "unit_hint": "any settlement, village, ward, or place name mentioned anywhere in the text",',
-    '  "name": "complainant name if stated",',
-    '  "phone": "phone if stated",',
-    '  "email": "email if stated",',
-    '  "date_occurred": "ISO date or natural date if stated",',
+    '  "date_occurred": "YYYY-MM-DD only when an exact calendar date is stated; omit for relative phrases like yesterday or two weeks ago",',
     '  "expected_outcome": "desired resolution if stated",',
     '  "sensitivity_signal": false',
     '}',
@@ -646,10 +775,10 @@ export async function extractFromNarrative(
       proposed.categories = parsed.categories.filter((c) => allowed.has(c));
     }
     if (parsed.unit_hint) proposed.unit_hint = parsed.unit_hint.trim();
-    if (parsed.name) proposed.name = parsed.name.trim();
-    if (parsed.phone) proposed.phone = parsed.phone.trim();
-    if (parsed.email) proposed.email = parsed.email.trim();
-    if (parsed.date_occurred) proposed.date_occurred = parsed.date_occurred.trim();
+    if (parsed.date_occurred) {
+      const formatted = formatIntakeDate(parsed.date_occurred.trim());
+      if (formatted) proposed.date_occurred = formatted;
+    }
     if (parsed.expected_outcome) proposed.expected_outcome = parsed.expected_outcome.trim();
 
     await db.insert(schema.aiInteraction).values({

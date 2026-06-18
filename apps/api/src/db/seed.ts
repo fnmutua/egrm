@@ -27,7 +27,7 @@ export const kisipOrgAccess = {
       description: 'Settlement/county grievance handling at assigned jurisdiction.',
       parent_role: 'grm_officer_national',
       permissions: [
-        'case:read', 'case:create_assisted', 'case:transition', 'case:assign',
+        'case:read', 'case:create_assisted', 'case:transition', 'case:assign', 'case:edit_fields',
         'thread:reply_external', 'thread:note_internal', 'thread:read',
         'attachment:upload', 'attachment:download', 'attachment:rename', 'attachment:delete_soft', 'task:manage',
       ],

@@ -30,3 +30,10 @@ export function normalizeIntakeValues(values: Record<string, unknown>): Record<s
   }
   return out;
 }
+
+export function formatLocalDate(value: unknown): string {
+  if (value == null || value === '') return '—';
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString();
+}

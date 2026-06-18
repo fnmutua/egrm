@@ -151,6 +151,10 @@ async function load() {
   }
 }
 
+function refresh() {
+  void load();
+}
+
 onMounted(async () => {
   if (!(await fetchMe())) return navigateTo('/login');
   setEnabled(true);
@@ -226,6 +230,15 @@ async function downloadExcel() {
 
     <!-- Toolbar -->
     <div class="flex flex-col sm:flex-row gap-2 flex-wrap items-center mb-4">
+      <UButton
+        variant="outline"
+        icon="i-lucide-refresh-cw"
+        size="sm"
+        aria-label="Refresh list"
+        :loading="loading"
+        class="shrink-0"
+        @click="refresh"
+      />
       <UInput
         v-if="prefs.search"
         v-model="q"
@@ -248,16 +261,7 @@ async function downloadExcel() {
             to="/cases/new"
             icon="i-lucide-file-plus"
             size="sm"
-          >
-            File case
-          </UButton>
-          <USelectMenu
-            v-if="prefs.status"
-            v-model="status"
-            :items="statusSelectItems"
-            value-key="value"
-            label-key="label"
-            class="w-full sm:w-44"
+            aria-label="File case"
           />
           <UPopover :content="{ side: 'bottom', align: 'end' }">
             <UButton
@@ -290,12 +294,11 @@ async function downloadExcel() {
             variant="outline"
             icon="i-lucide-download"
             size="sm"
+            aria-label="Export"
             :loading="downloading"
             :disabled="total === 0"
             @click="downloadExcel"
-          >
-            Export
-          </UButton>
+          />
           <template v-if="isAdmin">
             <UButton
               variant="outline"
