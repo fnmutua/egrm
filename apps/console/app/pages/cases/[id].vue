@@ -299,19 +299,28 @@ function formatThreadChannel(channel: string): string {
   return threadChannelLabel(channel);
 }
 
+const caseTabUi = {
+  label: 'sr-only sm:not-sr-only sm:truncate',
+  trigger: 'max-sm:px-2 max-sm:justify-center',
+} as const;
+
+function caseTab(label: string, value: string, icon: string) {
+  return { label, value, icon, title: label, ui: caseTabUi };
+}
+
 const tabItems = computed(() => {
   const items = [
-    { label: 'Overview', value: 'overview', icon: 'i-lucide-layout-dashboard' },
-    { label: 'Actions', value: 'actions', icon: 'i-lucide-play' },
-    { label: 'Documents', value: 'documents', icon: 'i-lucide-paperclip' },
+    caseTab('Overview', 'overview', 'i-lucide-layout-dashboard'),
+    caseTab('Actions', 'actions', 'i-lucide-play'),
+    caseTab('Documents', 'documents', 'i-lucide-paperclip'),
   ];
   if (canReadThread.value) {
-    items.push({ label: 'Correspondence', value: 'correspondence', icon: 'i-lucide-messages-square' });
+    items.push(caseTab('Correspondence', 'correspondence', 'i-lucide-messages-square'));
   }
   items.push(
-    { label: 'Assignment', value: 'assignment', icon: 'i-lucide-user-check' },
-    { label: 'Notifications', value: 'notifications', icon: 'i-lucide-bell' },
-    { label: 'Timeline', value: 'timeline', icon: 'i-lucide-history' },
+    caseTab('Assignment', 'assignment', 'i-lucide-user-check'),
+    caseTab('Notifications', 'notifications', 'i-lucide-bell'),
+    caseTab('Timeline', 'timeline', 'i-lucide-history'),
   );
   return items;
 });
@@ -1072,7 +1081,14 @@ onUnmounted(clearPageBreadcrumb);
         </div>
       </div>
 
-      <UTabs v-model="activeTab" :items="tabItems" class="pb-0" />
+      <UTabs
+        v-model="activeTab"
+        :items="tabItems"
+        variant="link"
+        size="sm"
+        class="pb-0 w-full"
+        :ui="{ list: 'w-full overflow-x-auto', trigger: 'shrink-0' }"
+      />
     </header>
 
     <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 sm:px-8 py-4">
