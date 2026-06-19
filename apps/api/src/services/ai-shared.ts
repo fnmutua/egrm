@@ -1,4 +1,4 @@
-import type { AiCapability, Cd14Features, Cd16Ai, Cd08Channels } from '@egrm/config-schemas';
+import type { AiCapability, Cd08Channels, Cd14Features, Cd16Ai } from '@egrm/config-schemas';
 import { getActiveConfig } from './config.js';
 
 export function parseJsonFromModel(raw: string): unknown {
@@ -23,32 +23,46 @@ export function resolveProfileForCapability(
   return { key, profile };
 }
 
+/** Active CD-16 payload; merges legacy CD-14/CD-08 AI flags when CD-16 toggles are still off. */
+export async function loadCd16Ai(tenantId: string): Promise<Cd16Ai | null> {
+  const [cd16, cd14, cd08] = await Promise.all([
+    getActiveConfig<Cd16Ai>(tenantId, 'cd16_ai'),
+    getActiveConfig<Cd14Features>(tenantId, 'cd14_features'),
+    getActiveConfig<Cd08Channels>(tenantId, 'cd08_channels'),
+  ]);
+  if (!cd16) return null;
+
+  const legacyStaff = Boolean(cd14?.ai_assistance);
+  const legacyChatbot = Boolean(cd14?.chatbot_intake) || Boolean(cd08?.modules?.chatbot?.enabled);
+  if (!legacyStaff && !legacyChatbot) return cd16;
+
+  return {
+    ...cd16,
+    enabled: cd16.enabled || legacyStaff || legacyChatbot,
+    chatbot: {
+      ...cd16.chatbot,
+      enabled: cd16.chatbot.enabled || legacyChatbot,
+    },
+  };
+}
+
 export async function loadAiAssistanceConfig(tenantId: string): Promise<{
   ready: boolean;
-  reason?: 'cd14_off' | 'cd16_off';
+  reason?: 'cd16_off';
   cd16: Cd16Ai | null;
 }> {
-  const [cd14, cd16] = await Promise.all([
-    getActiveConfig<Cd14Features>(tenantId, 'cd14_features'),
-    getActiveConfig<Cd16Ai>(tenantId, 'cd16_ai'),
-  ]);
-  if (!cd14?.ai_assistance) return { ready: false, reason: 'cd14_off', cd16: cd16 ?? null };
-  if (!cd16?.enabled) return { ready: false, reason: 'cd16_off', cd16 };
+  const cd16 = await loadCd16Ai(tenantId);
+  if (!cd16?.enabled) return { ready: false, reason: 'cd16_off', cd16: cd16 ?? null };
   return { ready: true, cd16 };
 }
 
 export async function loadChatbotConfig(tenantId: string): Promise<{
   ready: boolean;
-  reason?: 'cd14_off' | 'cd16_off' | 'chatbot_off' | 'channel_off';
+  reason?: 'cd16_off' | 'chatbot_off';
   cd16: Cd16Ai | null;
 }> {
-  const [cd14, cd16, cd08] = await Promise.all([
-    getActiveConfig<Cd14Features>(tenantId, 'cd14_features'),
-    getActiveConfig<Cd16Ai>(tenantId, 'cd16_ai'),
-    getActiveConfig<Cd08Channels>(tenantId, 'cd08_channels'),
-  ]);
-  if (!cd14?.chatbot_intake) return { ready: false, reason: 'cd14_off', cd16: cd16 ?? null };
-  if (!cd16?.enabled || !cd16.chatbot.enabled) return { ready: false, reason: 'cd16_off', cd16: cd16 ?? null };
-  if (!cd08?.modules?.chatbot?.enabled) return { ready: false, reason: 'channel_off', cd16 };
+  const cd16 = await loadCd16Ai(tenantId);
+  if (!cd16?.enabled) return { ready: false, reason: 'cd16_off', cd16: cd16 ?? null };
+  if (!cd16.chatbot.enabled) return { ready: false, reason: 'chatbot_off', cd16 };
   return { ready: true, cd16 };
 }

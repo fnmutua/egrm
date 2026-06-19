@@ -14,8 +14,10 @@ export const cd14Features = z.object({
   hotline: z.boolean().default(false),
   public_api: z.boolean().default(false),
   custom_dashboards: z.boolean().default(false),
-  chatbot_intake: z.boolean().default(false),
-  ai_assistance: z.boolean().default(false),
+  /** @deprecated Use CD-16 `enabled` — kept for legacy payloads only. */
+  chatbot_intake: z.boolean().default(false).optional(),
+  /** @deprecated Use CD-16 `enabled` — kept for legacy payloads only. */
+  ai_assistance: z.boolean().default(false).optional(),
 });
 
 export type Cd14Features = z.infer<typeof cd14Features>;

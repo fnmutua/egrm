@@ -1078,9 +1078,12 @@ onUnmounted(clearPageBreadcrumb);
     <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 sm:px-8 py-4">
     <div v-if="activeTab === 'overview'" class="space-y-2 max-w-6xl w-full">
       <details open class="group rounded-lg border border-default bg-default w-full">
-        <summary class="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium hover:bg-elevated/40 rounded-lg [&::-webkit-details-marker]:hidden">
-          <UIcon name="i-lucide-chevron-right" class="size-4 text-muted transition-transform group-open:rotate-90" />
-          Grievance details
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium hover:bg-elevated/40 rounded-lg [&::-webkit-details-marker]:hidden">
+          <div class="flex min-w-0 items-center gap-2">
+            <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-muted transition-transform group-open:rotate-90" />
+            <span>Grievance details</span>
+          </div>
+          <div id="grievance-details-header-actions" class="shrink-0" @click.stop />
         </summary>
         <div class="px-4 pb-4 pt-0 border-t border-default">
           <CaseGrievanceTriage

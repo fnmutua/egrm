@@ -202,12 +202,15 @@ const portalPreview = computed(() =>
           </div>
           <USwitch v-model="payload.modules.partner_api.enabled" />
         </div>
-        <div class="flex items-center justify-between gap-3 p-3 rounded-lg border border-default text-sm">
+        <div class="flex items-center justify-between gap-3 p-3 rounded-lg border border-default/60 bg-elevated/30 text-sm">
           <div>
             <span class="font-medium">Chatbot</span>
-            <p class="text-xs text-muted">Conversational intake (opt-in)</p>
+            <p class="text-xs text-muted">
+              Configured in
+              <NuxtLink to="/admin/config/cd16_ai#sec-overview" class="text-primary underline">Chatbot & AI (CD-16)</NuxtLink>
+            </p>
           </div>
-          <USwitch v-model="payload.modules.chatbot.enabled" />
+          <UBadge size="sm" variant="subtle" color="neutral">CD-16</UBadge>
         </div>
       </div>
 

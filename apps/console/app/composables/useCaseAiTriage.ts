@@ -30,7 +30,6 @@ export interface AiInteraction {
 export interface TriageConfig {
   ready: boolean;
   reason?: string;
-  ai_assistance: boolean;
   cd16_enabled: boolean;
   auto_categorize: boolean;
   sensitivity_detect: boolean;
@@ -79,8 +78,9 @@ export function useCaseAiTriage(caseId: Ref<string> | string) {
   const configHint = computed(() => {
     const cfg = view.value?.config;
     if (!cfg || cfg.ready) return null;
-    if (cfg.reason === 'cd14_off') return 'AI assistance is off under Platform → Feature flags (CD-14).';
-    if (cfg.reason === 'cd16_off') return 'Turn on the AI master switch under Admin → Chatbot & AI (CD-16) and save.';
+    if (cfg.reason === 'cd16_off') {
+      return 'Turn on Staff AI assistance under Admin → Chatbot & AI (CD-16) → Overview, then save.';
+    }
     if (cfg.reason === 'capabilities_off') {
       return 'Enable Auto-categorization and/or Sensitivity detection under CD-16 → Capabilities, then save.';
     }

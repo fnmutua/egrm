@@ -1,11 +1,11 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import type { Cd03Taxonomy, Cd14Features, Cd16Ai } from '@egrm/config-schemas';
+import type { Cd03Taxonomy, Cd16Ai } from '@egrm/config-schemas';
 import { db, schema } from '../db/client.js';
 import { getActiveConfig } from './config.js';
 import { chatCompletion } from './ai-completion.js';
 import { hashRedactedPrompt, redactIntakeText } from './ai-redaction.js';
-import { parseJsonFromModel, resolveProfileForCapability } from './ai-shared.js';
+import { loadCd16Ai, parseJsonFromModel, resolveProfileForCapability } from './ai-shared.js';
 
 const triageResponseSchema = z.object({
   categories: z.array(z.string()).default([]),
@@ -99,38 +99,34 @@ function normalizeSuggestion(
   };
 }
 
-export type AiTriageDisabledReason = 'cd14_off' | 'cd16_off' | 'capabilities_off' | 'no_profile' | 'taxonomy_missing';
+export type AiTriageDisabledReason = 'cd16_off' | 'capabilities_off' | 'no_profile' | 'taxonomy_missing';
 
 export interface AiTriageConfigStatus {
   ready: boolean;
   reason?: AiTriageDisabledReason;
-  ai_assistance: boolean;
   cd16_enabled: boolean;
   auto_categorize: boolean;
   sensitivity_detect: boolean;
 }
 
 export async function getAiTriageConfigStatus(tenantId: string): Promise<AiTriageConfigStatus> {
-  const [cd14, cd16] = await Promise.all([
-    getActiveConfig<Cd14Features>(tenantId, 'cd14_features'),
-    getActiveConfig<Cd16Ai>(tenantId, 'cd16_ai'),
-  ]);
-  const ai_assistance = Boolean(cd14?.ai_assistance);
+  const cd16 = await loadCd16Ai(tenantId);
   const cd16_enabled = Boolean(cd16?.enabled);
   const auto_categorize = Boolean(cd16?.capabilities.auto_categorize.enabled);
   const sensitivity_detect = Boolean(cd16?.capabilities.sensitivity_detect.enabled);
 
-  if (!ai_assistance) return { ready: false, reason: 'cd14_off', ai_assistance, cd16_enabled, auto_categorize, sensitivity_detect };
-  if (!cd16_enabled || !cd16) return { ready: false, reason: 'cd16_off', ai_assistance, cd16_enabled, auto_categorize, sensitivity_detect };
+  if (!cd16_enabled || !cd16) {
+    return { ready: false, reason: 'cd16_off', cd16_enabled, auto_categorize, sensitivity_detect };
+  }
   if (!auto_categorize && !sensitivity_detect) {
-    return { ready: false, reason: 'capabilities_off', ai_assistance, cd16_enabled, auto_categorize, sensitivity_detect };
+    return { ready: false, reason: 'capabilities_off', cd16_enabled, auto_categorize, sensitivity_detect };
   }
   const profileRef =
     resolveProfile(cd16, 'auto_categorize') ?? resolveProfile(cd16, 'sensitivity_detect');
   if (!profileRef) {
-    return { ready: false, reason: 'no_profile', ai_assistance, cd16_enabled, auto_categorize, sensitivity_detect };
+    return { ready: false, reason: 'no_profile', cd16_enabled, auto_categorize, sensitivity_detect };
   }
-  return { ready: true, ai_assistance, cd16_enabled, auto_categorize, sensitivity_detect };
+  return { ready: true, cd16_enabled, auto_categorize, sensitivity_detect };
 }
 
 async function isTriageEnabled(tenantId: string): Promise<{
@@ -141,7 +137,7 @@ async function isTriageEnabled(tenantId: string): Promise<{
   if (!status.ready) return null;
 
   const [cd16, taxonomy] = await Promise.all([
-    getActiveConfig<Cd16Ai>(tenantId, 'cd16_ai'),
+    loadCd16Ai(tenantId),
     getActiveConfig<Cd03Taxonomy>(tenantId, 'cd03_taxonomy'),
   ]);
   if (!cd16 || !taxonomy) return null;

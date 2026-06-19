@@ -104,7 +104,7 @@ export const aiTokenBudget = z
 
 export const cd16Ai = z
   .object({
-    /** Master switch; CD-14 `ai_assistance` / `chatbot_intake` must also be on. */
+    /** Master switch for staff AI (triage, drafts, summarization, etc.). */
     enabled: z.boolean().default(false),
     provider_profiles: z.record(profileKey, aiProviderProfile).default({}),
     capabilities: z
@@ -121,6 +121,7 @@ export const cd16Ai = z
     token_budget: aiTokenBudget,
     chatbot: z
       .object({
+        /** Portal chat widget and conversational intake (single switch — no CD-08/CD-14 flags). */
         enabled: z.boolean().default(false),
         profile: profileKey.optional(),
         locales: z.array(z.string().min(2).max(8)).default(['en']),

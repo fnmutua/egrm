@@ -148,12 +148,16 @@ export const CONFIG_SECTIONS: { label: string; icon?: string; entries: ConfigEnt
     ],
   },
   {
+    label: 'AI',
+    icon: 'i-lucide-bot',
+    entries: [{ domain: 'cd16_ai' }],
+  },
+  {
     label: 'Platform',
     entries: [
       { domain: 'cd13_reporting' },
       { domain: 'cd14_features' },
       { domain: 'cd15_dashboards' },
-      { domain: 'cd16_ai' },
     ],
   },
 ];
@@ -219,7 +223,7 @@ export const DOMAIN_CATALOGUE: DomainMeta[] = [
   { domain: 'cd13_reporting', cd: 'CD-13', title: 'Reporting & retention', icon: 'i-lucide-file-bar-chart', strict: false,
     description: 'KPI targets, transparency page, scheduled reports, retention policies, export field policies.' },
   { domain: 'cd14_features', cd: 'CD-14', title: 'Feature flags', icon: 'i-lucide-toggle-right', strict: true,
-    description: 'Module activation: knowledge base, tasks, committees, appeals, USSD, hotline, chatbot, AI assistance, custom dashboards…' },
+    description: 'Non-AI module activation (knowledge base, tasks, USSD, …). Staff AI and chatbot are under Chatbot & AI (CD-16).' },
   { domain: 'cd15_dashboards', cd: 'CD-15', title: 'Dashboards', icon: 'i-lucide-layout-dashboard', strict: false,
     description: 'Admin-built dashboards: sections and declarative widgets over the semantic layer.',
     subsections: [
@@ -228,7 +232,7 @@ export const DOMAIN_CATALOGUE: DomainMeta[] = [
       { id: 'sec-widgets', label: 'Widgets' },
     ] },
   { domain: 'cd16_ai', cd: 'CD-16', title: 'Chatbot & AI', icon: 'i-lucide-bot', strict: true,
-    description: 'OpenAI, xAI, Azure, Ollama profiles; token budgets; staff AI capabilities; chatbot; safety & RAG.',
+    description: 'Single place for AI: staff assistance, portal chatbot, provider profiles, capabilities, safety, and RAG.',
     subsections: CD16_SUBSECTIONS },
 ];
 

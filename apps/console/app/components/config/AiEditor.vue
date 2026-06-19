@@ -218,16 +218,26 @@ watch(profileKeys, (keys) => {
       <UAlert
         color="info"
         variant="subtle"
-        title="Requires CD-14 feature flags"
-        description="Turn on AI assistance and/or chatbot intake under Platform → Feature flags. API keys can use env:OPENAI_API_KEY / env:XAI_API_KEY in apps/api/.env."
+        title="All AI settings in one place"
+        description="Turn on staff AI and/or the portal chatbot below. Provider keys can use env:OPENAI_API_KEY / env:XAI_API_KEY in apps/api/.env."
       />
-      <div class="flex items-center justify-between gap-4">
-        <div>
-          <p class="font-medium">AI master switch</p>
-          <p class="text-sm text-muted">Enables provider calls when CD-14 flags are also on.</p>
+
+      <UCard :ui="{ body: 'space-y-4' }">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <p class="font-medium">Staff AI assistance</p>
+            <p class="text-sm text-muted">Triage, drafts, summarization, and other console capabilities.</p>
+          </div>
+          <USwitch v-model="payload.enabled" />
         </div>
-        <USwitch v-model="payload.enabled" />
-      </div>
+        <div class="flex items-center justify-between gap-4 pt-3 border-t border-default">
+          <div>
+            <p class="font-medium">Portal chatbot</p>
+            <p class="text-sm text-muted">Floating chat widget on the public portal for conversational intake.</p>
+          </div>
+          <USwitch v-model="payload.chatbot.enabled" />
+        </div>
+      </UCard>
 
       <div class="grid sm:grid-cols-2 gap-4 pt-2 border-t border-default">
         <UFormField label="Monthly token limit" help="0 = unlimited. Input + output tokens combined.">
@@ -434,13 +444,13 @@ watch(profileKeys, (keys) => {
 
     <!-- Chatbot -->
     <section v-if="show('sec-chatbot')" class="space-y-4">
-      <div class="flex items-center justify-between gap-4">
-        <div>
-          <p class="font-medium">Chatbot channel</p>
-          <p class="text-sm text-muted">Also enable chatbot under CD-08 and CD-14.</p>
-        </div>
-        <USwitch v-model="payload.chatbot.enabled" />
-      </div>
+      <UAlert
+        v-if="!payload.chatbot.enabled"
+        color="warning"
+        variant="subtle"
+        title="Portal chatbot is off"
+        description="Turn on Portal chatbot under Overview above to show the widget on the public site."
+      />
       <div v-if="payload.chatbot.enabled" class="grid sm:grid-cols-2 gap-4">
         <UFormField label="Conversation mode" class="sm:col-span-2">
           <USelectMenu v-model="payload.chatbot.mode" :items="modeItems" value-key="value" label-key="label" class="w-full" />

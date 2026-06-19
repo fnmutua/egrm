@@ -814,7 +814,7 @@ export async function runSeed() {
       ussd: { enabled: false },
       sms: { enabled: false },
       partner_api: { enabled: false },
-      chatbot: { enabled: true },
+      chatbot: { enabled: false },
     },
   }, admin!.id);
 
@@ -853,8 +853,6 @@ export async function runSeed() {
     appeals: true,
     satisfaction_survey: true,
     custom_dashboards: true,
-    ai_assistance: true,
-    chatbot_intake: true,
   }, admin!.id);
 
   await upsertActiveConfig(kisip!.id, 'cd16_ai', {

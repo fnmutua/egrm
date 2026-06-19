@@ -14,7 +14,6 @@ const {
   loading,
   deciding,
   rerunning,
-  polled,
   view,
   triage,
   failed,
@@ -76,9 +75,19 @@ async function onConfirmSensitivity() {
 async function onClearSensitivity() {
   if (await clearSensitivity()) emit('applied');
 }
+
+const showHeaderTriageAction = computed(
+  () => !loading.value && !configHint.value && canEditFields.value && Boolean(view.value?.config.ready),
+);
 </script>
 
 <template>
+  <Teleport v-if="showHeaderTriageAction" to="#grievance-details-header-actions">
+    <UButton size="xs" variant="outline" icon="i-lucide-sparkles" :loading="rerunning" @click="rerunTriage">
+      Run AI triage
+    </UButton>
+  </Teleport>
+
   <div v-if="loading" class="text-sm text-muted py-2 border-b border-default mb-3">
     Checking AI triage…
   </div>
@@ -227,13 +236,5 @@ async function onClearSensitivity() {
         </UButton>
       </div>
     </div>
-  </div>
-
-  <div
-    v-else-if="view?.config.ready && canEditFields && polled >= 3"
-    class="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-muted"
-  >
-    <span>No AI triage suggestions for this grievance.</span>
-    <UButton size="xs" variant="outline" :loading="rerunning" @click="rerunTriage">Run AI triage</UButton>
   </div>
 </template>

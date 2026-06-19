@@ -1,9 +1,9 @@
 /**
- * Enable chatbot intake for the kisip dev tenant (CD-08, CD-14, CD-16).
+ * Enable portal chatbot for the kisip dev tenant (CD-16 only).
  * Run: pnpm --filter @egrm/api db:enable-chatbot
  */
 import { and, eq, sql } from 'drizzle-orm';
-import type { Cd08Channels, Cd14Features, Cd16Ai } from '@egrm/config-schemas';
+import type { Cd16Ai } from '@egrm/config-schemas';
 import { DEFAULT_CD16_AI, validateConfig } from '@egrm/config-schemas';
 import type { ConfigDomain } from '@egrm/core';
 import { db, pool, schema } from './client.js';
@@ -89,34 +89,6 @@ async function main() {
 
   await activateMergedConfig(
     tenant.id,
-    'cd08_channels',
-    (current) => {
-      const c = current as Cd08Channels;
-      return {
-        ...c,
-        modules: {
-          ...c.modules,
-          chatbot: { ...c.modules?.chatbot, enabled: true },
-        },
-      };
-    },
-    changedBy,
-    'enable-chatbot: CD-08 chatbot module',
-  );
-
-  await activateMergedConfig(
-    tenant.id,
-    'cd14_features',
-    (current) => {
-      const c = current as Cd14Features;
-      return { ...c, chatbot_intake: true };
-    },
-    changedBy,
-    'enable-chatbot: CD-14 chatbot_intake',
-  );
-
-  await activateMergedConfig(
-    tenant.id,
     'cd16_ai',
     (current) => {
       const c = current as Cd16Ai;
@@ -133,7 +105,7 @@ async function main() {
       };
     },
     changedBy,
-    'enable-chatbot: CD-16 chatbot',
+    'enable-chatbot: CD-16 staff AI + portal chatbot',
   );
 
   console.log('Done. Refresh the portal — the Chat button should appear bottom-right.');
