@@ -1,33 +1,136 @@
 <script setup lang="ts">
 import type { PortalLegalSection } from '~/composables/usePortalIdentity';
 
-const { p, locale, t } = usePortalIdentity();
+const { notice, pageTitle, relatedLinkLabel, intro, t } = usePortalLegalCopy('data_deletion', {
+  pageTitle: {
+    en: 'Data deletion instructions',
+    sw: 'Maelezo ya kufuta data',
+  },
+  footerLink: {
+    en: 'Data deletion instructions',
+    sw: 'Maelezo ya kufuta data',
+  },
+  relatedLink: {
+    en: 'Privacy notice',
+    sw: 'Sera ya faragha',
+  },
+  intro: {
+    en: 'Under the Kenya Data Protection Act, 2019, you have the right to request erasure of your personal data where applicable. This page explains how to request deletion of your information from {programme}, and the limits that may apply.',
+    sw: 'Chini ya Sheria ya Ulinzi wa Data ya Kenya, 2019, una haki ya kuomba kufutwa kwa data yako binafsi inapofaa. Ukurasa huu unaeleza jinsi ya kuomba ufutaji wa taarifa zako kutoka kwa {programme}, na mipaka inayoweza kutumika.',
+  },
+});
 
-const ui = computed(() => ({
-  title: locale.value === 'sw' ? 'Maelezo ya kufuta data' : 'Data deletion instructions',
-  privacy: locale.value === 'sw' ? 'Sera ya faragha' : 'Privacy notice',
-}));
+const { submit } = useDataErasure();
+
+const formDefaults = {
+  title: {
+    en: 'Request deletion of your data',
+    sw: 'Omba kufutwa kwa data yako',
+  },
+  hint: {
+    en: 'Enter the name, email, and phone number you used when you submitted your grievance. If they match our records, your contact details will be removed immediately. Case details may be kept for audit purposes.',
+    sw: 'Weka jina, barua pepe, na nambari ya simu ulizotumia unapowasilisha malalamiko. Ikiwa zinalingana na rekodi zetu, taarifa zako za mawasiliano zitafutwa mara moja. Maelezo ya kesi yanaweza kubaki kwa madhumuni ya ukaguzi.',
+  },
+  name_label: { en: 'Full name', sw: 'Jina kamili' },
+  email_label: { en: 'Email', sw: 'Barua pepe' },
+  phone_label: { en: 'Phone number', sw: 'Nambari ya simu' },
+  submit_label: { en: 'Delete my data', sw: 'Futa data yangu' },
+  submitting_label: { en: 'Verifying…', sw: 'Inathibitisha…' },
+  success_message: {
+    en: 'Your contact details have been removed from {count} case record(s). You can no longer track those cases using this phone or email.',
+    sw: 'Taarifa zako za mawasiliano zimeondolewa kutoka kwa rekodi {count} za kesi. Huwezi tena kufuatilia kwa simu au barua pepe hizi.',
+  },
+  errors: {
+    no_match: {
+      en: 'We could not verify these details against our records. Check the information and try again, or contact us below.',
+      sw: 'Hatukuweza kuthibitisha maelezo haya dhidi ya rekodi zetu. Angalia taarifa na ujaribu tena, au wasiliana nasi hapa chini.',
+    },
+    already_erased: {
+      en: 'Personal contact details matching this information have already been removed.',
+      sw: 'Taarifa za mawasiliano zinazolingana na maelezo haya zimeshatolewa.',
+    },
+    invalid_name: {
+      en: 'Enter the full name used when you submitted your case.',
+      sw: 'Weka jina kamili lililotumika unapowasilisha kesi yako.',
+    },
+    invalid_phone: {
+      en: 'Enter a valid phone number.',
+      sw: 'Weka nambari halali ya simu.',
+    },
+    invalid_email: {
+      en: 'Enter a valid email address.',
+      sw: 'Weka anwani halali ya barua pepe.',
+    },
+    generic: {
+      en: 'Request failed. Please try again later.',
+      sw: 'Ombi limeshindwa. Jaribu tena baadaye.',
+    },
+  },
+} as const;
+
+const formConfig = computed(() => notice.value?.form);
+const formEnabled = computed(() => formConfig.value?.enabled !== false);
+
+function formText<K extends keyof typeof formDefaults>(field: K): string {
+  if (field === 'errors') return '';
+  const configured = formConfig.value?.[field as 'title'];
+  const value = t(configured as Record<string, string> | undefined);
+  if (value) return value;
+  return t(formDefaults[field] as Record<string, string>);
+}
+
+function errorText(code: keyof typeof formDefaults.errors): string {
+  const configured = formConfig.value?.errors?.[code];
+  const value = t(configured);
+  if (value) return value;
+  return t(formDefaults.errors[code]);
+}
+
+const name = ref('');
+const email = ref('');
+const phone = ref('');
+const error = ref('');
+const success = ref('');
+const pending = ref(false);
 
 const sections = computed((): PortalLegalSection[] => {
-  const configured = p.value?.data_deletion?.sections;
+  const configured = notice.value?.sections;
   if (configured?.length) return configured;
-  return fallbackSections(p.value?.programme ?? p.value?.name ?? 'this grievance redress mechanism');
+  return fallbackSections();
 });
 
-const intro = computed(() => {
-  const custom = p.value?.data_deletion?.intro;
-  if (custom && t(custom)) return t(custom);
-  const programme = p.value?.programme ?? p.value?.legal_name ?? p.value?.name ?? 'this programme';
-  return locale.value === 'sw'
-    ? `Chini ya Sheria ya Ulinzi wa Data ya Kenya, 2019, una haki ya kuomba kufutwa kwa data yako binafsi inapofaa. Ukurasa huu unaeleza jinsi ya kuomba ufutaji wa taarifa zako kutoka kwa ${programme}, na mipaka inayoweza kutumika.`
-    : `Under the Kenya Data Protection Act, 2019, you have the right to request erasure of your personal data where applicable. This page explains how to request deletion of your information from ${programme}, and the limits that may apply.`;
-});
+const relatedLinks = computed(() => [{ to: '/policy', label: relatedLinkLabel.value }]);
 
-const relatedLinks = computed(() => [{ to: '/policy', label: ui.value.privacy }]);
+async function onSubmit() {
+  error.value = '';
+  success.value = '';
+  pending.value = true;
+  try {
+    const res = await submit({
+      name: name.value.trim(),
+      phone: phone.value.trim(),
+      email: email.value.trim(),
+    });
+    const template = formText('success_message');
+    success.value = template.replace(/\{count\}/g, String(res.cases_affected));
+    name.value = '';
+    email.value = '';
+    phone.value = '';
+  } catch (e: unknown) {
+    const err = e as { data?: { error?: string; message?: string } };
+    const code = err.data?.error ?? '';
+    const known = ['no_match', 'already_erased', 'invalid_name', 'invalid_phone', 'invalid_email'] as const;
+    if (known.includes(code as (typeof known)[number])) {
+      error.value = errorText(code as keyof typeof formDefaults.errors);
+    } else {
+      error.value = err.data?.message ?? errorText('generic');
+    }
+  } finally {
+    pending.value = false;
+  }
+}
 
-function fallbackSections(programme: string): PortalLegalSection[] {
-  const contact = p.value?.footer?.email ?? 'the contact details below';
-  const phone = p.value?.footer?.phone ?? '';
+function fallbackSections(): PortalLegalSection[] {
   return [
     {
       id: 'right',
@@ -41,63 +144,71 @@ function fallbackSections(programme: string): PortalLegalSection[] {
       id: 'can-delete',
       title: { en: 'What we can delete', sw: 'Tunachoweza kufuta' },
       body: {
-        en: 'After a case is closed and statutory retention periods have passed, we can delete or anonymise contact details (name, phone, email), notification preferences, and uploaded documents that are not required for audit. We can also remove duplicate or mistaken contact information on request while a case is open.',
-        sw: 'Baada ya kesi kufungwa na muda wa kisheria wa uhifadhi kupita, tunaweza kufuta au kutambulisha bila jina maelezo ya mawasiliano (jina, simu, barua pepe), mapendeleo ya arifa, na nyaraka zilizopakiwa ambazo hazihitajiki kwa ukaguzi. Tunaweza pia kuondoa maelezo ya mawasiliano yaliyorudiwa au yaliyokosewa kwa ombi wakati kesi bado haijafungwa.',
+        en: 'We can remove your name, phone number, email, and notification preferences from our records. Grievance descriptions and case history may be retained in anonymised form where required for audit or legal obligations.',
+        sw: 'Tunaweza kuondoa jina, nambari ya simu, barua pepe, na mapendeleo ya arifa kutoka kwa rekodi zetu. Maelezo ya malalamiko na historia ya kesi yanaweza kuhifadhiwa bila kitambulisho pale inahitajika kwa ukaguzi au wajibu wa kisheria.',
       },
     },
     {
       id: 'cannot-delete',
       title: { en: 'What we may need to keep', sw: 'Tunachoweza kuhitaji kuweka' },
       body: {
-        en: `We cannot delete information that must be retained to investigate or evidence a grievance, meet World Bank or government audit requirements, defend legal claims, or protect the safety of others. For open cases, we will usually restrict processing or anonymise identifiers where possible rather than delete active case records. System audit logs (who accessed a case) are kept for security and may not be erased.`,
-        sw: `Hatuwezi kufuta taarifa zinazohitajika kuchunguza au kuthibitisha malalamiko, kutimiza mahitaji ya ukaguzi wa Benki ya Dunia au serikali, kulinda madai ya kisheria, au kulinda usalama wa wengine. Kwa kesi zinazoendelea, kwa kawaida tutazuia uchakataji au kutambulisha vitambulisho bila jina inapowezekana badala ya kufuta rekodi za kesi hai. Kumbukumbu za ukaguzi wa mfumo (nani aliyefikia kesi) zinahifadhiwa kwa usalama na huenda zisifutwe.`,
+        en: 'We cannot delete information that must be retained to investigate or evidence a grievance, meet World Bank or government audit requirements, defend legal claims, or protect the safety of others. System audit logs are kept for security and may not be erased.',
+        sw: 'Hatuwezi kufuta taarifa zinazohitajika kuchunguza au kuthibitisha malalamiko, kutimiza mahitaji ya ukaguzi wa Benki ya Dunia au serikali, kulinda madai ya kisheria, au kulinda usalama wa wengine. Kumbukumbu za ukaguzi wa mfumo zinahifadhiwa kwa usalama na huenda zisifutwe.',
       },
     },
     {
       id: 'how-to-request',
       title: { en: 'How to submit a request', sw: 'Jinsi ya kuwasilisha ombi' },
       body: {
-        en: `Email ${contact}${phone ? `, call ${phone},` : ','} or visit a programme office. Include your case reference number (for example GRM-2026-0001) if you have one, the personal data you want deleted, and enough detail for us to verify your identity. Anonymous cases can be verified with the reference number and PIN or phone number you used at intake.`,
-        sw: `Tuma barua pepe ${contact}${phone ? `, piga ${phone},` : ','} au tembelea ofisi ya mradi. Jumuisha nambari yako ya kumbukumbu ya kesi (kwa mfano GRM-2026-0001) ikiwa unayo, data binafsi unayotaka ifutwe, na maelezo ya kutosha kututhibitisha utambulisho wako. Kesi zisizo na jina zinaweza kuthibitishwa kwa nambari ya kumbukumbu na PIN au simu uliyotumia wakati wa kuwasilisha.`,
-      },
-    },
-    {
-      id: 'verification',
-      title: { en: 'Identity verification', sw: 'Uthibitishaji wa utambulisho' },
-      body: {
-        en: 'To protect complainants from fraudulent deletion requests, we must confirm you are the data subject or their authorised representative before erasing personal data. We may ask for a copy of ID, confirmation from the phone or email on file, or in-person verification at a programme office.',
-        sw: 'Ili kulinda wawasilishaji dhidi ya maombi ya ulaghai ya kufuta data, lazima tuthibitishe wewe ndiye mhusika wa data au mwakilishi aliyeidhinishwa kabla ya kufuta data binafsi. Tunaweza kuomba nakala ya kitambulisho, uthibitisho kutoka kwa simu au barua pepe iliyorekodiwa, au uthibitisho ana kwa ana katika ofisi ya mradi.',
-      },
-    },
-    {
-      id: 'timeline',
-      title: { en: 'What happens next', sw: 'Kinachofuata' },
-      body: {
-        en: 'We acknowledge requests within 7 working days. We will tell you what was deleted, what must be retained and why, or if we need more information. If you disagree with our decision, you may complain to the Office of the Data Protection Commissioner.',
-        sw: 'Tunathibitisha kupokea maombi ndani ya siku 7 za kazi. Tutakuambia kilichofutwa, kilichobaki na sababu, au ikiwa tunahitaji taarifa zaidi. Usipokubaliana na uamuzi wetu, unaweza kuwasilisha malalamiko kwa Ofisi ya Kamishna wa Ulinzi wa Data.',
-      },
-    },
-    {
-      id: 'whatsapp',
-      title: { en: 'WhatsApp and messaging channels', sw: 'WhatsApp na njia za ujumbe' },
-      body: {
-        en: `Messages sent to our WhatsApp or SMS numbers for case status are processed to reply to you; they are not a channel for formal deletion requests. Please use email or post for written erasure requests relating to ${programme}.`,
-        sw: `Ujumbe unaotumwa kwa nambari zetu za WhatsApp au SMS kwa hali ya kesi unachakatwa ili kukujibu; si njia ya maombi rasmi ya kufuta data. Tafadhali tumia barua pepe au posta kwa maombi ya maandishi ya ufutaji yanayohusiana na ${programme}.`,
+        en: 'Use the form above for instant removal when your details match. You can also contact us using the details at the bottom of this page for other requests.',
+        sw: 'Tumia fomu hapo juu kwa uondoaji wa papo hapo maelezo yanapolingana. Unaweza pia kuwasiliana nasi kwa maelezo hapo chini ya ukurasa huu kwa maombi mengine.',
       },
     },
   ];
 }
 
-useHead({ title: computed(() => ui.value.title) });
+useHead({ title: computed(() => pageTitle.value) });
 </script>
 
 <template>
   <PortalLegalNoticePage
-    :title="ui.title"
+    :title="pageTitle"
     :intro="intro"
     :sections="sections"
-    :version="p?.data_deletion?.version"
-    :effective-date="p?.data_deletion?.effective_date"
+    :version="notice?.version"
+    :effective-date="notice?.effective_date"
     :related-links="relatedLinks"
-  />
+  >
+    <template v-if="formEnabled" #prepend>
+      <UCard class="mb-10" :ui="{ body: 'p-5 sm:p-6 space-y-4' }">
+        <div>
+          <h2 class="text-lg font-semibold">{{ formText('title') }}</h2>
+          <p class="text-sm text-muted mt-1">{{ formText('hint') }}</p>
+        </div>
+
+        <UAlert v-if="success" color="success" variant="subtle" :title="success" />
+        <UAlert v-if="error" color="error" variant="subtle" :title="error" />
+
+        <form class="space-y-4" @submit.prevent="onSubmit">
+          <UFormField :label="formText('name_label')" required>
+            <UInput v-model="name" class="w-full" autocomplete="name" :disabled="pending" />
+          </UFormField>
+          <UFormField :label="formText('email_label')" required>
+            <UInput v-model="email" type="email" class="w-full" autocomplete="email" :disabled="pending" />
+          </UFormField>
+          <UFormField :label="formText('phone_label')" required>
+            <UInput v-model="phone" type="tel" class="w-full" autocomplete="tel" :disabled="pending" />
+          </UFormField>
+          <UButton
+            type="submit"
+            color="primary"
+            :loading="pending"
+            :disabled="pending || !name.trim() || !email.trim() || !phone.trim()"
+          >
+            {{ pending ? formText('submitting_label') : formText('submit_label') }}
+          </UButton>
+        </form>
+      </UCard>
+    </template>
+  </PortalLegalNoticePage>
 </template>

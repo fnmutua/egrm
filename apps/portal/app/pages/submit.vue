@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { meta, loadMeta, fieldOptions, submit } = useIntake();
+const { p: identity, t: tIdentity } = usePortalIdentity();
 
 await loadMeta();
 
@@ -364,11 +365,11 @@ async function doSubmit() {
                   <span class="text-sm leading-snug">
                     {{ meta?.consent_text[locale] ?? meta?.consent_text.en }}
                     <NuxtLink to="/policy" class="text-primary hover:underline whitespace-nowrap" @click.stop>
-                      {{ locale === 'sw' ? '(Sera ya faragha)' : '(Privacy notice)' }}
+                      ({{ tIdentity(identity?.privacy_policy?.footer_link_label) || (locale === 'sw' ? 'Sera ya faragha' : 'Privacy notice') }})
                     </NuxtLink>
                     ·
                     <NuxtLink to="/delete" class="text-primary hover:underline whitespace-nowrap" @click.stop>
-                      {{ locale === 'sw' ? '(Kufuta data)' : '(Data deletion)' }}
+                      ({{ tIdentity(identity?.data_deletion?.footer_link_label) || (locale === 'sw' ? 'Kufuta data' : 'Data deletion') }})
                     </NuxtLink>
                   </span>
                 </label>

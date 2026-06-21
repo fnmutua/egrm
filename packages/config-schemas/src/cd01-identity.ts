@@ -3,10 +3,42 @@ import { z } from 'zod';
 /** CD-01 Tenant identity & branding (spec 02). */
 export const localizedText = z.record(z.string().min(2).max(8), z.string());
 
+/** Self-service erasure form copy (portal `/delete` only). */
+export const portalErasureFormSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    title: localizedText.optional(),
+    hint: localizedText.optional(),
+    name_label: localizedText.optional(),
+    email_label: localizedText.optional(),
+    phone_label: localizedText.optional(),
+    submit_label: localizedText.optional(),
+    submitting_label: localizedText.optional(),
+    /** Use `{count}` for the number of case records updated. */
+    success_message: localizedText.optional(),
+    errors: z
+      .object({
+        no_match: localizedText.optional(),
+        already_erased: localizedText.optional(),
+        invalid_name: localizedText.optional(),
+        invalid_phone: localizedText.optional(),
+        invalid_email: localizedText.optional(),
+        generic: localizedText.optional(),
+      })
+      .optional(),
+  })
+  .optional();
+
 /** Versioned legal notice with localized sections (portal `/policy`, `/delete`, etc.). */
 export const portalLegalNoticeSchema = z.object({
   version: z.string().min(1).default('1.0'),
   effective_date: z.string().optional(),
+  /** Page heading (h1). */
+  page_title: localizedText.optional(),
+  /** Short label for footer and cross-links. */
+  footer_link_label: localizedText.optional(),
+  /** Label linking to the paired legal page (privacy ↔ deletion). */
+  related_link_label: localizedText.optional(),
   intro: localizedText.optional(),
   sections: z
     .array(
@@ -17,6 +49,7 @@ export const portalLegalNoticeSchema = z.object({
       }),
     )
     .default([]),
+  form: portalErasureFormSchema,
 });
 
 /** Chromatic palette colors supported by the Nuxt UI design system. */

@@ -21,6 +21,8 @@ interface IdentityPayload {
   about?: { heading?: L10n; body: L10n };
   faq?: { question: L10n; answer: L10n }[];
   footer?: { address?: string; phone?: string; email?: string; privacy_note?: L10n };
+  privacy_policy?: { footer_link_label?: L10n; page_title?: L10n };
+  data_deletion?: { footer_link_label?: L10n; page_title?: L10n };
 }
 
 const apiBase = usePublicApiBase();
@@ -58,6 +60,27 @@ function t(text: L10n | undefined): string {
   if (!text) return '';
   return text[locale.value] || text[p.value?.locales.default ?? 'en'] || Object.values(text)[0] || '';
 }
+
+function legalLinkLabel(
+  notice: { footer_link_label?: L10n; page_title?: L10n } | undefined,
+  fallback: L10n,
+): string {
+  return t(notice?.footer_link_label) || t(notice?.page_title) || t(fallback);
+}
+
+const privacyFooterLabel = computed(() =>
+  legalLinkLabel(p.value?.privacy_policy, {
+    en: 'Privacy & data protection notice',
+    sw: 'Sera ya faragha na ulinzi wa data',
+  }),
+);
+
+const deleteFooterLabel = computed(() =>
+  legalLinkLabel(p.value?.data_deletion, {
+    en: 'Data deletion instructions',
+    sw: 'Maelezo ya kufuta data',
+  }),
+);
 
 // Hide the logo slot entirely if the configured URL doesn't load (broken link, not an image).
 const logoFailed = ref(false);
@@ -336,10 +359,10 @@ const heroSubtitle = computed(
         <div class="sm:text-right space-y-2">
           <div class="flex flex-col sm:items-end gap-1">
             <NuxtLink to="/policy" class="text-primary hover:underline text-sm font-medium">
-              {{ locale === 'sw' ? 'Sera ya faragha na ulinzi wa data' : 'Privacy & data protection notice' }}
+              {{ privacyFooterLabel }}
             </NuxtLink>
             <NuxtLink to="/delete" class="text-primary hover:underline text-sm font-medium">
-              {{ locale === 'sw' ? 'Maelezo ya kufuta data' : 'Data deletion instructions' }}
+              {{ deleteFooterLabel }}
             </NuxtLink>
           </div>
           <div v-if="p?.footer?.privacy_note" class="text-xs max-w-sm sm:ml-auto">{{ t(p.footer.privacy_note) }}</div>

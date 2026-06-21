@@ -36,6 +36,7 @@ import {
   getChatbotMeta,
   handleChatbotMessage,
 } from '../services/chatbot.js';
+import { requestPortalDataErasure } from '../services/data-erasure.js';
 
 const chatbotSessionBody = z.object({
   locale: z.string().min(2).max(8).optional(),
@@ -70,6 +71,12 @@ const trackBody = z.object({
   verifier: z.string().min(3).max(128),
 });
 
+const dataErasureBody = z.object({
+  name: z.string().min(2).max(120),
+  phone: z.string().min(9).max(32),
+  email: z.string().email().max(254),
+});
+
 const registerBody = z.object({
   email: z.string().email(),
   display_name: z.string().min(1).max(120),
@@ -86,6 +93,7 @@ async function departmentCodes(tenantId: string): Promise<string[]> {
 /** Public (unauthenticated) surface: intake metadata, submission, tracking. Rate-limited. */
 export default async function publicRoutes(app: FastifyInstance) {
   const rateLimit = { rateLimit: { max: 30, timeWindow: '1 minute' } };
+  const erasureRateLimit = { rateLimit: { max: 5, timeWindow: '1 minute' } };
   await app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024, files: 10 } });
 
   // Everything the portal needs to render the configured intake form.
@@ -259,6 +267,30 @@ export default async function publicRoutes(app: FastifyInstance) {
       timeline: events,
       messages,
       reply_allowed: replyAllowed,
+    };
+  });
+
+  app.post('/api/v1/public/data-erasure', { config: erasureRateLimit }, async (req, reply) => {
+    const parsed = dataErasureBody.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+    }
+
+    const result = await requestPortalDataErasure({
+      tenantId: req.tenant.id,
+      name: parsed.data.name,
+      phone: parsed.data.phone,
+      email: parsed.data.email,
+    });
+
+    if (!result.ok) {
+      return reply.code(result.code).send({ error: result.error, message: result.message });
+    }
+
+    return {
+      ok: true,
+      parties_affected: result.parties_affected,
+      cases_affected: result.cases_affected,
     };
   });
 

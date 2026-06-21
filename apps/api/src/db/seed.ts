@@ -6,7 +6,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { ConfigDomain } from '@egrm/core';
 import { DEFAULT_CD16_AI } from '@egrm/config-schemas';
 import { validateConfig, defaultNotificationPack, defaultStaffProfileFields, DEFAULT_ATTACHMENT_KINDS, DEFAULT_ATTACHMENT_POLICY, DEFAULT_CORRESPONDENCE_POLICY, mergeMissingNotificationItems, mergeMissingIntakeFormDefaults, type Cd06IntakeForms } from '@egrm/config-schemas';
-import type { Cd09Notifications, Cd10OrgAccess } from '@egrm/config-schemas';
+import type { Cd01Identity, Cd09Notifications, Cd10OrgAccess } from '@egrm/config-schemas';
 import { db, pool, schema } from './client.js';
 import { syncRolesFromOrgAccess } from '../services/org-access.js';
 
@@ -399,6 +399,74 @@ async function ensureCd09Notifications(tenantId: string, freshPack: Cd09Notifica
   console.log('[seed] merged thread notification templates/rules into active CD-09');
 }
 
+/** Refresh privacy policy and data-deletion copy from seed on existing CD-01 configs. */
+async function ensureCd01LegalPages(
+  tenantId: string,
+  legal: Pick<typeof kisipIdentity, 'privacy_policy' | 'data_deletion'>,
+  changedBy: string,
+) {
+  const [active] = await db
+    .select({
+      id: schema.configVersion.id,
+      version: schema.configVersion.version,
+      payload: schema.configVersion.payload,
+    })
+    .from(schema.configVersion)
+    .where(
+      and(
+        eq(schema.configVersion.tenantId, tenantId),
+        eq(schema.configVersion.domain, 'cd01_identity'),
+        eq(schema.configVersion.status, 'active'),
+      ),
+    )
+    .limit(1);
+
+  if (!active) return;
+
+  const current = active.payload as Cd01Identity;
+  const samePrivacy = JSON.stringify(current.privacy_policy ?? null) === JSON.stringify(legal.privacy_policy ?? null);
+  const sameDeletion = JSON.stringify(current.data_deletion ?? null) === JSON.stringify(legal.data_deletion ?? null);
+  if (samePrivacy && sameDeletion) return;
+
+  const merged: Cd01Identity = {
+    ...current,
+    privacy_policy: legal.privacy_policy,
+    data_deletion: legal.data_deletion,
+  };
+
+  const parsed = validateConfig('cd01_identity', merged);
+  if (!parsed.success) {
+    throw new Error(`CD-01 legal pages merge invalid: ${JSON.stringify(parsed.error.issues, null, 2)}`);
+  }
+
+  const [maxRow] = await db
+    .select({ max: sql<number>`coalesce(max(${schema.configVersion.version}), 0)::int` })
+    .from(schema.configVersion)
+    .where(and(eq(schema.configVersion.tenantId, tenantId), eq(schema.configVersion.domain, 'cd01_identity')));
+
+  const nextVersion = (maxRow?.max ?? 0) + 1;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.configVersion)
+      .set({ status: 'retired' })
+      .where(eq(schema.configVersion.id, active.id));
+
+    await tx.insert(schema.configVersion).values({
+      tenantId,
+      domain: 'cd01_identity',
+      version: nextVersion,
+      status: 'active',
+      payload: parsed.data,
+      changeNote: 'seed: sync privacy policy and data deletion pages',
+      changedBy,
+      activatedAt: new Date(),
+    });
+  });
+
+  console.log('[seed] synced privacy policy and data deletion content into active CD-01');
+}
+
 /** Backfill attachment_policy / document kinds on CD-06 configs created before spec 14 shipped. */
 async function ensureCd06IntakeForms(tenantId: string, changedBy: string) {
   const [active] = await db
@@ -572,6 +640,18 @@ export const kisipIdentity = {
   privacy_policy: {
     version: '1.0',
     effective_date: '2026-01-01',
+    page_title: {
+      en: 'Privacy & data protection notice',
+      sw: 'Sera ya faragha na ulinzi wa data',
+    },
+    footer_link_label: {
+      en: 'Privacy & data protection notice',
+      sw: 'Sera ya faragha na ulinzi wa data',
+    },
+    related_link_label: {
+      en: 'Data deletion instructions',
+      sw: 'Maelezo ya kufuta data',
+    },
     intro: {
       en: 'This notice explains how the Kenya Informal Settlements Improvement Project (KISIP) Grievance Redress Mechanism collects, uses, stores, and protects your information when you submit or track a grievance through this portal, hotline, county offices, SMS, WhatsApp, or other connected channels.',
       sw: 'Taarifa hii inaeleza jinsi Utaratibu wa Kushughulikia Malalamiko wa KISIP unavyokusanya, kutumia, kuhifadhi, na kulinda taarifa zako unapowasilisha au kufuatilia malalamiko kupitia tovuti hii, simu ya bure, ofisi za kaunti, SMS, WhatsApp, au njia nyingine zilizounganishwa.',
@@ -646,6 +726,64 @@ export const kisipIdentity = {
   data_deletion: {
     version: '1.0',
     effective_date: '2026-01-01',
+    page_title: {
+      en: 'Data deletion instructions',
+      sw: 'Maelezo ya kufuta data',
+    },
+    footer_link_label: {
+      en: 'Data deletion instructions',
+      sw: 'Maelezo ya kufuta data',
+    },
+    related_link_label: {
+      en: 'Privacy notice',
+      sw: 'Sera ya faragha',
+    },
+    form: {
+      enabled: true,
+      title: {
+        en: 'Request deletion of your data',
+        sw: 'Omba kufutwa kwa data yako',
+      },
+      hint: {
+        en: 'Enter the name, email, and phone number you used when you submitted your grievance. If they match our records, your contact details will be removed immediately. Case details may be kept for audit purposes.',
+        sw: 'Weka jina, barua pepe, na nambari ya simu ulizotumia unapowasilisha malalamiko. Ikiwa zinalingana na rekodi zetu, taarifa zako za mawasiliano zitafutwa mara moja. Maelezo ya kesi yanaweza kubaki kwa madhumuni ya ukaguzi.',
+      },
+      name_label: { en: 'Full name', sw: 'Jina kamili' },
+      email_label: { en: 'Email', sw: 'Barua pepe' },
+      phone_label: { en: 'Phone number', sw: 'Nambari ya simu' },
+      submit_label: { en: 'Delete my data', sw: 'Futa data yangu' },
+      submitting_label: { en: 'Verifying…', sw: 'Inathibitisha…' },
+      success_message: {
+        en: 'Your contact details have been removed from {count} case record(s). You can no longer track those cases using this phone or email.',
+        sw: 'Taarifa zako za mawasiliano zimeondolewa kutoka kwa rekodi {count} za kesi. Huwezi tena kufuatilia kwa simu au barua pepe hizi.',
+      },
+      errors: {
+        no_match: {
+          en: 'We could not verify these details against our records. Check the information and try again, or contact us below.',
+          sw: 'Hatukuweza kuthibitisha maelezo haya dhidi ya rekodi zetu. Angalia taarifa na ujaribu tena, au wasiliana nasi hapa chini.',
+        },
+        already_erased: {
+          en: 'Personal contact details matching this information have already been removed.',
+          sw: 'Taarifa za mawasiliano zinazolingana na maelezo haya zimeshatolewa.',
+        },
+        invalid_name: {
+          en: 'Enter the full name used when you submitted your case.',
+          sw: 'Weka jina kamili lililotumika unapowasilisha kesi yako.',
+        },
+        invalid_phone: {
+          en: 'Enter a valid phone number.',
+          sw: 'Weka nambari halali ya simu.',
+        },
+        invalid_email: {
+          en: 'Enter a valid email address.',
+          sw: 'Weka anwani halali ya barua pepe.',
+        },
+        generic: {
+          en: 'Request failed. Please try again later.',
+          sw: 'Ombi limeshindwa. Jaribu tena baadaye.',
+        },
+      },
+    },
     intro: {
       en: 'Under the Kenya Data Protection Act, 2019, you have the right to request erasure of your personal data where applicable. This page explains how to request deletion of your information from KISIP GRM, and the limits that may apply.',
       sw: 'Chini ya Sheria ya Ulinzi wa Data ya Kenya, 2019, una haki ya kuomba kufutwa kwa data yako binafsi inapofaa. Ukurasa huu unaeleza jinsi ya kuomba ufutaji wa taarifa zako kutoka kwa GRM ya KISIP, na mipaka inayoweza kutumika.',
@@ -776,6 +914,11 @@ export async function runSeed() {
 
   // Active config versions
   await upsertActiveConfig(kisip!.id, 'cd01_identity', kisipIdentity, admin!.id);
+  await ensureCd01LegalPages(
+    kisip!.id,
+    { privacy_policy: kisipIdentity.privacy_policy, data_deletion: kisipIdentity.data_deletion },
+    admin!.id,
+  );
 
   await upsertActiveConfig(kisip!.id, 'cd02_hierarchy', {
     levels: [

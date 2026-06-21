@@ -55,6 +55,8 @@ const ui = computed(() => ({
 
         <p class="text-muted leading-relaxed mb-10">{{ intro }}</p>
 
+        <slot name="prepend" />
+
         <div class="space-y-8">
           <section v-for="section in sections" :key="section.id">
             <h2 class="text-lg font-semibold mb-2">{{ t(section.title) }}</h2>

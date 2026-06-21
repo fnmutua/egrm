@@ -71,12 +71,35 @@ function ensure() {
   p.faq ??= [];
   p.footer ??= { privacy_note: {} };
   p.footer.privacy_note ??= {};
-  p.privacy_policy ??= { version: '1.0', effective_date: '', intro: {}, sections: [] };
+  p.privacy_policy ??= { version: '1.0', effective_date: '', page_title: {}, footer_link_label: {}, related_link_label: {}, intro: {}, sections: [] };
+  p.privacy_policy.page_title ??= {};
+  p.privacy_policy.footer_link_label ??= {};
+  p.privacy_policy.related_link_label ??= {};
   p.privacy_policy.intro ??= {};
   p.privacy_policy.sections ??= [];
-  p.data_deletion ??= { version: '1.0', effective_date: '', intro: {}, sections: [] };
+  p.data_deletion ??= {
+    version: '1.0',
+    effective_date: '',
+    page_title: {},
+    footer_link_label: {},
+    related_link_label: {},
+    intro: {},
+    sections: [],
+    form: { enabled: true, errors: {} },
+  };
+  p.data_deletion.page_title ??= {};
+  p.data_deletion.footer_link_label ??= {};
+  p.data_deletion.related_link_label ??= {};
   p.data_deletion.intro ??= {};
   p.data_deletion.sections ??= [];
+  p.data_deletion.form ??= { enabled: true, errors: {} };
+  p.data_deletion.form.errors ??= {};
+  for (const key of ['title', 'hint', 'name_label', 'email_label', 'phone_label', 'submit_label', 'submitting_label', 'success_message']) {
+    p.data_deletion.form[key] ??= {};
+  }
+  for (const key of ['no_match', 'already_erased', 'invalid_name', 'invalid_phone', 'invalid_email', 'generic']) {
+    p.data_deletion.form.errors[key] ??= {};
+  }
 
   for (const loc of p.locales.enabled) {
     for (const s of STATEMENTS) p.statements[s.key][loc] ??= '';
@@ -85,8 +108,16 @@ function ensure() {
     p.about.heading[loc] ??= '';
     p.about.body[loc] ??= '';
     p.footer.privacy_note[loc] ??= '';
-    p.privacy_policy.intro[loc] ??= '';
-    p.data_deletion.intro[loc] ??= '';
+    for (const key of ['page_title', 'footer_link_label', 'related_link_label', 'intro']) {
+      p.privacy_policy[key][loc] ??= '';
+      p.data_deletion[key][loc] ??= '';
+    }
+    for (const key of ['title', 'hint', 'name_label', 'email_label', 'phone_label', 'submit_label', 'submitting_label', 'success_message']) {
+      p.data_deletion.form[key][loc] ??= '';
+    }
+    for (const key of ['no_match', 'already_erased', 'invalid_name', 'invalid_phone', 'invalid_email', 'generic']) {
+      p.data_deletion.form.errors[key][loc] ??= '';
+    }
     for (const step of p.how_it_works) {
       step.title ??= {};
       step.description ??= {};
@@ -157,6 +188,32 @@ function addPartnerLogo() {
 function removeAt(arr: unknown[], i: number) {
   arr.splice(i, 1);
 }
+
+const LEGAL_PAGE_LABELS = [
+  { key: 'page_title', label: 'Page title', multiline: false },
+  { key: 'footer_link_label', label: 'Footer link label', multiline: false },
+  { key: 'related_link_label', label: 'Related page link label', multiline: false },
+] as const;
+
+const ERASURE_FORM_LABELS = [
+  { key: 'title', label: 'Form heading', multiline: false },
+  { key: 'hint', label: 'Form introduction', multiline: true },
+  { key: 'name_label', label: 'Name field label', multiline: false },
+  { key: 'email_label', label: 'Email field label', multiline: false },
+  { key: 'phone_label', label: 'Phone field label', multiline: false },
+  { key: 'submit_label', label: 'Submit button', multiline: false },
+  { key: 'submitting_label', label: 'Submitting state', multiline: false },
+  { key: 'success_message', label: 'Success message', multiline: true, hint: 'Use {count} for cases updated' },
+] as const;
+
+const ERASURE_ERROR_LABELS = [
+  { key: 'no_match', label: 'No matching records' },
+  { key: 'already_erased', label: 'Already erased' },
+  { key: 'invalid_name', label: 'Invalid name' },
+  { key: 'invalid_phone', label: 'Invalid phone' },
+  { key: 'invalid_email', label: 'Invalid email' },
+  { key: 'generic', label: 'Generic failure' },
+] as const;
 </script>
 
 <template>
@@ -406,6 +463,17 @@ function removeAt(arr: unknown[], i: number) {
           <UInput v-model="payload.privacy_policy.effective_date" class="w-full" placeholder="2026-01-01" />
         </UFormField>
       </div>
+      <UCard class="mb-4" :ui="{ body: 'p-4 sm:p-4 space-y-4' }">
+        <div class="text-sm font-medium">Page labels</div>
+        <div v-for="field in LEGAL_PAGE_LABELS" :key="`pp-${field.key}`" class="space-y-2">
+          <div class="text-xs text-muted">{{ field.label }}</div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <UFormField v-for="loc in enabledLocales" :key="`pp-${field.key}-${loc}`" :label="loc.toUpperCase()">
+              <UInput v-model="payload.privacy_policy[field.key][loc]" class="w-full" />
+            </UFormField>
+          </div>
+        </div>
+      </UCard>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
         <UFormField v-for="loc in enabledLocales" :key="`ppi-${loc}`" :label="`Introduction (${loc.toUpperCase()})`">
           <UTextarea v-model="payload.privacy_policy.intro[loc]" :rows="3" autoresize class="w-full" />
@@ -447,6 +515,55 @@ function removeAt(arr: unknown[], i: number) {
           <UInput v-model="payload.data_deletion.effective_date" class="w-full" placeholder="2026-01-01" />
         </UFormField>
       </div>
+      <UCard class="mb-4" :ui="{ body: 'p-4 sm:p-4 space-y-4' }">
+        <div class="text-sm font-medium">Page labels</div>
+        <div v-for="field in LEGAL_PAGE_LABELS" :key="`dd-${field.key}`" class="space-y-2">
+          <div class="text-xs text-muted">{{ field.label }}</div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <UFormField v-for="loc in enabledLocales" :key="`dd-${field.key}-${loc}`" :label="loc.toUpperCase()">
+              <UInput v-model="payload.data_deletion[field.key][loc]" class="w-full" />
+            </UFormField>
+          </div>
+        </div>
+      </UCard>
+      <UCard class="mb-4" :ui="{ body: 'p-4 sm:p-4 space-y-4' }">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <div class="text-sm font-medium">Self-service deletion form</div>
+            <div class="text-xs text-muted">Shown at the top of <code>/delete</code> when enabled.</div>
+          </div>
+          <USwitch v-model="payload.data_deletion.form.enabled" />
+        </div>
+        <div v-for="field in ERASURE_FORM_LABELS" :key="field.key" class="space-y-2">
+          <div class="text-xs text-muted">
+            {{ field.label }}
+            <span v-if="field.hint"> — {{ field.hint }}</span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <UFormField v-for="loc in enabledLocales" :key="`ddf-${field.key}-${loc}`" :label="loc.toUpperCase()">
+              <UTextarea
+                v-if="field.multiline"
+                v-model="payload.data_deletion.form[field.key][loc]"
+                :rows="field.key === 'success_message' ? 2 : 3"
+                autoresize
+                class="w-full"
+              />
+              <UInput v-else v-model="payload.data_deletion.form[field.key][loc]" class="w-full" />
+            </UFormField>
+          </div>
+        </div>
+        <div class="pt-2 border-t border-default space-y-3">
+          <div class="text-xs font-semibold text-muted uppercase tracking-wide">Form error messages</div>
+          <div v-for="field in ERASURE_ERROR_LABELS" :key="field.key" class="space-y-2">
+            <div class="text-xs text-muted">{{ field.label }}</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <UFormField v-for="loc in enabledLocales" :key="`dde-${field.key}-${loc}`" :label="loc.toUpperCase()">
+                <UTextarea v-model="payload.data_deletion.form.errors[field.key][loc]" :rows="2" autoresize class="w-full" />
+              </UFormField>
+            </div>
+          </div>
+        </div>
+      </UCard>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
         <UFormField v-for="loc in enabledLocales" :key="`ddi-${loc}`" :label="`Introduction (${loc.toUpperCase()})`">
           <UTextarea v-model="payload.data_deletion.intro[loc]" :rows="3" autoresize class="w-full" />

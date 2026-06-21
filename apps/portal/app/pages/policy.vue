@@ -1,32 +1,32 @@
 <script setup lang="ts">
 import type { PortalLegalSection } from '~/composables/usePortalIdentity';
 
-const { p, locale, t } = usePortalIdentity();
-
-const ui = computed(() => ({
-  title: locale.value === 'sw' ? 'Sera ya faragha na ulinzi wa data' : 'Privacy & data protection notice',
-  dataDeletion:
-    locale.value === 'sw' ? 'Maelezo ya kufuta data' : 'Data deletion instructions',
-}));
+const { notice, pageTitle, relatedLinkLabel, intro, t, programmeName } = usePortalLegalCopy('privacy_policy', {
+  pageTitle: {
+    en: 'Privacy & data protection notice',
+    sw: 'Sera ya faragha na ulinzi wa data',
+  },
+  footerLink: {
+    en: 'Privacy & data protection notice',
+    sw: 'Sera ya faragha na ulinzi wa data',
+  },
+  relatedLink: {
+    en: 'Data deletion instructions',
+    sw: 'Maelezo ya kufuta data',
+  },
+  intro: {
+    en: 'This notice explains how {programme} collects, uses, stores, and protects your information when you submit or track a grievance through this electronic Grievance Redress Mechanism (GRM).',
+    sw: 'Taarifa hii inaeleza jinsi {programme} inavyokusanya, kutumia, kuhifadhi, na kulinda taarifa zako unapowasilisha au kufuatilia malalamiko kupitia mfumo wa kielektroniki wa GRM.',
+  },
+});
 
 const sections = computed((): PortalLegalSection[] => {
-  const configured = p.value?.privacy_policy?.sections;
+  const configured = notice.value?.sections;
   if (configured?.length) return configured;
-  return fallbackSections(p.value?.programme ?? p.value?.name ?? 'this grievance redress mechanism');
+  return fallbackSections(programmeName());
 });
 
-const intro = computed(() => {
-  const custom = p.value?.privacy_policy?.intro;
-  if (custom && t(custom)) return t(custom);
-  const programme = p.value?.programme ?? p.value?.legal_name ?? p.value?.name ?? 'this programme';
-  return locale.value === 'sw'
-    ? `Taarifa hii inaeleza jinsi ${programme} inavyokusanya, kutumia, kuhifadhi, na kulinda taarifa zako unapowasilisha au kufuatilia malalamiko kupitia mfumo wa kielektroniki wa GRM.`
-    : `This notice explains how ${programme} collects, uses, stores, and protects your information when you submit or track a grievance through this electronic Grievance Redress Mechanism (GRM).`;
-});
-
-const relatedLinks = computed(() => [
-  { to: '/delete', label: ui.value.dataDeletion },
-]);
+const relatedLinks = computed(() => [{ to: '/delete', label: relatedLinkLabel.value }]);
 
 function fallbackSections(programme: string): PortalLegalSection[] {
   return [
@@ -97,16 +97,16 @@ function fallbackSections(programme: string): PortalLegalSection[] {
   ];
 }
 
-useHead({ title: computed(() => ui.value.title) });
+useHead({ title: computed(() => pageTitle.value) });
 </script>
 
 <template>
   <PortalLegalNoticePage
-    :title="ui.title"
+    :title="pageTitle"
     :intro="intro"
     :sections="sections"
-    :version="p?.privacy_policy?.version"
-    :effective-date="p?.privacy_policy?.effective_date"
+    :version="notice?.version"
+    :effective-date="notice?.effective_date"
     :related-links="relatedLinks"
   />
 </template>
