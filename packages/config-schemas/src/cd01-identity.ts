@@ -3,6 +3,22 @@ import { z } from 'zod';
 /** CD-01 Tenant identity & branding (spec 02). */
 export const localizedText = z.record(z.string().min(2).max(8), z.string());
 
+/** Versioned legal notice with localized sections (portal `/policy`, `/delete`, etc.). */
+export const portalLegalNoticeSchema = z.object({
+  version: z.string().min(1).default('1.0'),
+  effective_date: z.string().optional(),
+  intro: localizedText.optional(),
+  sections: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        title: localizedText,
+        body: localizedText,
+      }),
+    )
+    .default([]),
+});
+
 /** Chromatic palette colors supported by the Nuxt UI design system. */
 export const PALETTE_COLORS = [
   'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan',
@@ -82,6 +98,10 @@ export const cd01Identity = z.object({
       privacy_note: localizedText.optional(),
     })
     .optional(),
+  /** Full privacy / data protection notice (portal `/policy`). Version referenced by consent records. */
+  privacy_policy: portalLegalNoticeSchema.optional(),
+  /** Data deletion / erasure instructions (portal `/delete`). */
+  data_deletion: portalLegalNoticeSchema.optional(),
 }).superRefine((cfg, ctx) => {
   for (const [key, text] of Object.entries(cfg.statements)) {
     for (const locale of cfg.locales.enabled) {

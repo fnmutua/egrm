@@ -359,7 +359,19 @@ async function doSubmit() {
 
               <!-- Consent + notification channels on final step -->
               <div v-if="step === sections.length - 1 && !anonymous" class="pt-2 border-t border-default space-y-3">
-                <UCheckbox v-model="consent" :label="meta?.consent_text[locale] ?? meta?.consent_text.en" />
+                <label class="flex items-start gap-2.5 cursor-pointer">
+                  <UCheckbox v-model="consent" class="mt-0.5 shrink-0" />
+                  <span class="text-sm leading-snug">
+                    {{ meta?.consent_text[locale] ?? meta?.consent_text.en }}
+                    <NuxtLink to="/policy" class="text-primary hover:underline whitespace-nowrap" @click.stop>
+                      {{ locale === 'sw' ? '(Sera ya faragha)' : '(Privacy notice)' }}
+                    </NuxtLink>
+                    ·
+                    <NuxtLink to="/delete" class="text-primary hover:underline whitespace-nowrap" @click.stop>
+                      {{ locale === 'sw' ? '(Kufuta data)' : '(Data deletion)' }}
+                    </NuxtLink>
+                  </span>
+                </label>
                 <div v-if="configuredChannels.length > 0" class="space-y-2">
                   <div class="text-sm font-medium">How should we notify you?</div>
                   <div class="flex flex-wrap items-center gap-x-5 gap-y-2">

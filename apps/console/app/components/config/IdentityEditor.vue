@@ -71,6 +71,12 @@ function ensure() {
   p.faq ??= [];
   p.footer ??= { privacy_note: {} };
   p.footer.privacy_note ??= {};
+  p.privacy_policy ??= { version: '1.0', effective_date: '', intro: {}, sections: [] };
+  p.privacy_policy.intro ??= {};
+  p.privacy_policy.sections ??= [];
+  p.data_deletion ??= { version: '1.0', effective_date: '', intro: {}, sections: [] };
+  p.data_deletion.intro ??= {};
+  p.data_deletion.sections ??= [];
 
   for (const loc of p.locales.enabled) {
     for (const s of STATEMENTS) p.statements[s.key][loc] ??= '';
@@ -79,6 +85,8 @@ function ensure() {
     p.about.heading[loc] ??= '';
     p.about.body[loc] ??= '';
     p.footer.privacy_note[loc] ??= '';
+    p.privacy_policy.intro[loc] ??= '';
+    p.data_deletion.intro[loc] ??= '';
     for (const step of p.how_it_works) {
       step.title ??= {};
       step.description ??= {};
@@ -90,6 +98,18 @@ function ensure() {
       f.answer ??= {};
       f.question[loc] ??= '';
       f.answer[loc] ??= '';
+    }
+    for (const sec of p.privacy_policy.sections) {
+      sec.title ??= {};
+      sec.body ??= {};
+      sec.title[loc] ??= '';
+      sec.body[loc] ??= '';
+    }
+    for (const sec of p.data_deletion.sections) {
+      sec.title ??= {};
+      sec.body ??= {};
+      sec.title[loc] ??= '';
+      sec.body[loc] ??= '';
     }
   }
 }
@@ -115,6 +135,20 @@ function addStep() {
 }
 function addFaq() {
   props.payload.faq.push({ question: localized(), answer: localized() });
+}
+function addPrivacySection() {
+  props.payload.privacy_policy.sections.push({
+    id: `section-${props.payload.privacy_policy.sections.length + 1}`,
+    title: localized(),
+    body: localized(),
+  });
+}
+function addDataDeletionSection() {
+  props.payload.data_deletion.sections.push({
+    id: `section-${props.payload.data_deletion.sections.length + 1}`,
+    title: localized(),
+    body: localized(),
+  });
 }
 function addPartnerLogo() {
   props.payload.branding.partner_logos.push({ name: '', image_url: '', link: '' });
@@ -355,6 +389,88 @@ function removeAt(arr: unknown[], i: number) {
           </div>
         </UCard>
         <UButton size="xs" variant="soft" icon="i-lucide-plus" @click="addFaq">Add question</UButton>
+      </div>
+    </section>
+
+    <!-- Privacy policy -->
+    <section v-show="show('sec-policy')" id="sec-policy">
+      <h3 class="text-sm font-semibold text-muted uppercase tracking-wide mb-1">Privacy policy page</h3>
+      <p class="text-xs text-muted mb-3">
+        Full notice shown on the public portal at <code class="text-xs">/policy</code>. Version is stored with consent records at intake.
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <UFormField label="Policy version">
+          <UInput v-model="payload.privacy_policy.version" class="w-full" placeholder="1.0" />
+        </UFormField>
+        <UFormField label="Effective date">
+          <UInput v-model="payload.privacy_policy.effective_date" class="w-full" placeholder="2026-01-01" />
+        </UFormField>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+        <UFormField v-for="loc in enabledLocales" :key="`ppi-${loc}`" :label="`Introduction (${loc.toUpperCase()})`">
+          <UTextarea v-model="payload.privacy_policy.intro[loc]" :rows="3" autoresize class="w-full" />
+        </UFormField>
+      </div>
+      <div class="space-y-3">
+        <UCard v-for="(sec, i) in payload.privacy_policy.sections" :key="i" :ui="{ body: 'p-4 sm:p-4' }">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <span class="text-xs font-semibold text-muted">Section {{ i + 1 }}</span>
+            <UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click="removeAt(payload.privacy_policy.sections, i)" />
+          </div>
+          <UFormField label="Section ID" class="mb-3">
+            <UInput v-model="sec.id" class="w-full font-mono text-sm" placeholder="scope" />
+          </UFormField>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <UFormField v-for="loc in enabledLocales" :key="`ppt-${i}-${loc}`" :label="`Title (${loc.toUpperCase()})`">
+              <UInput v-model="sec.title[loc]" class="w-full" />
+            </UFormField>
+            <UFormField v-for="loc in enabledLocales" :key="`ppb-${i}-${loc}`" :label="`Body (${loc.toUpperCase()})`">
+              <UTextarea v-model="sec.body[loc]" :rows="4" autoresize class="w-full" />
+            </UFormField>
+          </div>
+        </UCard>
+        <UButton size="xs" variant="soft" icon="i-lucide-plus" @click="addPrivacySection">Add section</UButton>
+      </div>
+    </section>
+
+    <!-- Data deletion -->
+    <section v-show="show('sec-data-deletion')" id="sec-data-deletion">
+      <h3 class="text-sm font-semibold text-muted uppercase tracking-wide mb-1">Data deletion page</h3>
+      <p class="text-xs text-muted mb-3">
+        Instructions for erasure requests on the public portal at <code class="text-xs">/delete</code>.
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <UFormField label="Notice version">
+          <UInput v-model="payload.data_deletion.version" class="w-full" placeholder="1.0" />
+        </UFormField>
+        <UFormField label="Effective date">
+          <UInput v-model="payload.data_deletion.effective_date" class="w-full" placeholder="2026-01-01" />
+        </UFormField>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+        <UFormField v-for="loc in enabledLocales" :key="`ddi-${loc}`" :label="`Introduction (${loc.toUpperCase()})`">
+          <UTextarea v-model="payload.data_deletion.intro[loc]" :rows="3" autoresize class="w-full" />
+        </UFormField>
+      </div>
+      <div class="space-y-3">
+        <UCard v-for="(sec, i) in payload.data_deletion.sections" :key="i" :ui="{ body: 'p-4 sm:p-4' }">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <span class="text-xs font-semibold text-muted">Section {{ i + 1 }}</span>
+            <UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click="removeAt(payload.data_deletion.sections, i)" />
+          </div>
+          <UFormField label="Section ID" class="mb-3">
+            <UInput v-model="sec.id" class="w-full font-mono text-sm" placeholder="how-to-request" />
+          </UFormField>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <UFormField v-for="loc in enabledLocales" :key="`ddt-${i}-${loc}`" :label="`Title (${loc.toUpperCase()})`">
+              <UInput v-model="sec.title[loc]" class="w-full" />
+            </UFormField>
+            <UFormField v-for="loc in enabledLocales" :key="`ddb-${i}-${loc}`" :label="`Body (${loc.toUpperCase()})`">
+              <UTextarea v-model="sec.body[loc]" :rows="4" autoresize class="w-full" />
+            </UFormField>
+          </div>
+        </UCard>
+        <UButton size="xs" variant="soft" icon="i-lucide-plus" @click="addDataDeletionSection">Add section</UButton>
       </div>
     </section>
 

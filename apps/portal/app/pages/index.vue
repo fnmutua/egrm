@@ -333,9 +333,17 @@ const heroSubtitle = computed(
             </span>
           </div>
         </div>
-        <div class="sm:text-right">
+        <div class="sm:text-right space-y-2">
+          <div class="flex flex-col sm:items-end gap-1">
+            <NuxtLink to="/policy" class="text-primary hover:underline text-sm font-medium">
+              {{ locale === 'sw' ? 'Sera ya faragha na ulinzi wa data' : 'Privacy & data protection notice' }}
+            </NuxtLink>
+            <NuxtLink to="/delete" class="text-primary hover:underline text-sm font-medium">
+              {{ locale === 'sw' ? 'Maelezo ya kufuta data' : 'Data deletion instructions' }}
+            </NuxtLink>
+          </div>
           <div v-if="p?.footer?.privacy_note" class="text-xs max-w-sm sm:ml-auto">{{ t(p.footer.privacy_note) }}</div>
-          <div class="text-xs mt-2">{{ p?.name }} — electronic Grievance Redress Mechanism</div>
+          <div class="text-xs">{{ p?.name }} — electronic Grievance Redress Mechanism</div>
         </div>
       </div>
     </footer>

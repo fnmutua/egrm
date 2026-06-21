@@ -1092,7 +1092,7 @@ onUnmounted(clearPageBreadcrumb);
     </header>
 
     <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 sm:px-8 py-4">
-    <div v-if="activeTab === 'overview'" class="space-y-2 max-w-6xl w-full">
+    <div v-if="activeTab === 'overview'" class="space-y-2 w-full">
       <details open class="group rounded-lg border border-default bg-default w-full">
         <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium hover:bg-elevated/40 rounded-lg [&::-webkit-details-marker]:hidden">
           <div class="flex min-w-0 items-center gap-2">

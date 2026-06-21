@@ -71,6 +71,8 @@ export const CD01_SUBSECTIONS = [
   { id: 'sec-about', label: 'About' },
   { id: 'sec-statements', label: 'Statements' },
   { id: 'sec-faq', label: 'FAQ' },
+  { id: 'sec-policy', label: 'Privacy policy' },
+  { id: 'sec-data-deletion', label: 'Data deletion' },
   { id: 'sec-footer', label: 'Footer & contact' },
 ];
 

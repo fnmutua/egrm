@@ -569,6 +569,146 @@ export const kisipIdentity = {
       sw: 'Data binafsi inashughulikiwa kwa mujibu wa Sheria ya Ulinzi wa Data, 2019.',
     },
   },
+  privacy_policy: {
+    version: '1.0',
+    effective_date: '2026-01-01',
+    intro: {
+      en: 'This notice explains how the Kenya Informal Settlements Improvement Project (KISIP) Grievance Redress Mechanism collects, uses, stores, and protects your information when you submit or track a grievance through this portal, hotline, county offices, SMS, WhatsApp, or other connected channels.',
+      sw: 'Taarifa hii inaeleza jinsi Utaratibu wa Kushughulikia Malalamiko wa KISIP unavyokusanya, kutumia, kuhifadhi, na kulinda taarifa zako unapowasilisha au kufuatilia malalamiko kupitia tovuti hii, simu ya bure, ofisi za kaunti, SMS, WhatsApp, au njia nyingine zilizounganishwa.',
+    },
+    sections: [
+      {
+        id: 'scope',
+        title: { en: 'Scope', sw: 'Upeo' },
+        body: {
+          en: 'This notice applies to personal data you provide to KISIP GRM. It covers grievances about KISIP-funded activities — including land and compensation, construction works, environmental and social impacts, and related project conduct. It does not replace separate policies of partner agencies where a referral is made.',
+          sw: 'Taarifa hii inatumika kwa data binafsi unayotoa kwa GRM ya KISIP. Inahusisha malalamiko kuhusu shughuli zinazofadhiliwa na KISIP — ikiwemo ardhi na fidia, kazi za ujenzi, athari za kimazingira na kijamii, na tabia inayohusiana na mradi. Haiibadili sera za kando za mashirika mengine pale tunaporejea malalamiko.',
+        },
+      },
+      {
+        id: 'collect',
+        title: { en: 'Information we collect', sw: 'Taarifa tunazokusanya' },
+        body: {
+          en: 'Depending on how you contact us, we may collect: your name, phone number, email address, settlement or county, description of the grievance, supporting documents, preferred language, and notification preferences. Anonymous submissions do not require your name; we issue a reference number and may ask for a phone number or PIN to verify follow-up.',
+          sw: 'Kulingana na jinsi unavyowasiliana nasi, tunaweza kukusanya: jina, nambari ya simu, barua pepe, makazi au kaunti, maelezo ya malalamiko, nyaraka za usaidizi, lugha unayopendelea, na njia za taarifa. Uwasilishaji bila kujulikana hauhitaji jina; tunakupa nambari ya kumbukumbu na tunaweza kuomba simu au PIN kuthibitisha ufuatiliaji.',
+        },
+      },
+      {
+        id: 'use',
+        title: { en: 'How we use your information', sw: 'Jinsi tunavyotumia taarifa zako' },
+        body: {
+          en: 'We use your information solely to register, investigate, and resolve grievances; communicate with you about your case; meet legal, environmental, and safeguard obligations; and produce anonymised statistics for programme reporting. We do not sell your data.',
+          sw: 'Tunatumia taarifa zako tu kusajili, kuchunguza, na kutatua malalamiko; kuwasiliana nawe kuhusu kesi yako; kutimiza wajibu wa kisheria, kimazingira, na ulinzi; na kutoa takwimu zisizotambulisha mtu kwa ripoti za mradi. Hatuuzi data yako.',
+        },
+      },
+      {
+        id: 'access',
+        title: { en: 'Who can access your information', sw: 'Nani anaweza kufikia taarifa zako' },
+        body: {
+          en: 'Only authorised KISIP GRM staff with a legitimate case-related need can view your details. Access is logged. Sensitive grievances (for example GBV/SEA) are restricted to specially trained officers under stricter confidentiality rules.',
+          sw: 'Wafanyakazi wa GRM wa KISIP walioruhusiwa tu wenye haja halali ya kesi wanaweza kuona taarifa zako. Ufikiaji unarekodiwa. Malalamiko nyeti (kwa mfano GBV/SEA) yanawekewa vizuizi kwa maafisa waliofunzwa kwa sheria kali zaidi za usiri.',
+        },
+      },
+      {
+        id: 'notifications',
+        title: { en: 'Notifications', sw: 'Taarifa na arifa' },
+        body: {
+          en: 'If you opt in, we may send case updates by SMS, email, or WhatsApp (including automated status replies when you message our WhatsApp number). Messages contain only the information needed to inform you; sensitive cases may use privacy-safe wording.',
+          sw: 'Ukikubali, tunaweza kutuma taarifa za kesi kupitia SMS, barua pepe, au WhatsApp (ikiwemo majibu ya hali ya kesi unapotuma ujumbe kwa nambari yetu ya WhatsApp). Ujumbe una taarifa muhimu tu; kesi nyeti zinaweza kutumia maneno salama zaidi kwa faragha.',
+        },
+      },
+      {
+        id: 'retention',
+        title: { en: 'Retention', sw: 'Uhifadhi wa data' },
+        body: {
+          en: 'Case records are kept for as long as needed to resolve the grievance, handle appeals, and meet World Bank and Government of Kenya audit requirements, then archived or anonymised according to programme retention rules.',
+          sw: 'Rekodi za kesi zinahifadhiwa kwa muda unaohitajika kutatua malalamiko, kushughulikia rufaa, na kutimiza mahitaji ya ukaguzi wa Benki ya Dunia na Serikali ya Kenya, kisha kuhifadhiwa au kutambulishwa bila jina kulingana na sheria za uhifadhi wa mradi.',
+        },
+      },
+      {
+        id: 'rights',
+        title: { en: 'Your rights', sw: 'Haki zako' },
+        body: {
+          en: 'Under the Kenya Data Protection Act, 2019, you may request access, correction, or deletion of your personal data where applicable. Contact grm@kisip.go.ke or 0800 720 720. You may also lodge a complaint with the Office of the Data Protection Commissioner.',
+          sw: 'Chini ya Sheria ya Ulinzi wa Data ya Kenya, 2019, unaweza kuomba kufikia, kusahihisha, au kufuta data yako binafsi inapofaa. Wasiliana grm@kisip.go.ke au 0800 720 720. Unaweza pia kuwasilisha malalamiko kwa Ofisi ya Kamishna wa Ulinzi wa Data.',
+        },
+      },
+      {
+        id: 'security',
+        title: { en: 'Security', sw: 'Usalama' },
+        body: {
+          en: 'Personal identifiers are encrypted. The system records who accessed a case and when. We apply technical and organisational measures appropriate to the sensitivity of the information.',
+          sw: 'Vitambulisho binafsi vimesimbwa. Mfumo unarekodi nani aliyefikia kesi na lini. Tunatumia hatua za kiufundi na za shirika zinazofaa kwa usikivu wa taarifa.',
+        },
+      },
+    ],
+  },
+  data_deletion: {
+    version: '1.0',
+    effective_date: '2026-01-01',
+    intro: {
+      en: 'Under the Kenya Data Protection Act, 2019, you have the right to request erasure of your personal data where applicable. This page explains how to request deletion of your information from KISIP GRM, and the limits that may apply.',
+      sw: 'Chini ya Sheria ya Ulinzi wa Data ya Kenya, 2019, una haki ya kuomba kufutwa kwa data yako binafsi inapofaa. Ukurasa huu unaeleza jinsi ya kuomba ufutaji wa taarifa zako kutoka kwa GRM ya KISIP, na mipaka inayoweza kutumika.',
+    },
+    sections: [
+      {
+        id: 'right',
+        title: { en: 'Your right to erasure', sw: 'Haki yako ya kufutwa kwa data' },
+        body: {
+          en: 'You may ask us to delete personal data we hold about you when it is no longer needed for the purpose it was collected, when you withdraw consent (where consent was the legal basis), or when the data was processed unlawfully. We will respond within 30 days unless the law allows a longer period.',
+          sw: 'Unaweza kuomba tufute data binafsi tunayohifadhi kukuhusu inapohitajika tena kwa madhumuni yaliyokusanywa, unapojiondoa ridhaa (pale ridhaa ilikuwa msingi wa kisheria), au data ilichakatwa kinyume cha sheria. Tutajibu ndani ya siku 30 isipokuwa sheria inaruhusu muda mrefu zaidi.',
+        },
+      },
+      {
+        id: 'can-delete',
+        title: { en: 'What we can delete', sw: 'Tunachoweza kufuta' },
+        body: {
+          en: 'After a case is closed and statutory retention periods have passed, we can delete or anonymise contact details (name, phone, email), notification preferences, and uploaded documents that are not required for audit. We can also remove duplicate or mistaken contact information on request while a case is open.',
+          sw: 'Baada ya kesi kufungwa na muda wa kisheria wa uhifadhi kupita, tunaweza kufuta au kutambulisha bila jina maelezo ya mawasiliano (jina, simu, barua pepe), mapendeleo ya arifa, na nyaraka zilizopakiwa ambazo hazihitajiki kwa ukaguzi. Tunaweza pia kuondoa maelezo ya mawasiliano yaliyorudiwa au yaliyokosewa kwa ombi wakati kesi bado haijafungwa.',
+        },
+      },
+      {
+        id: 'cannot-delete',
+        title: { en: 'What we may need to keep', sw: 'Tunachoweza kuhitaji kuweka' },
+        body: {
+          en: 'We cannot delete information that must be retained to investigate or evidence a grievance, meet World Bank or Government of Kenya audit requirements, defend legal claims, or protect the safety of others. For open cases, we will usually restrict processing or anonymise identifiers where possible rather than delete active case records. System audit logs are kept for security and may not be erased.',
+          sw: 'Hatuwezi kufuta taarifa zinazohitajika kuchunguza au kuthibitisha malalamiko, kutimiza mahitaji ya ukaguzi wa Benki ya Dunia au Serikali ya Kenya, kulinda madai ya kisheria, au kulinda usalama wa wengine. Kwa kesi zinazoendelea, kwa kawaida tutazuia uchakataji au kutambulisha vitambulisho bila jina inapowezekana badala ya kufuta rekodi za kesi hai. Kumbukumbu za ukaguzi wa mfumo zinahifadhiwa kwa usalama na huenda zisifutwe.',
+        },
+      },
+      {
+        id: 'how-to-request',
+        title: { en: 'How to submit a request', sw: 'Jinsi ya kuwasilisha ombi' },
+        body: {
+          en: 'Email grm@kisip.go.ke, call 0800 720 720, or visit a county KISIP coordination office. Include your case reference number (for example GRM-2026-0001) if you have one, the personal data you want deleted, and enough detail for us to verify your identity. Anonymous cases can be verified with the reference number and PIN or phone number you used at intake.',
+          sw: 'Tuma barua pepe grm@kisip.go.ke, piga 0800 720 720, au tembelea ofisi ya uratibu wa KISIP ya kaunti. Jumuisha nambari yako ya kumbukumbu ya kesi (kwa mfano GRM-2026-0001) ikiwa unayo, data binafsi unayotaka ifutwe, na maelezo ya kutosha kututhibitisha utambulisho wako. Kesi zisizo na jina zinaweza kuthibitishwa kwa nambari ya kumbukumbu na PIN au simu uliyotumia wakati wa kuwasilisha.',
+        },
+      },
+      {
+        id: 'verification',
+        title: { en: 'Identity verification', sw: 'Uthibitishaji wa utambulisho' },
+        body: {
+          en: 'To protect complainants from fraudulent deletion requests, we must confirm you are the data subject or their authorised representative before erasing personal data. We may ask for a copy of ID, confirmation from the phone or email on file, or in-person verification at a programme office.',
+          sw: 'Ili kulinda wawasilishaji dhidi ya maombi ya ulaghai ya kufuta data, lazima tuthibitishe wewe ndiye mhusika wa data au mwakilishi aliyeidhinishwa kabla ya kufuta data binafsi. Tunaweza kuomba nakala ya kitambulisho, uthibitisho kutoka kwa simu au barua pepe iliyorekodiwa, au uthibitisho ana kwa ana katika ofisi ya mradi.',
+        },
+      },
+      {
+        id: 'timeline',
+        title: { en: 'What happens next', sw: 'Kinachofuata' },
+        body: {
+          en: 'We acknowledge requests within 7 working days. We will tell you what was deleted, what must be retained and why, or if we need more information. If you disagree with our decision, you may complain to the Office of the Data Protection Commissioner.',
+          sw: 'Tunathibitisha kupokea maombi ndani ya siku 7 za kazi. Tutakuambia kilichofutwa, kilichobaki na sababu, au ikiwa tunahitaji taarifa zaidi. Usipokubaliana na uamuzi wetu, unaweza kuwasilisha malalamiko kwa Ofisi ya Kamishna wa Ulinzi wa Data.',
+        },
+      },
+      {
+        id: 'whatsapp',
+        title: { en: 'WhatsApp and messaging channels', sw: 'WhatsApp na njia za ujumbe' },
+        body: {
+          en: 'Messages sent to our WhatsApp or SMS numbers for case status are processed to reply to you; they are not a channel for formal deletion requests. Please use email or post for written erasure requests.',
+          sw: 'Ujumbe unaotumwa kwa nambari zetu za WhatsApp au SMS kwa hali ya kesi unachakatwa ili kukujibu; si njia ya maombi rasmi ya kufuta data. Tafadhali tumia barua pepe au posta kwa maombi ya maandishi ya ufutaji.',
+        },
+      },
+    ],
+  },
 };
 
 export async function runSeed() {
