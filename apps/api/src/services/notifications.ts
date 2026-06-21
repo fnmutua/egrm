@@ -113,7 +113,9 @@ async function buildNotificationVars(ctx: NotificationEventContext): Promise<Rec
       : Promise.resolve([]),
   ]);
   const tenantName = identity?.name ?? 'GRM';
-  const trackUrl = `${env.PUBLIC_PORTAL_BASE_URL.replace(/\/$/, '')}/track?ref=${encodeURIComponent(ctx.case.reference)}`;
+  const base = env.PUBLIC_PORTAL_BASE_URL.replace(/\/$/, '');
+  const trackUrl = `${base}/track?ref=${encodeURIComponent(ctx.case.reference)}`;
+  const appealUrl = `${base}/appeal/${encodeURIComponent(ctx.case.reference)}`;
   const actionTaken = String(ctx.data?.action_taken ?? '');
   const updateSummary = String(ctx.data?.update_summary ?? '');
 
@@ -129,6 +131,7 @@ async function buildNotificationVars(ctx: NotificationEventContext): Promise<Rec
     'tenant.short_name': tenantName.split(/\s+/)[0] ?? tenantName,
     'tracking.url': trackUrl,
     'tracking.link': ctx.case.reference,
+    'appeal.url': appealUrl,
     'date.today': new Date().toISOString().slice(0, 10),
     'date.deadline': '',
   };

@@ -189,6 +189,15 @@ async function applyMoveLevel(
   return { levelCode: newLevel, unitId: childId ?? caseRow.unitId };
 }
 
+export async function moveCaseLevel(
+  tenantId: string,
+  hierarchy: Cd02Hierarchy,
+  caseRow: { unitId: string | null; levelCode: string },
+  direction: 'up' | 'down',
+): Promise<{ levelCode: string; unitId: string | null }> {
+  return applyMoveLevel(tenantId, hierarchy, caseRow, direction);
+}
+
 function validateTransitionRequires(
   transition: WorkflowTransition,
   input: CaseActionInput,
@@ -211,19 +220,18 @@ function validateTransitionRequires(
 
 function validateGuard(
   transition: WorkflowTransition,
-  caseRow: { levelCode: string },
+  _caseRow: { levelCode: string },
   access: UserAccess,
 ): string | null {
   if (transition.guard !== 'confirmation') return null;
+
+  // National closure confirmation: platform admin, national officer, or elevated case/admin wildcards.
+  if (hasWorkflowElevated(access)) return null;
+
   const roles = userRoleNames(access);
-  const nationalRoles = roles.some((r) => r === 'grm_officer_national' || r === 'administrator');
-  if (!nationalRoles) return 'confirmation_authority_required';
-  const nationalLevel = caseRow.levelCode.toLowerCase() === 'national';
-  if (!nationalLevel && !access.tenantWide) {
-    // Allow national officers with tenant-wide scope to close from any level
-    return null;
-  }
-  return null;
+  if (roles.some((r) => r === 'grm_officer_national' || r === 'administrator')) return null;
+
+  return 'confirmation_authority_required';
 }
 
 export async function getAvailableCaseActions(
@@ -446,6 +454,24 @@ export async function applyCaseAction(
 
   const toStatus = input.to_status;
   const toTag = statusTag(workflow, toStatus);
+  const fromTag = statusTag(workflow, fromStatus);
+
+  if (toTag === 'closed' && (fromTag === 'resolved' || caseRow.statusTag === 'resolved')) {
+    const { validateAppealWindowForClosure } = await import('./appeals.js');
+    const appealErr = await validateAppealWindowForClosure(tenantId, caseRow, workflow);
+    if (appealErr === 'open_appeal_pending') {
+      return { ok: false, code: 422, error: appealErr, message: 'An appeal is still open for this case.' };
+    }
+    if (appealErr === 'appeal_window_open') {
+      return {
+        ok: false,
+        code: 422,
+        error: appealErr,
+        message: 'The complainant appeal window is still open. Wait for it to lapse or for an appeal decision.',
+      };
+    }
+  }
+
   const actionTaken = transitionActionTaken(input);
   const updateSummary = transitionUpdateSummary(input);
   const transitionNote = transitionEffectiveNote(input);
@@ -464,16 +490,29 @@ export async function applyCaseAction(
   }
 
   await db.transaction(async (tx) => {
+    const casePatch: {
+      status: string;
+      statusTag: string;
+      levelCode: string;
+      unitId: string | null;
+      assigneeId: string | null;
+      updatedAt: Date;
+      resolvedAt?: Date;
+    } = {
+      status: toStatus,
+      statusTag: toTag,
+      levelCode,
+      unitId,
+      assigneeId,
+      updatedAt: new Date(),
+    };
+    if (toTag === 'resolved' && !caseRow.resolvedAt) {
+      casePatch.resolvedAt = new Date();
+    }
+
     await tx
       .update(schema.grmCase)
-      .set({
-        status: toStatus,
-        statusTag: toTag,
-        levelCode,
-        unitId,
-        assigneeId,
-        updatedAt: new Date(),
-      })
+      .set(casePatch)
       .where(eq(schema.grmCase.id, caseId));
 
     let attachmentSummary: { id: string; kind: string; filename: string }[] = [];
@@ -580,6 +619,17 @@ export async function applyCaseAction(
   });
 
   if (pendingOutboxId) scheduleOutboxDispatch(pendingOutboxId).catch(console.error);
+
+  const { resolveOpenAppealOnTransition } = await import('./appeals.js');
+  await resolveOpenAppealOnTransition({
+    tenantId,
+    caseId,
+    fromStatus,
+    toStatus,
+    actorId,
+    workflow,
+    note: transitionNote,
+  });
 
   return { ok: true, case_id: caseId, status: toStatus, assignee_id: assigneeId };
 }

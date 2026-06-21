@@ -37,6 +37,7 @@ import {
   handleChatbotMessage,
 } from '../services/chatbot.js';
 import { requestPortalDataErasure } from '../services/data-erasure.js';
+import { getAppealEligibility, listComplainantAppeals, listCaseAppeals, submitComplainantAppeal } from '../services/appeals.js';
 
 const chatbotSessionBody = z.object({
   locale: z.string().min(2).max(8).optional(),
@@ -75,6 +76,12 @@ const dataErasureBody = z.object({
   name: z.string().min(2).max(120),
   phone: z.string().min(9).max(32),
   email: z.string().email().max(254),
+});
+
+const appealBody = z.object({
+  reference: z.string().min(3).max(64),
+  verifier: z.string().min(3).max(128),
+  reason: z.string().min(10).max(4000),
 });
 
 const registerBody = z.object({
@@ -258,6 +265,16 @@ export default async function publicRoutes(app: FastifyInstance) {
       && c.statusTag !== 'closed'
       && c.statusTag !== 'rejected';
 
+    const appeal = await getAppealEligibility(req.tenant.id, {
+      id: c.id,
+      status: c.status,
+      statusTag: c.statusTag,
+      resolvedAt: c.resolvedAt,
+    });
+
+    const appeals =
+      appeal.enabled ? await listComplainantAppeals(req.tenant.id, c.id) : [];
+
     return {
       reference: c.reference,
       status: c.status,
@@ -267,7 +284,60 @@ export default async function publicRoutes(app: FastifyInstance) {
       timeline: events,
       messages,
       reply_allowed: replyAllowed,
+      appeal,
+      appeals,
     };
+  });
+
+  app.post('/api/v1/public/cases/appeal', { config: rateLimit }, async (req, reply) => {
+    const parsed = appealBody.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+    }
+
+    const result = await submitComplainantAppeal({
+      tenantId: req.tenant.id,
+      reference: parsed.data.reference,
+      verifier: parsed.data.verifier,
+      reason: parsed.data.reason,
+    });
+
+    if (!result.ok) {
+      return reply.code(result.code).send({ error: result.error, message: result.message });
+    }
+
+    return reply.code(201).send({
+      ok: true,
+      appeal_id: result.appeal_id,
+      status: result.status,
+      round: result.round,
+    });
+  });
+
+  app.post('/api/v1/public/cases/:ref/appeal', { config: rateLimit }, async (req, reply) => {
+    const { ref } = req.params as { ref: string };
+    const parsed = appealBody.omit({ reference: true }).safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_body', issues: parsed.error.issues });
+    }
+
+    const result = await submitComplainantAppeal({
+      tenantId: req.tenant.id,
+      reference: ref,
+      verifier: parsed.data.verifier,
+      reason: parsed.data.reason,
+    });
+
+    if (!result.ok) {
+      return reply.code(result.code).send({ error: result.error, message: result.message });
+    }
+
+    return reply.code(201).send({
+      ok: true,
+      appeal_id: result.appeal_id,
+      status: result.status,
+      round: result.round,
+    });
   });
 
   app.post('/api/v1/public/data-erasure', { config: erasureRateLimit }, async (req, reply) => {

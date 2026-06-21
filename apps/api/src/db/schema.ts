@@ -167,6 +167,8 @@ export const grmCase = pgTable(
     /** HMAC of the tracking verifier (submitter phone/email, or one-time PIN for anonymous cases). */
     verifierHash: text('verifier_hash'),
     assigneeId: uuid('assignee_id').references(() => appUser.id),
+    /** Set when the case first enters a resolved-tagged status (appeal window anchor). */
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -179,7 +181,7 @@ export const caseEvent = pgTable('case_event', {
   tenantId: uuid('tenant_id').notNull().references(() => tenant.id),
   caseId: uuid('case_id').notNull().references(() => grmCase.id),
   kind: text('kind', {
-    enum: ['created', 'status_changed', 'message_external', 'message_inbound', 'note_internal', 'field_edited', 'assigned', 'attachment_added'],
+    enum: ['created', 'status_changed', 'message_external', 'message_inbound', 'note_internal', 'field_edited', 'assigned', 'attachment_added', 'appealed', 'appeal_decided'],
   }).notNull(),
   actorType: text('actor_type', { enum: ['complainant', 'staff', 'system'] }).notNull(),
   actorId: uuid('actor_id'),
@@ -187,6 +189,28 @@ export const caseEvent = pgTable('case_event', {
   data: jsonb('data'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Complainant or staff appeal against a resolution (spec 03 §2.8). */
+export const caseAppeal = pgTable(
+  'case_appeal',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenant.id),
+    caseId: uuid('case_id').notNull().references(() => grmCase.id),
+    round: integer('round').notNull(),
+    raisedBy: text('raised_by', { enum: ['party', 'staff', 'satisfaction'] }).notNull(),
+    reason: text('reason').notNull(),
+    raisedAt: timestamp('raised_at', { withTimezone: true }).notNull().defaultNow(),
+    routedToLevelCode: text('routed_to_level_code'),
+    routedToUnitId: uuid('routed_to_unit_id').references(() => unit.id),
+    status: text('status', { enum: ['open', 'upheld', 'dismissed'] }).notNull().default('open'),
+    decision: text('decision'),
+    decisionNote: text('decision_note'),
+    decidedBy: uuid('decided_by').references(() => appUser.id),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+  },
+  (t) => [uniqueIndex('case_appeal_case_round').on(t.tenantId, t.caseId, t.round)],
+);
 
 /** Concurrency-safe reference allocation (GEN-INT-08): one row per tenant × scope key. */
 export const caseSequence = pgTable(

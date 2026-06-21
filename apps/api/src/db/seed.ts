@@ -6,7 +6,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { ConfigDomain } from '@egrm/core';
 import { DEFAULT_CD16_AI } from '@egrm/config-schemas';
 import { validateConfig, defaultNotificationPack, defaultStaffProfileFields, DEFAULT_ATTACHMENT_KINDS, DEFAULT_ATTACHMENT_POLICY, DEFAULT_CORRESPONDENCE_POLICY, mergeMissingNotificationItems, mergeMissingIntakeFormDefaults, type Cd06IntakeForms } from '@egrm/config-schemas';
-import type { Cd01Identity, Cd09Notifications, Cd10OrgAccess } from '@egrm/config-schemas';
+import type { Cd01Identity, Cd04Workflow, Cd09Notifications, Cd10OrgAccess } from '@egrm/config-schemas';
 import { db, pool, schema } from './client.js';
 import { syncRolesFromOrgAccess } from '../services/org-access.js';
 
@@ -465,6 +465,109 @@ async function ensureCd01LegalPages(
   });
 
   console.log('[seed] synced privacy policy and data deletion content into active CD-01');
+}
+
+const appealedWorkflowStatus = {
+  name: 'Appealed',
+  tag: 'appeal' as const,
+  label: { en: 'Appealed', sw: 'Rufaa' },
+};
+
+const appealedWorkflowTransitions: Cd04Workflow['transitions'] = [
+  {
+    from: ['Appealed'],
+    to: 'Investigation',
+    roles: ['grm_officer', 'grm_officer_national'],
+    requires: { note: true },
+  },
+  {
+    from: ['Appealed'],
+    to: 'Resolved',
+    roles: ['grm_officer', 'grm_officer_national'],
+    requires: { note: true },
+  },
+];
+
+/** Merge Appealed status and staff appeal transitions into active CD-04 on existing tenants. */
+async function ensureCd04AppealWorkflow(tenantId: string, changedBy: string) {
+  const [active] = await db
+    .select({
+      id: schema.configVersion.id,
+      version: schema.configVersion.version,
+      payload: schema.configVersion.payload,
+    })
+    .from(schema.configVersion)
+    .where(
+      and(
+        eq(schema.configVersion.tenantId, tenantId),
+        eq(schema.configVersion.domain, 'cd04_workflow'),
+        eq(schema.configVersion.status, 'active'),
+      ),
+    )
+    .limit(1);
+
+  if (!active) return;
+
+  const current = active.payload as Cd04Workflow;
+  const hasAppealedStatus = current.statuses.some((s) => s.tag === 'appeal' || s.name === 'Appealed');
+  const hasAppealTransitions = current.transitions.some(
+    (t) => t.from.includes('Appealed') || t.from.includes(appealedWorkflowStatus.name),
+  );
+  const appealPolicy = current.appeal ?? { enabled: false };
+
+  if (hasAppealedStatus && hasAppealTransitions && appealPolicy.enabled) return;
+
+  const statuses = hasAppealedStatus
+    ? current.statuses
+    : [...current.statuses, appealedWorkflowStatus];
+
+  const transitions = hasAppealTransitions
+    ? current.transitions
+    : [...current.transitions, ...appealedWorkflowTransitions];
+
+  const merged: Cd04Workflow = {
+    ...current,
+    statuses,
+    transitions,
+    appeal: {
+      enabled: true,
+      window_days: appealPolicy.window_days ?? 30,
+      routes_to: appealPolicy.routes_to ?? 'next_level',
+      max_rounds: appealPolicy.max_rounds,
+    },
+  };
+
+  const parsed = validateConfig('cd04_workflow', merged);
+  if (!parsed.success) {
+    throw new Error(`CD-04 appeal workflow merge invalid: ${JSON.stringify(parsed.error.issues, null, 2)}`);
+  }
+
+  const [maxRow] = await db
+    .select({ max: sql<number>`coalesce(max(${schema.configVersion.version}), 0)::int` })
+    .from(schema.configVersion)
+    .where(and(eq(schema.configVersion.tenantId, tenantId), eq(schema.configVersion.domain, 'cd04_workflow')));
+
+  const nextVersion = (maxRow?.max ?? 0) + 1;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.configVersion)
+      .set({ status: 'retired' })
+      .where(eq(schema.configVersion.id, active.id));
+
+    await tx.insert(schema.configVersion).values({
+      tenantId,
+      domain: 'cd04_workflow',
+      version: nextVersion,
+      status: 'active',
+      payload: parsed.data,
+      changeNote: 'seed: add Appealed status and appeal transitions',
+      changedBy,
+      activatedAt: new Date(),
+    });
+  });
+
+  console.log('[seed] merged Appealed workflow status and transitions into active CD-04');
 }
 
 /** Backfill attachment_policy / document kinds on CD-06 configs created before spec 14 shipped. */
@@ -939,6 +1042,7 @@ export async function runSeed() {
       { name: 'Escalated', tag: 'in_progress', label: { en: 'Escalated', sw: 'Imepandishwa' } },
       { name: 'Returned', tag: 'in_progress', label: { en: 'Returned', sw: 'Imerudishwa' } },
       { name: 'Resolved', tag: 'resolved', label: { en: 'Resolved', sw: 'Imetatuliwa' } },
+      { name: 'Appealed', tag: 'appeal', label: { en: 'Appealed', sw: 'Rufaa' } },
       { name: 'Closed', tag: 'closed', label: { en: 'Closed', sw: 'Imefungwa' } },
       { name: 'Rejected', tag: 'rejected', label: { en: 'Rejected', sw: 'Imekataliwa' } },
       { name: 'In Court', tag: 'on_hold', label: { en: 'In Court', sw: 'Mahakamani' } },
@@ -953,6 +1057,8 @@ export async function runSeed() {
       { from: ['Sorting', 'Investigation', 'Returned'], to: 'Escalated', roles: ['grm_officer'], effects: [{ move_level: 'up' }, { restart_sla: 'stage' }] },
       { from: ['Escalated'], to: 'Returned', roles: ['grm_officer_national'], effects: [{ move_level: 'down' }] },
       { from: ['Investigation', 'Escalated', 'Returned'], to: 'Resolved', roles: ['grm_officer'], requires: { fields: ['resolution_summary'], attachments: ['signed_resolution_form'] } },
+      { from: ['Appealed'], to: 'Investigation', roles: ['grm_officer', 'grm_officer_national'], requires: { note: true } },
+      { from: ['Appealed'], to: 'Resolved', roles: ['grm_officer', 'grm_officer_national'], requires: { note: true } },
       { from: ['Resolved'], to: 'Closed', roles: ['grm_officer_national'], guard: 'confirmation' },
       { from: ['In Court'], to: 'Investigation', roles: ['grm_officer_national'] },
     ],
@@ -962,6 +1068,7 @@ export async function runSeed() {
     },
     appeal: { enabled: true, window_days: 30, routes_to: 'next_level' },
   }, admin!.id);
+  await ensureCd04AppealWorkflow(kisip!.id, admin!.id);
 
   await upsertActiveConfig(kisip!.id, 'cd05_sla', {
     default_plan: 'standard',

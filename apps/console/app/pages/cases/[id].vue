@@ -641,6 +641,12 @@ async function onDocFileChange(event: Event) {
 
 function eventSummary(ev: CaseDetail['events'][number]): string | null {
   const d = ev.data;
+  if (ev.kind === 'appealed' && typeof d.reason === 'string') {
+    return `Appeal submitted (round ${d.round ?? '?'})`;
+  }
+  if (ev.kind === 'appeal_decided') {
+    return typeof d.summary === 'string' ? d.summary : 'Appeal decision recorded';
+  }
   if (ev.kind === 'status_changed') {
     const parts: string[] = [];
     if (d.from_status && d.to_status) parts.push(`${d.from_status} → ${d.to_status}`);
@@ -1310,6 +1316,13 @@ onUnmounted(clearPageBreadcrumb);
           <p v-if="!detail.case.anonymous" class="text-xs text-muted mt-3 pt-3 border-t border-default">PII access is logged in the audit trail.</p>
         </div>
       </details>
+
+      <CaseAppeals
+        :case-id="caseId"
+        :status-tag="detail.case.status_tag"
+        class="mt-2"
+        @changed="loadCase"
+      />
     </div>
 
     <div v-else-if="activeTab === 'actions'">

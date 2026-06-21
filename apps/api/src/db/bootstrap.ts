@@ -44,6 +44,16 @@ async function ensureChatbotSessionTable(): Promise<void> {
   console.log('[bootstrap] created missing chatbot_session table');
 }
 
+/** Safety net for case_appeal + grm_case.resolved_at after 0017. */
+async function ensureCaseAppealTable(): Promise<void> {
+  const reg = await pool.query<{ reg: string | null }>(`SELECT to_regclass('public.case_appeal') AS reg`);
+  if (reg.rows[0]?.reg) return;
+
+  const sqlFile = path.resolve(__dirname, '../../drizzle/0017_appeal.sql');
+  await pool.query(readFileSync(sqlFile, 'utf8'));
+  console.log('[bootstrap] created missing case_appeal table / resolved_at column');
+}
+
 function seedFlag(name: string): boolean | undefined {
   const v = process.env[name]?.trim().toLowerCase();
   if (v === '1' || v === 'true' || v === 'yes') return true;
@@ -66,6 +76,7 @@ export async function runBootstrap(): Promise<void> {
   await ensureStaffInboxTable();
   await ensureAiInteractionTable();
   await ensureChatbotSessionTable();
+  await ensureCaseAppealTable();
 
   if (await shouldRunSeed()) {
     console.log('[bootstrap] running seed…');

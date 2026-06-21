@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { buildThreadTree } from '@egrm/core';
-
+const route = useRoute();
 const { track, reply, loadMeta, meta } = useIntake();
+const { appealPath } = usePortalCasePaths();
 
 const reference = ref('');
 const verifier = ref('');
@@ -16,16 +16,21 @@ const replyLoading = ref(false);
 const replyError = ref('');
 const replyInput = ref<HTMLInputElement | null>(null);
 
-const messageTree = computed(() => {
-  const messages = result.value?.messages ?? [];
-  return buildThreadTree(messages, { order: 'desc' });
+const showAppealLink = computed(() => Boolean(result.value?.appeal?.enabled && result.value?.appeal?.eligible));
+const appealHint = computed(() => {
+  const a = result.value?.appeal;
+  if (!a?.enabled || a.eligible) return '';
+  if (a.reason === 'appeal_pending') return 'Your appeal is being reviewed.';
+  if (a.reason === 'window_closed') return 'The appeal window for this resolution has closed.';
+  if (a.reason === 'max_rounds_reached') return 'The maximum number of appeals has been reached.';
+  return '';
 });
 
-const messageById = computed(() =>
-  Object.fromEntries((result.value?.messages ?? []).map((m) => [m.id, m])),
-);
-
-onMounted(() => loadMeta().catch(() => {}));
+onMounted(() => {
+  const q = route.query.ref;
+  if (typeof q === 'string' && q.trim()) reference.value = q.trim();
+  loadMeta().catch(() => {});
+});
 
 const correspondence = computed(() => meta.value?.correspondence);
 const replyAttachmentsEnabled = computed(
@@ -187,14 +192,54 @@ async function doReply() {
           </template>
 
           <div class="space-y-6">
+            <!-- Appeals -->
+            <div v-if="result.appeals?.length" class="pb-4 border-b border-default">
+              <div class="flex items-center gap-2 mb-3">
+                <UIcon name="i-lucide-scale" class="text-primary" />
+                <span class="text-sm font-semibold">Appeals</span>
+              </div>
+              <PortalAppealHistory :appeals="result.appeals" />
+            </div>
+
+            <!-- Status updates -->
+            <div v-if="result.timeline?.length" class="pb-4 border-b border-default">
+              <div class="flex items-center gap-2 mb-3">
+                <UIcon name="i-lucide-history" class="text-primary" />
+                <span class="text-sm font-semibold">Status updates</span>
+              </div>
+              <PortalCaseTimeline :events="result.timeline" />
+            </div>
+
             <!-- Messages -->
             <div v-if="result.messages?.length">
               <div class="flex items-center gap-2 mb-3">
                 <UIcon name="i-lucide-message-circle" class="text-primary" />
                 <span class="text-sm font-semibold">Messages</span>
               </div>
-              <p class="text-xs text-muted mb-3">Tap a message to read the full text.</p>
-              <PortalThreadTree :nodes="messageTree" :entry-by-id="messageById" />
+              <p class="text-xs text-muted mb-3">Replies from the GRM office and your responses appear here in order.</p>
+              <PortalTrackMessages :messages="result.messages" />
+            </div>
+
+            <!-- Appeal -->
+            <div
+              v-if="result.appeal?.enabled && (showAppealLink || appealHint)"
+              class="pt-4 border-t border-default"
+            >
+              <div class="flex items-center gap-2 mb-3">
+                <UIcon name="i-lucide-scale" class="text-primary" />
+                <span class="text-sm font-semibold">Appeal the outcome</span>
+              </div>
+              <p v-if="appealHint" class="text-sm text-muted mb-3">{{ appealHint }}</p>
+              <template v-else-if="showAppealLink">
+                <p class="text-sm text-muted mb-3">
+                  If you are not satisfied with the resolution, you may appeal within
+                  <strong>{{ result.appeal.days_remaining }}</strong>
+                  day(s) (by {{ new Date(result.appeal.window_ends_at!).toLocaleDateString() }}).
+                </p>
+                <UButton :to="appealPath(result.reference)" block>
+                  Appeal this resolution
+                </UButton>
+              </template>
             </div>
 
             <!-- Reply -->

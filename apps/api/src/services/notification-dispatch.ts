@@ -199,7 +199,9 @@ async function buildTemplateVars(
   ]);
 
   const tenantName = identity?.name ?? 'GRM';
-  const trackUrl = `${env.PUBLIC_PORTAL_BASE_URL.replace(/\/$/, '')}/track?ref=${encodeURIComponent(caseRow.reference)}`;
+  const base = env.PUBLIC_PORTAL_BASE_URL.replace(/\/$/, '');
+  const trackUrl = `${base}/track?ref=${encodeURIComponent(caseRow.reference)}`;
+  const appealUrl = `${base}/appeal/${encodeURIComponent(caseRow.reference)}`;
   const partyName = partyRow[0]?.nameEnc ? decryptPII(partyRow[0].nameEnc) : '';
   const actionTaken = String(eventData?.action_taken ?? '');
   const updateSummary = String(eventData?.update_summary ?? '');
@@ -217,6 +219,7 @@ async function buildTemplateVars(
     'party.name': partyName || 'Complainant',
     'tracking.url': trackUrl,
     'tracking.link': caseRow.reference,
+    'appeal.url': appealUrl,
     'date.today': new Date().toISOString().slice(0, 10),
     'date.deadline': '',
   };

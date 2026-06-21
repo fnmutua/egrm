@@ -18,6 +18,7 @@ import {
   sensitivityListFilter,
 } from '../services/access.js';
 import { applyCaseAction, getAvailableCaseActions } from '../services/case-workflow.js';
+import { decideAppealAction, listCaseAppeals } from '../services/appeals.js';
 import { unitSelfAndAncestors } from '../services/units.js';
 import {
   commitStandaloneAttachments,
@@ -464,6 +465,50 @@ export default async function caseRoutes(app: FastifyInstance) {
     const result = await getAvailableCaseActions(req.tenant.id, id, access, req.user.sub);
     if ('error' in result) return reply.code(result.code).send({ error: result.error });
     return { actions: result };
+  });
+
+  app.get('/api/v1/cases/:id/appeals', { onRequest: [app.requirePermission('case:read')] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const [c] = await db
+      .select({
+        unitId: schema.grmCase.unitId,
+        assigneeId: schema.grmCase.assigneeId,
+        sensitivity: schema.grmCase.sensitivity,
+      })
+      .from(schema.grmCase)
+      .where(and(eq(schema.grmCase.tenantId, req.tenant.id), eq(schema.grmCase.id, id)))
+      .limit(1);
+    if (!c) return reply.code(404).send({ error: 'not_found' });
+
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const allowed = await canAccessCase(req.tenant.id, access, req.user.sub, c);
+    if (!allowed) return reply.code(404).send({ error: 'not_found' });
+
+    const appeals = await listCaseAppeals(req.tenant.id, id);
+    return { appeals };
+  });
+
+  const appealDecideBody = z.object({
+    decision: z.enum(['uphold', 'dismiss']),
+    note: z.string().max(4000).optional(),
+  });
+
+  app.post('/api/v1/cases/:id/appeals/:aid/decide', { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { id, aid } = req.params as { id: string; aid: string };
+    const parsed = appealDecideBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_body' });
+
+    const access = await loadUserAccess(req.user.sub, req.tenant.id);
+    const result = await decideAppealAction(
+      req.tenant.id,
+      id,
+      aid,
+      req.user.sub,
+      access,
+      parsed.data,
+    );
+    if (!result.ok) return reply.code(result.code).send({ error: result.error, message: result.message });
+    return { ok: true };
   });
 
   app.get('/api/v1/cases/:id/assignees', { onRequest: [app.requirePermission('case:assign')] }, async (req, reply) => {

@@ -57,6 +57,27 @@ export interface IntakeOption {
 
 export type IntakeSelectItem = IntakeOption;
 
+export interface AppealEligibility {
+  enabled: boolean;
+  eligible: boolean;
+  reason?: string;
+  window_days?: number;
+  window_ends_at?: string;
+  days_remaining?: number;
+  rounds_used?: number;
+  max_rounds?: number;
+  open_appeal?: boolean;
+}
+
+export interface ComplainantAppeal {
+  round: number;
+  status: 'open' | 'upheld' | 'dismissed';
+  raised_at: string;
+  decision: 'accepted' | 'rejected' | null;
+  decided_at: string | null;
+  outcome_label: string;
+}
+
 export function useIntake() {
   const apiBase = usePublicApiBase();
   const config = useRuntimeConfig();
@@ -166,6 +187,8 @@ export function useIntake() {
         created_at: string;
       }[];
       reply_allowed: boolean;
+      appeal: AppealEligibility;
+      appeals: ComplainantAppeal[];
     }>('/api/v1/public/cases/track', {
       baseURL: apiBase.value,
       method: 'POST',
@@ -209,5 +232,17 @@ export function useIntake() {
     });
   }
 
-  return { meta, loadMeta, fieldOptions, searchIntakeUnits, submit, track, reply };
+  async function appeal(payload: { reference: string; verifier: string; reason: string }) {
+    return await $fetch<{ ok: boolean; appeal_id: string; status: string; round: number }>(
+      '/api/v1/public/cases/appeal',
+      {
+        baseURL: apiBase.value,
+        method: 'POST',
+        headers,
+        body: payload,
+      },
+    );
+  }
+
+  return { meta, loadMeta, fieldOptions, searchIntakeUnits, submit, track, reply, appeal };
 }

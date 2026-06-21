@@ -74,6 +74,7 @@ export const TEMPLATE_VARIABLES = [
   'actor.name',
   'tracking.link',
   'tracking.url',
+  'appeal.url',
   'date.today',
   'date.deadline',
 ] as const;
